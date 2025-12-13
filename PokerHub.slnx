@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PokerHub.Application/PokerHub.Application.csproj" />
+    <Project Path="src/PokerHub.Domain/PokerHub.Domain.csproj" />
+    <Project Path="src/PokerHub.Infrastructure/PokerHub.Infrastructure.csproj" />
+    <Project Path="src/PokerHub.Web/PokerHub.Web.csproj" />
+  </Folder>
+</Solution>
