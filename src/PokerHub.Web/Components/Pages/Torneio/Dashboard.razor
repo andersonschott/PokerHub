@@ -421,6 +421,17 @@
     private string? _currentUserId;
     private bool _rebuyAddonInProgress;
 
+    // Connection state
+    private bool _isReconnecting;
+    private bool _isDisconnected;
+
+    // Handler disposables (prevent memory leak)
+    private IDisposable? _timerStateHandler;
+    private IDisposable? _timerTickHandler;
+    private IDisposable? _prizePoolHandler;
+    private IDisposable? _eliminatedHandler;
+    private IDisposable? _levelChangedHandler;
+
     protected override async Task OnInitializedAsync()
     {
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
@@ -447,8 +458,42 @@
                         return handler;
                     };
                 })
-                .WithAutomaticReconnect()
+                .WithAutomaticReconnect(new[] {
+                    TimeSpan.Zero,
+                    TimeSpan.FromSeconds(2),
+                    TimeSpan.FromSeconds(5),
+                    TimeSpan.FromSeconds(10),
+                    TimeSpan.FromSeconds(30),
+                    TimeSpan.FromSeconds(60),
+                    TimeSpan.FromSeconds(120),
+                    TimeSpan.FromSeconds(300)  // 5 min max - keeps retrying
+                })
                 .Build();
+
+            // Setup reconnection handlers
+            _hubConnection.Reconnecting += async (error) =>
+            {
+                _isReconnecting = true;
+                _isDisconnected = false;
+                await InvokeAsync(StateHasChanged);
+            };
+
+            _hubConnection.Reconnected += async (connectionId) =>
+            {
+                _isReconnecting = false;
+                _isDisconnected = false;
+                // Re-join tournament group and sync state
+                await _hubConnection.SendAsync("JoinTorneio", TournamentId);
+                await RefreshPlayerData();
+                await InvokeAsync(StateHasChanged);
+            };
+
+            _hubConnection.Closed += async (error) =>
+            {
+                _isDisconnected = true;
+                _isReconnecting = false;
+                await InvokeAsync(StateHasChanged);
+            };
 
             RegisterHubHandlers();
 
@@ -493,49 +538,84 @@
     {
         if (_hubConnection == null) return;
 
-        _hubConnection.On<TimerStateDto>("TimerStateUpdated", async (state) =>
+        _timerStateHandler = _hubConnection.On<TimerStateDto>("TimerStateUpdated", async (state) =>
         {
-            _timerState = state;
-            await InvokeAsync(StateHasChanged);
-        });
-
-        _hubConnection.On<object>("TimerTick", async (data) =>
-        {
-            var json = System.Text.Json.JsonSerializer.Serialize(data);
-            var tick = System.Text.Json.JsonSerializer.Deserialize<TimerTickData>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (tick != null && _timerState != null)
+            try
             {
-                _timerState = _timerState with { TimeRemainingSeconds = tick.SecondsRemaining };
+                _timerState = state;
                 await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"TimerStateUpdated handler error: {ex.Message}");
             }
         });
 
-        _hubConnection.On<object>("PrizePoolAtualizado", async (data) =>
+        _timerTickHandler = _hubConnection.On<object>("TimerTick", async (data) =>
         {
-            await RefreshPlayerData();
-            await InvokeAsync(StateHasChanged);
-        });
-
-        _hubConnection.On<object>("JogadorEliminado", async (data) =>
-        {
-            await RefreshPlayerData();
-            await InvokeAsync(StateHasChanged);
-        });
-
-        _hubConnection.On<object>("NivelAlterado", async (data) =>
-        {
-            var json = System.Text.Json.JsonSerializer.Serialize(data);
-            var levelData = System.Text.Json.JsonSerializer.Deserialize<LevelChangedData>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            if (levelData?.NewLevel != null && _timerState != null)
+            try
             {
-                _timerState = _timerState with
+                var json = System.Text.Json.JsonSerializer.Serialize(data);
+                var tick = System.Text.Json.JsonSerializer.Deserialize<TimerTickData>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (tick != null && _timerState != null)
                 {
-                    CurrentLevel = levelData.NewLevel.Order,
-                    TimeRemainingSeconds = levelData.NewLevel.DurationMinutes * 60,
-                    CurrentBlindLevel = levelData.NewLevel,
-                    NextBlindLevel = levelData.NextLevel
-                };
+                    _timerState = _timerState with { TimeRemainingSeconds = tick.SecondsRemaining };
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"TimerTick handler error: {ex.Message}");
+            }
+        });
+
+        _prizePoolHandler = _hubConnection.On<object>("PrizePoolAtualizado", async (data) =>
+        {
+            try
+            {
+                await RefreshPlayerData();
                 await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"PrizePoolAtualizado handler error: {ex.Message}");
+            }
+        });
+
+        _eliminatedHandler = _hubConnection.On<object>("JogadorEliminado", async (data) =>
+        {
+            try
+            {
+                await RefreshPlayerData();
+                await InvokeAsync(StateHasChanged);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"JogadorEliminado handler error: {ex.Message}");
+            }
+        });
+
+        _levelChangedHandler = _hubConnection.On<object>("NivelAlterado", async (data) =>
+        {
+            try
+            {
+                var json = System.Text.Json.JsonSerializer.Serialize(data);
+                var levelData = System.Text.Json.JsonSerializer.Deserialize<LevelChangedData>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (levelData?.NewLevel != null && _timerState != null)
+                {
+                    _timerState = _timerState with
+                    {
+                        CurrentLevel = levelData.NewLevel.Order,
+                        TimeRemainingSeconds = levelData.NewLevel.DurationMinutes * 60,
+                        CurrentBlindLevel = levelData.NewLevel,
+                        NextBlindLevel = levelData.NextLevel
+                    };
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"NivelAlterado handler error: {ex.Message}");
             }
         });
     }
@@ -972,9 +1052,23 @@
 
     public async ValueTask DisposeAsync()
     {
+        // Dispose all handler subscriptions to prevent memory leaks
+        _timerStateHandler?.Dispose();
+        _timerTickHandler?.Dispose();
+        _prizePoolHandler?.Dispose();
+        _eliminatedHandler?.Dispose();
+        _levelChangedHandler?.Dispose();
+
         if (_hubConnection != null)
         {
-            await _hubConnection.SendAsync("LeaveTorneio", TournamentId);
+            try
+            {
+                await _hubConnection.SendAsync("LeaveTorneio", TournamentId);
+            }
+            catch
+            {
+                // Ignore errors when leaving - connection might already be closed
+            }
             await _hubConnection.DisposeAsync();
         }
     }

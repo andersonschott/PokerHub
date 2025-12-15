@@ -44,7 +44,15 @@ public class TorneioHub : Hub
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        _logger.LogInformation("Client {ConnectionId} disconnected", Context.ConnectionId);
+        if (exception != null)
+        {
+            _logger.LogWarning(exception, "Client {ConnectionId} disconnected with error", Context.ConnectionId);
+        }
+        else
+        {
+            _logger.LogInformation("Client {ConnectionId} disconnected normally", Context.ConnectionId);
+        }
+
         await base.OnDisconnectedAsync(exception);
     }
 

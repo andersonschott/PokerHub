@@ -14,6 +14,14 @@ public class TournamentTimerService : BackgroundService
     private readonly IHubContext<TorneioHub> _hubContext;
     private readonly ILogger<TournamentTimerService> _logger;
     private readonly ConcurrentDictionary<Guid, TournamentTimerState> _activeTimers = new();
+    private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _advanceLocks = new();
+
+    // Cache control for RefreshActiveTimers
+    private DateTime _lastRefresh = DateTime.MinValue;
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
+
+    // Persistence failure tracking
+    private readonly ConcurrentDictionary<Guid, int> _persistFailureCounts = new();
 
     public TournamentTimerService(
         IServiceProvider serviceProvider,
@@ -53,8 +61,12 @@ public class TournamentTimerService : BackgroundService
 
     private async Task ProcessActiveTimers(CancellationToken stoppingToken)
     {
-        // Load active tournaments from database periodically
-        await RefreshActiveTimers(stoppingToken);
+        // Refresh only every 5 seconds, not every tick (reduce DB queries)
+        if (DateTime.UtcNow - _lastRefresh > RefreshInterval)
+        {
+            await RefreshActiveTimers(stoppingToken);
+            _lastRefresh = DateTime.UtcNow;
+        }
 
         // Process each active timer
         foreach (var (tournamentId, timerState) in _activeTimers)
@@ -72,47 +84,88 @@ public class TournamentTimerService : BackgroundService
         }
     }
 
+    private SemaphoreSlim GetAdvanceLock(Guid tournamentId)
+    {
+        return _advanceLocks.GetOrAdd(tournamentId, _ => new SemaphoreSlim(1, 1));
+    }
+
     private async Task RefreshActiveTimers(CancellationToken stoppingToken)
     {
-        using var scope = _serviceProvider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<PokerHubDbContext>();
-
-        var activeTournaments = await context.Tournaments
-            .Where(t => t.Status == TournamentStatus.InProgress)
-            .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
-            .ToListAsync(stoppingToken);
-
-        // Add new active tournaments
-        foreach (var tournament in activeTournaments)
+        try
         {
-            if (!_activeTimers.ContainsKey(tournament.Id))
+            using var scope = _serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<PokerHubDbContext>();
+
+            // Only get InProgress tournaments
+            var activeTournaments = await context.Tournaments
+                .Where(t => t.Status == TournamentStatus.InProgress)
+                .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
+                .ToListAsync(stoppingToken);
+
+            // Add new active tournaments
+            foreach (var tournament in activeTournaments)
             {
-                var currentBlind = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == tournament.CurrentLevel);
-                var nextBlind = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == tournament.CurrentLevel + 1);
-
-                _activeTimers[tournament.Id] = new TournamentTimerState
+                if (!_activeTimers.ContainsKey(tournament.Id))
                 {
-                    TournamentId = tournament.Id,
-                    CurrentLevel = tournament.CurrentLevel,
-                    TimeRemainingSeconds = tournament.TimeRemainingSeconds ?? (currentBlind?.DurationMinutes ?? 15) * 60,
-                    CurrentBlindLevel = currentBlind != null ? MapToDto(currentBlind) : null,
-                    NextBlindLevel = nextBlind != null ? MapToDto(nextBlind) : null,
-                    IsPaused = false,
-                    LastTickTime = DateTime.UtcNow
-                };
+                    var currentBlind = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == tournament.CurrentLevel);
+                    var nextBlind = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == tournament.CurrentLevel + 1);
 
-                _logger.LogInformation("Added timer for tournament {TournamentId}", tournament.Id);
+                    // Use CurrentLevelStartedAt for anti-drift calculation
+                    var levelStartedAt = tournament.CurrentLevelStartedAt ?? DateTime.UtcNow;
+
+                    _activeTimers[tournament.Id] = new TournamentTimerState
+                    {
+                        TournamentId = tournament.Id,
+                        CurrentLevel = tournament.CurrentLevel,
+                        TimeRemainingSeconds = tournament.TimeRemainingSeconds ?? (currentBlind?.DurationMinutes ?? 15) * 60,
+                        CurrentBlindLevel = currentBlind != null ? MapToDto(currentBlind) : null,
+                        NextBlindLevel = nextBlind != null ? MapToDto(nextBlind) : null,
+                        IsPaused = false,
+                        LastTickTime = DateTime.UtcNow,
+                        LevelStartedAt = levelStartedAt
+                    };
+
+                    _logger.LogInformation("Added timer for tournament {TournamentId}", tournament.Id);
+                }
+            }
+
+            // Remove ALL tournaments that are not InProgress (finished, paused, cancelled)
+            var activeIds = activeTournaments.Select(t => t.Id).ToHashSet();
+            var toRemove = _activeTimers.Keys.Where(id => !activeIds.Contains(id)).ToList();
+            foreach (var id in toRemove)
+            {
+                _activeTimers.TryRemove(id, out _);
+                _advanceLocks.TryRemove(id, out _);  // Clean up locks
+                _persistFailureCounts.TryRemove(id, out _);  // Clean up failure counts
+                _logger.LogInformation("Removed timer for tournament {TournamentId}", id);
             }
         }
-
-        // Remove finished/paused tournaments
-        var activeIds = activeTournaments.Select(t => t.Id).ToHashSet();
-        var toRemove = _activeTimers.Keys.Where(id => !activeIds.Contains(id)).ToList();
-        foreach (var id in toRemove)
+        catch (Exception ex) when (IsTransientError(ex))
         {
-            _activeTimers.TryRemove(id, out _);
-            _logger.LogInformation("Removed timer for tournament {TournamentId}", id);
+            // Transient database error - log and continue with cached timers
+            _logger.LogWarning(ex, "Transient database error in RefreshActiveTimers, using cached timer state");
         }
+    }
+
+    /// <summary>
+    /// Checks if an exception is a transient database error that may resolve on retry
+    /// </summary>
+    private static bool IsTransientError(Exception ex)
+    {
+        if (ex is Microsoft.Data.SqlClient.SqlException sqlEx)
+        {
+            // Common transient error numbers
+            // -2: Timeout, 40197: Service busy, 40501: Service busy, 40613: Database unavailable
+            // 49918: Insufficient resources, 49919: Too many requests, 49920: Too many requests
+            var transientErrors = new[] { -2, 40197, 40501, 40613, 49918, 49919, 49920, 4060, 233, 10053, 10054, 10060, 40143, 64 };
+            return transientErrors.Contains(sqlEx.Number);
+        }
+
+        // Check inner exceptions
+        if (ex.InnerException != null)
+            return IsTransientError(ex.InnerException);
+
+        return false;
     }
 
     private async Task ProcessTimer(Guid tournamentId, TournamentTimerState timerState, CancellationToken stoppingToken)
@@ -120,15 +173,17 @@ public class TournamentTimerService : BackgroundService
         if (timerState.IsPaused || timerState.CurrentBlindLevel == null)
             return;
 
-        // Calculate elapsed time since last tick
         var now = DateTime.UtcNow;
-        var elapsed = (int)(now - timerState.LastTickTime).TotalSeconds;
+
+        // ANTI-DRIFT: Calculate time remaining based on absolute reference time
+        // This prevents drift accumulation over long tournament durations
+        var levelDurationSeconds = timerState.CurrentBlindLevel.DurationMinutes * 60;
+        var elapsedSinceLevelStart = (int)(now - timerState.LevelStartedAt).TotalSeconds;
+        var calculatedRemaining = levelDurationSeconds - elapsedSinceLevelStart;
+
+        // Use the calculated value, not incremental subtraction
+        timerState.TimeRemainingSeconds = Math.Max(0, calculatedRemaining);
         timerState.LastTickTime = now;
-
-        // Only process if at least 1 second has passed
-        if (elapsed < 1) return;
-
-        timerState.TimeRemainingSeconds -= elapsed;
 
         // Check if level should change
         if (timerState.TimeRemainingSeconds <= 0)
@@ -155,48 +210,67 @@ public class TournamentTimerService : BackgroundService
 
     private async Task AdvanceLevel(Guid tournamentId, TournamentTimerState timerState, CancellationToken stoppingToken)
     {
-        using var scope = _serviceProvider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<PokerHubDbContext>();
-
-        var tournament = await context.Tournaments
-            .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
-            .FirstOrDefaultAsync(t => t.Id == tournamentId, stoppingToken);
-
-        if (tournament == null) return;
-
-        // Get next level
-        var nextLevel = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == timerState.CurrentLevel + 1);
-
-        if (nextLevel == null)
+        // Use lock to prevent race condition with ManualAdvanceLevel
+        var lockObj = GetAdvanceLock(tournamentId);
+        if (!await lockObj.WaitAsync(0, stoppingToken)) // Non-blocking try
         {
-            // No more levels - keep current level running
-            _logger.LogWarning("Tournament {TournamentId} has no more blind levels", tournamentId);
-            timerState.TimeRemainingSeconds = 60; // Give 1 minute buffer
+            // Another advance is in progress, skip this tick
             return;
         }
 
-        // Advance to next level
-        timerState.CurrentLevel = nextLevel.Order;
-        timerState.TimeRemainingSeconds = nextLevel.DurationMinutes * 60;
-        timerState.CurrentBlindLevel = MapToDto(nextLevel);
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<PokerHubDbContext>();
 
-        var futureLevel = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == nextLevel.Order + 1);
-        timerState.NextBlindLevel = futureLevel != null ? MapToDto(futureLevel) : null;
+            var tournament = await context.Tournaments
+                .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
+                .FirstOrDefaultAsync(t => t.Id == tournamentId, stoppingToken);
 
-        // Update database
-        tournament.CurrentLevel = nextLevel.Order;
-        tournament.TimeRemainingSeconds = timerState.TimeRemainingSeconds;
-        tournament.CurrentLevelStartedAt = DateTime.UtcNow;
-        await context.SaveChangesAsync(stoppingToken);
+            if (tournament == null) return;
 
-        // Broadcast level change
-        await TorneioHub.BroadcastLevelChanged(
-            _hubContext,
-            tournamentId,
-            timerState.CurrentBlindLevel,
-            timerState.NextBlindLevel);
+            // Get next level
+            var nextLevel = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == timerState.CurrentLevel + 1);
 
-        _logger.LogInformation("Tournament {TournamentId} advanced to level {Level}", tournamentId, nextLevel.Order);
+            if (nextLevel == null)
+            {
+                // No more levels - keep current level running
+                _logger.LogWarning("Tournament {TournamentId} has no more blind levels", tournamentId);
+                timerState.TimeRemainingSeconds = 60; // Give 1 minute buffer
+                timerState.LevelStartedAt = DateTime.UtcNow; // Reset to prevent immediate re-trigger
+                return;
+            }
+
+            var now = DateTime.UtcNow;
+
+            // Advance to next level
+            timerState.CurrentLevel = nextLevel.Order;
+            timerState.TimeRemainingSeconds = nextLevel.DurationMinutes * 60;
+            timerState.CurrentBlindLevel = MapToDto(nextLevel);
+            timerState.LevelStartedAt = now; // CRITICAL: Reset level start time for anti-drift
+
+            var futureLevel = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == nextLevel.Order + 1);
+            timerState.NextBlindLevel = futureLevel != null ? MapToDto(futureLevel) : null;
+
+            // Update database
+            tournament.CurrentLevel = nextLevel.Order;
+            tournament.TimeRemainingSeconds = timerState.TimeRemainingSeconds;
+            tournament.CurrentLevelStartedAt = now;
+            await context.SaveChangesAsync(stoppingToken);
+
+            // Broadcast level change
+            await TorneioHub.BroadcastLevelChanged(
+                _hubContext,
+                tournamentId,
+                timerState.CurrentBlindLevel,
+                timerState.NextBlindLevel);
+
+            _logger.LogInformation("Tournament {TournamentId} advanced to level {Level}", tournamentId, nextLevel.Order);
+        }
+        finally
+        {
+            lockObj.Release();
+        }
     }
 
     private async Task PersistTimerState(Guid tournamentId, TournamentTimerState timerState, CancellationToken stoppingToken)
@@ -210,12 +284,27 @@ public class TournamentTimerService : BackgroundService
             if (tournament != null)
             {
                 tournament.TimeRemainingSeconds = timerState.TimeRemainingSeconds;
+                tournament.CurrentLevelStartedAt = timerState.LevelStartedAt;
                 await context.SaveChangesAsync(stoppingToken);
+
+                // Reset failure count on success
+                _persistFailureCounts.TryRemove(tournamentId, out _);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to persist timer state for tournament {TournamentId}", tournamentId);
+            // Track consecutive failures
+            var failureCount = _persistFailureCounts.AddOrUpdate(tournamentId, 1, (_, count) => count + 1);
+
+            _logger.LogWarning(ex, "Failed to persist timer state for tournament {TournamentId} (attempt {Count})",
+                tournamentId, failureCount);
+
+            // After 5 consecutive failures, log as critical
+            if (failureCount >= 5)
+            {
+                _logger.LogCritical("Persistent failure to save timer state for {TournamentId} - {Count} consecutive failures",
+                    tournamentId, failureCount);
+            }
         }
     }
 
@@ -261,41 +350,54 @@ public class TournamentTimerService : BackgroundService
     /// </summary>
     public async Task ManualAdvanceLevel(Guid tournamentId)
     {
-        using var scope = _serviceProvider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<PokerHubDbContext>();
+        // Use lock to prevent race condition with auto-advance
+        var lockObj = GetAdvanceLock(tournamentId);
+        await lockObj.WaitAsync(); // Blocking wait for manual advance
 
-        var tournament = await context.Tournaments
-            .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
-            .FirstOrDefaultAsync(t => t.Id == tournamentId);
-
-        if (tournament == null) return;
-
-        // Use current level from DB (already advanced by AdvanceToNextLevelAsync)
-        var currentLevel = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == tournament.CurrentLevel);
-        if (currentLevel == null)
+        try
         {
-            _logger.LogWarning("Tournament {TournamentId} current level {Level} not found", tournamentId, tournament.CurrentLevel);
-            return;
+            using var scope = _serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<PokerHubDbContext>();
+
+            var tournament = await context.Tournaments
+                .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
+                .FirstOrDefaultAsync(t => t.Id == tournamentId);
+
+            if (tournament == null) return;
+
+            // Use current level from DB (already advanced by AdvanceToNextLevelAsync)
+            var currentLevel = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == tournament.CurrentLevel);
+            if (currentLevel == null)
+            {
+                _logger.LogWarning("Tournament {TournamentId} current level {Level} not found", tournamentId, tournament.CurrentLevel);
+                return;
+            }
+
+            var now = DateTime.UtcNow;
+            var currentLevelDto = MapToDto(currentLevel);
+            var nextLevel = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == tournament.CurrentLevel + 1);
+            var nextLevelDto = nextLevel != null ? MapToDto(nextLevel) : null;
+
+            // Update in-memory state if timer is active
+            if (_activeTimers.TryGetValue(tournamentId, out var timerState))
+            {
+                timerState.CurrentLevel = tournament.CurrentLevel;
+                timerState.TimeRemainingSeconds = tournament.TimeRemainingSeconds ?? currentLevel.DurationMinutes * 60;
+                timerState.CurrentBlindLevel = currentLevelDto;
+                timerState.NextBlindLevel = nextLevelDto;
+                timerState.LastTickTime = now;
+                timerState.LevelStartedAt = tournament.CurrentLevelStartedAt ?? now; // CRITICAL: Sync level start time
+            }
+
+            // Broadcast level change to all clients
+            await TorneioHub.BroadcastLevelChanged(_hubContext, tournamentId, currentLevelDto, nextLevelDto);
+
+            _logger.LogInformation("Tournament {TournamentId} synced to level {Level}", tournamentId, tournament.CurrentLevel);
         }
-
-        var currentLevelDto = MapToDto(currentLevel);
-        var nextLevel = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == tournament.CurrentLevel + 1);
-        var nextLevelDto = nextLevel != null ? MapToDto(nextLevel) : null;
-
-        // Update in-memory state if timer is active
-        if (_activeTimers.TryGetValue(tournamentId, out var timerState))
+        finally
         {
-            timerState.CurrentLevel = tournament.CurrentLevel;
-            timerState.TimeRemainingSeconds = tournament.TimeRemainingSeconds ?? currentLevel.DurationMinutes * 60;
-            timerState.CurrentBlindLevel = currentLevelDto;
-            timerState.NextBlindLevel = nextLevelDto;
-            timerState.LastTickTime = DateTime.UtcNow;
+            lockObj.Release();
         }
-
-        // Broadcast level change to all clients
-        await TorneioHub.BroadcastLevelChanged(_hubContext, tournamentId, currentLevelDto, nextLevelDto);
-
-        _logger.LogInformation("Tournament {TournamentId} synced to level {Level}", tournamentId, tournament.CurrentLevel);
     }
 
     #endregion
@@ -323,5 +425,6 @@ public class TournamentTimerService : BackgroundService
         public BlindLevelDto? NextBlindLevel { get; set; }
         public bool IsPaused { get; set; }
         public DateTime LastTickTime { get; set; }
+        public DateTime LevelStartedAt { get; set; } // For anti-drift calculation
     }
 }

@@ -5,13 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="37797a15-e9ca-400b-a535-6ec9f8109e73" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/PokerHub.Application/Interfaces/IPlayerService.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/PokerHub.Application/Interfaces/IPlayerService.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/PokerHub.Application/Services/PlayerService.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/PokerHub.Application/Services/PlayerService.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/PokerHub.Web/Components/Account/Pages/Register.razor" beforeDir="false" afterPath="$PROJECT_DIR$/src/PokerHub.Web/Components/Account/Pages/Register.razor" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/PokerHub.Web/Components/App.razor" beforeDir="false" afterPath="$PROJECT_DIR$/src/PokerHub.Web/Components/App.razor" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/PokerHub.Web/Components/Layout/MainLayout.razor" beforeDir="false" afterPath="$PROJECT_DIR$/src/PokerHub.Web/Components/Layout/MainLayout.razor" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/PokerHub.Web/Components/Routes.razor" beforeDir="false" afterPath="$PROJECT_DIR$/src/PokerHub.Web/Components/Routes.razor" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/PokerHub.Web/Components/Pages/Timer/Index.razor" beforeDir="false" afterPath="$PROJECT_DIR$/src/PokerHub.Web/Components/Pages/Timer/Index.razor" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/PokerHub.Web/Components/Pages/Torneio/Dashboard.razor" beforeDir="false" afterPath="$PROJECT_DIR$/src/PokerHub.Web/Components/Pages/Torneio/Dashboard.razor" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/PokerHub.Web/Hubs/TorneioHub.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/PokerHub.Web/Hubs/TorneioHub.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/PokerHub.Web/Program.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/PokerHub.Web/Program.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/PokerHub.Web/Services/TournamentTimerService.cs" beforeDir="false" afterPath="$PROJECT_DIR$/src/PokerHub.Web/Services/TournamentTimerService.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/PokerHub.Web/appsettings.json" beforeDir="false" afterPath="$PROJECT_DIR$/src/PokerHub.Web/appsettings.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

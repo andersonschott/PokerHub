@@ -16,13 +16,34 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Blazor Server configuration for long-running tournaments (4-8 hours)
+builder.Services.AddServerSideBlazor(options =>
+{
+    // Keep circuit in memory for 10 minutes after disconnection (allows reconnection)
+    options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(10);
+
+    // Maximum disconnected circuits to retain in memory
+    options.DisconnectedCircuitMaxRetained = 100;
+
+    // Detailed errors only in development
+    options.DetailedErrors = builder.Environment.IsDevelopment();
+});
+
 // MudBlazor
 builder.Services.AddMudServices();
 
-// SignalR
-builder.Services.AddSignalR();
+// SignalR with optimized settings for long-running connections
+builder.Services.AddSignalR(options =>
+{
+    options.EnableDetailedErrors = true;
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
+    options.HandshakeTimeout = TimeSpan.FromSeconds(15);
+});
 
 // Background Services
+// DatabaseWarmupService runs first to wake up Azure SQL from sleep mode
+builder.Services.AddHostedService<DatabaseWarmupService>();
 builder.Services.AddSingleton<TournamentTimerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<TournamentTimerService>());
 
@@ -44,7 +65,15 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
 builder.Services.AddDbContext<PokerHubDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlServer(connectionString, sqlOptions =>
+    {
+        // Enable retry on transient failures (connection timeouts, etc.)
+        sqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(30),
+            errorNumbersToAdd: null);
+        sqlOptions.CommandTimeout(60); // 60 seconds command timeout
+    }));
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
@@ -58,6 +87,10 @@ builder.Services.AddIdentityCore<User>(options =>
     .AddDefaultTokenProviders();
 
 builder.Services.AddSingleton<IEmailSender<User>, IdentityNoOpEmailSender>();
+
+// Health Checks for monitoring
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<PokerHubDbContext>("database");
 
 var app = builder.Build();
 
@@ -84,6 +117,9 @@ app.MapRazorComponents<App>()
 
 // SignalR Hub
 app.MapHub<TorneioHub>("/hubs/torneio");
+
+// Health Check endpoint for Azure monitoring
+app.MapHealthChecks("/health");
 
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
