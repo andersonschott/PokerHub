@@ -569,6 +569,28 @@ public class TournamentService : ITournamentService
         };
     }
 
+    public async Task<bool> CanUserManageTournamentAsync(Guid tournamentId, string userId)
+    {
+        var tournament = await _context.Tournaments
+            .Include(t => t.League)
+            .Include(t => t.Players)
+                .ThenInclude(tp => tp.Player)
+            .FirstOrDefaultAsync(t => t.Id == tournamentId);
+
+        if (tournament == null)
+            return false;
+
+        // League organizer can always manage
+        if (tournament.League.OrganizerId == userId)
+            return true;
+
+        // Checked-in player can manage
+        var isCheckedInPlayer = tournament.Players
+            .Any(tp => tp.Player.UserId == userId && tp.CheckedInAt != null);
+
+        return isCheckedInPlayer;
+    }
+
     private static TournamentDto MapToDto(Tournament t)
     {
         return new TournamentDto(

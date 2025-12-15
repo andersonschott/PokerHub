@@ -7,6 +7,7 @@
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>@(_league?.Name ?? "Liga") - PokerHub</PageTitle>
 
@@ -30,18 +31,21 @@ else
                 }
             </MudStack>
             <MudStack Row Spacing="2">
-                <MudButton Variant="Variant.Outlined"
-                          Color="Color.Primary"
-                          StartIcon="@Icons.Material.Filled.ContentCopy"
-                          OnClick="ShowInviteCode">
-                    Convidar
-                </MudButton>
-                <MudButton Variant="Variant.Outlined"
-                          Color="Color.Default"
-                          StartIcon="@Icons.Material.Filled.Settings"
-                          Href="@($"/ligas/{LeagueId}/editar")">
-                    Editar
-                </MudButton>
+                @if (_isOrganizer)
+                {
+                    <MudButton Variant="Variant.Outlined"
+                              Color="Color.Primary"
+                              StartIcon="@Icons.Material.Filled.ContentCopy"
+                              OnClick="ShowInviteCode">
+                        Convidar
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                              Color="Color.Default"
+                              StartIcon="@Icons.Material.Filled.Settings"
+                              Href="@($"/ligas/{LeagueId}/editar")">
+                        Editar
+                    </MudButton>
+                }
             </MudStack>
         </MudStack>
 
@@ -49,12 +53,15 @@ else
             <MudTabPanel Text="Jogadores" Icon="@Icons.Material.Filled.People">
                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
                     <MudText Typo="Typo.h6">Jogadores (@_league.Players.Count)</MudText>
-                    <MudButton Variant="Variant.Filled"
-                              Color="Color.Primary"
-                              StartIcon="@Icons.Material.Filled.PersonAdd"
-                              OnClick="OpenAddPlayerDialog">
-                        Adicionar Jogador
-                    </MudButton>
+                    @if (_isOrganizer)
+                    {
+                        <MudButton Variant="Variant.Filled"
+                                  Color="Color.Primary"
+                                  StartIcon="@Icons.Material.Filled.PersonAdd"
+                                  OnClick="OpenAddPlayerDialog">
+                            Adicionar Jogador
+                        </MudButton>
+                    }
                 </MudStack>
 
                 @if (!_league.Players.Any())
@@ -72,7 +79,10 @@ else
                             <MudTh>Torneios</MudTh>
                             <MudTh>Vitorias</MudTh>
                             <MudTh>Lucro</MudTh>
-                            <MudTh>Acoes</MudTh>
+                            @if (_isOrganizer)
+                            {
+                                <MudTh>Acoes</MudTh>
+                            }
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd DataLabel="Nome">@context.Name</MudTd>
@@ -84,15 +94,18 @@ else
                                     R$ @context.TotalProfit.ToString("N2")
                                 </MudText>
                             </MudTd>
-                            <MudTd DataLabel="Acoes">
-                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                                              Size="Size.Small"
-                                              OnClick="@(() => EditPlayer(context.Id))" />
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                              Size="Size.Small"
-                                              Color="Color.Error"
-                                              OnClick="@(() => DeletePlayer(context))" />
-                            </MudTd>
+                            @if (_isOrganizer)
+                            {
+                                <MudTd DataLabel="Acoes">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                  Size="Size.Small"
+                                                  OnClick="@(() => EditPlayer(context.Id))" />
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                  Size="Size.Small"
+                                                  Color="Color.Error"
+                                                  OnClick="@(() => DeletePlayer(context))" />
+                                </MudTd>
+                            }
                         </RowTemplate>
                     </MudTable>
                 }
@@ -101,12 +114,15 @@ else
             <MudTabPanel Text="Torneios" Icon="@Icons.Material.Filled.EmojiEvents">
                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
                     <MudText Typo="Typo.h6">Torneios (@(_tournaments?.Count ?? 0))</MudText>
-                    <MudButton Variant="Variant.Filled"
-                              Color="Color.Primary"
-                              StartIcon="@Icons.Material.Filled.Add"
-                              Href="@($"/ligas/{LeagueId}/torneios/criar")">
-                        Criar Torneio
-                    </MudButton>
+                    @if (_isOrganizer)
+                    {
+                        <MudButton Variant="Variant.Filled"
+                                  Color="Color.Primary"
+                                  StartIcon="@Icons.Material.Filled.Add"
+                                  Href="@($"/ligas/{LeagueId}/torneios/criar")">
+                            Criar Torneio
+                        </MudButton>
+                    }
                 </MudStack>
 
                 @if (_tournaments == null || !_tournaments.Any())
@@ -278,7 +294,10 @@ else
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@(() => _inviteDialogVisible = false)">Fechar</MudButton>
-        <MudButton Color="Color.Primary" OnClick="RegenerateInviteCode">Gerar Novo Codigo</MudButton>
+        @if (_isOrganizer)
+        {
+            <MudButton Color="Color.Primary" OnClick="RegenerateInviteCode">Gerar Novo Codigo</MudButton>
+        }
     </DialogActions>
 </MudDialog>
 
@@ -289,9 +308,27 @@ else
     private IReadOnlyList<TournamentDto>? _tournaments;
     private bool _loading = true;
     private bool _inviteDialogVisible;
+    private bool _isOrganizer;
+    private bool _canAccess;
+    private string? _currentUserId;
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        if (!string.IsNullOrEmpty(_currentUserId))
+        {
+            _canAccess = await LeagueService.CanUserAccessLeagueAsync(LeagueId, _currentUserId);
+            _isOrganizer = await LeagueService.IsUserOrganizerAsync(LeagueId, _currentUserId);
+
+            if (!_canAccess)
+            {
+                Navigation.NavigateTo("/ligas");
+                return;
+            }
+        }
+
         await LoadData();
     }
 

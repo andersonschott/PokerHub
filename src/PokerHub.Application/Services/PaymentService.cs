@@ -200,6 +200,50 @@ public class PaymentService : IPaymentService
         return true;
     }
 
+    public async Task<bool> AdminMarkAsPaidAsync(Guid paymentId, string organizerUserId)
+    {
+        var payment = await _context.Payments
+            .Include(p => p.Tournament)
+                .ThenInclude(t => t.League)
+            .FirstOrDefaultAsync(p => p.Id == paymentId);
+
+        if (payment == null)
+            return false;
+
+        // Verify user is the league organizer
+        if (payment.Tournament.League.OrganizerId != organizerUserId)
+            return false;
+
+        if (payment.Status != PaymentStatus.Pending)
+            return false;
+
+        payment.MarkAsPaid();
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> AdminConfirmPaymentAsync(Guid paymentId, string organizerUserId)
+    {
+        var payment = await _context.Payments
+            .Include(p => p.Tournament)
+                .ThenInclude(t => t.League)
+            .FirstOrDefaultAsync(p => p.Id == paymentId);
+
+        if (payment == null)
+            return false;
+
+        // Verify user is the league organizer
+        if (payment.Tournament.League.OrganizerId != organizerUserId)
+            return false;
+
+        if (payment.Status != PaymentStatus.Paid)
+            return false;
+
+        payment.Confirm();
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
     public async Task<IReadOnlyList<PlayerBalanceDto>> GetTournamentPlayerBalancesAsync(Guid tournamentId)
     {
         var tournament = await _context.Tournaments
@@ -221,6 +265,19 @@ public class PaymentService : IPaymentService
             ))
             .OrderByDescending(b => b.Balance)
             .ToList();
+    }
+
+    public async Task<IReadOnlyList<PaymentDto>> GetPaymentsForOrganizerAsync(string organizerUserId)
+    {
+        return await _context.Payments
+            .Include(p => p.Tournament)
+                .ThenInclude(t => t.League)
+            .Include(p => p.FromPlayer)
+            .Include(p => p.ToPlayer)
+            .Where(p => p.Tournament.League.OrganizerId == organizerUserId && p.Status != PaymentStatus.Confirmed)
+            .OrderByDescending(p => p.CreatedAt)
+            .Select(p => MapToDto(p))
+            .ToListAsync();
     }
 
     private static PaymentDto MapToDto(Payment p)

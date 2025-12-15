@@ -23,54 +23,99 @@
     {
         <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
     }
-    else if (_leagues == null || !_leagues.Any())
-    {
-        <MudAlert Severity="Severity.Info">
-            Voce ainda nao tem nenhuma liga. Crie sua primeira liga para comecar!
-        </MudAlert>
-    }
     else
     {
-        <MudGrid>
-            @foreach (var league in _leagues)
-            {
-                <MudItem xs="12" sm="6" md="4">
-                    <MudCard Elevation="2" Class="cursor-pointer" @onclick="() => NavigateToLeague(league.Id)">
-                        <MudCardHeader>
-                            <CardHeaderContent>
-                                <MudText Typo="Typo.h6">@league.Name</MudText>
-                            </CardHeaderContent>
-                            <CardHeaderActions>
-                                <MudIconButton Icon="@Icons.Material.Filled.Settings"
-                                              OnClick="@(() => NavigateToEdit(league.Id))"
-                                              Color="Color.Default" />
-                            </CardHeaderActions>
-                        </MudCardHeader>
-                        <MudCardContent>
-                            @if (!string.IsNullOrEmpty(league.Description))
-                            {
-                                <MudText Typo="Typo.body2" Class="mb-2">@league.Description</MudText>
-                            }
-                            <MudStack Row Spacing="4">
-                                <MudChip T="string" Icon="@Icons.Material.Filled.People" Size="Size.Small">
-                                    @league.PlayerCount jogadores
-                                </MudChip>
-                                <MudChip T="string" Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Small">
-                                    @league.TournamentCount torneios
-                                </MudChip>
-                            </MudStack>
-                        </MudCardContent>
-                        <MudCardActions>
-                            <MudButton Variant="Variant.Text"
-                                      Color="Color.Primary"
-                                      OnClick="@(() => ShowInviteCode(league))">
-                                Codigo de Convite
-                            </MudButton>
-                        </MudCardActions>
-                    </MudCard>
-                </MudItem>
-            }
-        </MudGrid>
+        @if (_leagues != null && _leagues.Any())
+        {
+            <MudText Typo="Typo.h5" Class="mb-3">Minhas Ligas (Organizador)</MudText>
+            <MudGrid>
+                @foreach (var league in _leagues)
+                {
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudCard Elevation="2" Class="cursor-pointer" @onclick="() => NavigateToLeague(league.Id)">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">@league.Name</MudText>
+                                </CardHeaderContent>
+                                <CardHeaderActions>
+                                    <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                                                  OnClick="@(() => NavigateToEdit(league.Id))"
+                                                  Color="Color.Default" />
+                                </CardHeaderActions>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                @if (!string.IsNullOrEmpty(league.Description))
+                                {
+                                    <MudText Typo="Typo.body2" Class="mb-2">@league.Description</MudText>
+                                }
+                                <MudStack Row Spacing="4">
+                                    <MudChip T="string" Icon="@Icons.Material.Filled.People" Size="Size.Small">
+                                        @league.PlayerCount jogadores
+                                    </MudChip>
+                                    <MudChip T="string" Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Small">
+                                        @league.TournamentCount torneios
+                                    </MudChip>
+                                </MudStack>
+                            </MudCardContent>
+                            <MudCardActions>
+                                <MudButton Variant="Variant.Text"
+                                          Color="Color.Primary"
+                                          OnClick="@(() => ShowInviteCode(league))">
+                                    Codigo de Convite
+                                </MudButton>
+                            </MudCardActions>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+
+        @if (_participatingLeagues != null && _participatingLeagues.Any())
+        {
+            <MudDivider Class="my-6" />
+            <MudText Typo="Typo.h5" Class="mb-3">Ligas que Participo</MudText>
+            <MudGrid>
+                @foreach (var league in _participatingLeagues)
+                {
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudCard Elevation="2" Class="cursor-pointer" @onclick="() => NavigateToLeague(league.Id)">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">@league.Name</MudText>
+                                </CardHeaderContent>
+                                <CardHeaderActions>
+                                    <MudChip T="string" Color="Color.Info" Size="Size.Small">Jogador</MudChip>
+                                </CardHeaderActions>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                @if (!string.IsNullOrEmpty(league.Description))
+                                {
+                                    <MudText Typo="Typo.body2" Class="mb-2">@league.Description</MudText>
+                                }
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-2">
+                                    Organizado por @league.OrganizerName
+                                </MudText>
+                                <MudStack Row Spacing="4">
+                                    <MudChip T="string" Icon="@Icons.Material.Filled.People" Size="Size.Small">
+                                        @league.PlayerCount jogadores
+                                    </MudChip>
+                                    <MudChip T="string" Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Small">
+                                        @league.TournamentCount torneios
+                                    </MudChip>
+                                </MudStack>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+
+        @if ((_leagues == null || !_leagues.Any()) && (_participatingLeagues == null || !_participatingLeagues.Any()))
+        {
+            <MudAlert Severity="Severity.Info">
+                Voce ainda nao tem nenhuma liga. Crie sua primeira liga para comecar!
+            </MudAlert>
+        }
     }
 </MudContainer>
 
@@ -96,6 +141,7 @@
 
 @code {
     private IReadOnlyList<LeagueDto>? _leagues;
+    private IReadOnlyList<LeagueDto>? _participatingLeagues;
     private bool _loading = true;
     private bool _inviteDialogVisible;
     private LeagueDto? _selectedLeague;
@@ -116,6 +162,7 @@
             if (!string.IsNullOrEmpty(userId))
             {
                 _leagues = await LeagueService.GetLeaguesByUserAsync(userId);
+                _participatingLeagues = await LeagueService.GetLeaguesAsPlayerAsync(userId);
             }
         }
         finally

@@ -10,6 +10,7 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>@(_tournament?.Name ?? "Torneio") - PokerHub</PageTitle>
 
@@ -34,7 +35,7 @@
                         </MudChip>
                     </div>
                     <MudStack Row="true" Spacing="2">
-                        @if (_tournament.Status == TournamentStatus.Scheduled)
+                        @if (_canManage && _tournament.Status == TournamentStatus.Scheduled)
                         {
                             <MudButton Variant="Variant.Filled"
                                       Color="Color.Success"
@@ -46,13 +47,16 @@
                         }
                         else if (_tournament.Status == TournamentStatus.InProgress)
                         {
-                            <MudButton Variant="Variant.Outlined"
-                                      Color="Color.Warning"
-                                      StartIcon="@Icons.Material.Filled.Pause"
-                                      OnClick="PauseTournament"
-                                      Disabled="_processing">
-                                Pausar
-                            </MudButton>
+                            @if (_canManage)
+                            {
+                                <MudButton Variant="Variant.Outlined"
+                                          Color="Color.Warning"
+                                          StartIcon="@Icons.Material.Filled.Pause"
+                                          OnClick="PauseTournament"
+                                          Disabled="_processing">
+                                    Pausar
+                                </MudButton>
+                            }
                             <MudButton Variant="Variant.Filled"
                                       Color="Color.Primary"
                                       StartIcon="@Icons.Material.Filled.Tv"
@@ -61,7 +65,7 @@
                                 Abrir Timer
                             </MudButton>
                         }
-                        else if (_tournament.Status == TournamentStatus.Paused)
+                        else if (_canManage && _tournament.Status == TournamentStatus.Paused)
                         {
                             <MudButton Variant="Variant.Filled"
                                       Color="Color.Success"
@@ -172,7 +176,7 @@
                             <MudText Typo="Typo.h6">Jogadores</MudText>
                         </CardHeaderContent>
                         <CardHeaderActions>
-                            @if (_tournament.Status == TournamentStatus.Scheduled)
+                            @if (_canManage && _tournament.Status == TournamentStatus.Scheduled)
                             {
                                 <MudButton Variant="Variant.Outlined"
                                           Color="Color.Primary"
@@ -214,7 +218,7 @@
                                     </MudChip>
                                 </MudTd>
                                 <MudTd>
-                                    @if (_tournament.Status != TournamentStatus.Finished && IsPlayerPlaying(context) && _rebuyAllowed)
+                                    @if (_canManage && _tournament.Status != TournamentStatus.Finished && IsPlayerPlaying(context) && _rebuyAllowed)
                                     {
                                         <MudStack Row="true" Spacing="1">
                                             <MudIconButton Icon="@Icons.Material.Filled.Remove"
@@ -235,7 +239,7 @@
                                     }
                                 </MudTd>
                                 <MudTd>
-                                    @if (_tournament.Status != TournamentStatus.Finished && IsPlayerPlaying(context) && _detail?.AddonValue != null)
+                                    @if (_canManage && _tournament.Status != TournamentStatus.Finished && IsPlayerPlaying(context) && _detail?.AddonValue != null)
                                     {
                                         <MudSwitch T="bool"
                                                   Value="@context.HasAddon"
@@ -260,7 +264,7 @@
                                     }
                                 </MudTd>
                                 <MudTd>
-                                    @if (_tournament.Status == TournamentStatus.Scheduled)
+                                    @if (_canManage && _tournament.Status == TournamentStatus.Scheduled)
                                     {
                                         @if (!context.IsCheckedIn)
                                         {
@@ -285,7 +289,7 @@
                                                       Size="Size.Small"
                                                       OnClick="@(() => RemovePlayer(context.PlayerId))" />
                                     }
-                                    else if ((_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused) && IsPlayerPlaying(context))
+                                    else if (_canManage && (_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused) && IsPlayerPlaying(context))
                                     {
                                         <MudButton Variant="Variant.Text"
                                                   Color="Color.Error"
@@ -311,12 +315,15 @@
                                 <MudText Typo="Typo.h6">Despesas Extras</MudText>
                             </CardHeaderContent>
                             <CardHeaderActions>
-                                <MudButton Variant="Variant.Outlined"
-                                          Color="Color.Primary"
-                                          StartIcon="@Icons.Material.Filled.Add"
-                                          OnClick="OpenAddExpenseDialog">
-                                    Adicionar Despesa
-                                </MudButton>
+                                @if (_canManage)
+                                {
+                                    <MudButton Variant="Variant.Outlined"
+                                              Color="Color.Primary"
+                                              StartIcon="@Icons.Material.Filled.Add"
+                                              OnClick="OpenAddExpenseDialog">
+                                        Adicionar Despesa
+                                    </MudButton>
+                                }
                             </CardHeaderActions>
                         </MudCardHeader>
                         <MudCardContent>
@@ -344,10 +351,13 @@
                                             </MudTooltip>
                                         </MudTd>
                                         <MudTd>
-                                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                                          Color="Color.Error"
-                                                          Size="Size.Small"
-                                                          OnClick="@(() => DeleteExpense(context.Id))" />
+                                            @if (_canManage)
+                                            {
+                                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                              Color="Color.Error"
+                                                              Size="Size.Small"
+                                                              OnClick="@(() => DeleteExpense(context.Id))" />
+                                            }
                                         </MudTd>
                                     </RowTemplate>
                                 </MudTable>
@@ -363,7 +373,7 @@
             }
 
             <!-- Actions -->
-            @if (_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused)
+            @if (_canManage && (_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused))
             {
                 <MudItem xs="12">
                     <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
@@ -396,9 +406,14 @@
     private bool _loading = true;
     private bool _processing;
     private bool _rebuyAllowed;
+    private bool _canManage;
+    private string? _currentUserId;
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
         await LoadTournament();
         await SetupSignalR();
     }
@@ -443,6 +458,13 @@
         _timerState = await TournamentService.GetTimerStateAsync(TournamentId);
         _rebuyAllowed = await TournamentService.IsRebuyAllowedAsync(TournamentId);
         _expenses = await ExpenseService.GetExpensesByTournamentAsync(TournamentId);
+
+        // Check if user can manage this tournament (organizer or checked-in player)
+        if (!string.IsNullOrEmpty(_currentUserId))
+        {
+            _canManage = await TournamentService.CanUserManageTournamentAsync(TournamentId, _currentUserId);
+        }
+
         _loading = false;
     }
 

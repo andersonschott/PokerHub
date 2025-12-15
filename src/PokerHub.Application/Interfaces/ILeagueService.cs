@@ -13,4 +13,14 @@ public interface ILeagueService
     Task<string> RegenerateInviteCodeAsync(Guid leagueId);
     Task<bool> DeleteLeagueAsync(Guid leagueId);
     Task<bool> IsUserOrganizerAsync(Guid leagueId, string userId);
+
+    /// <summary>
+    /// Gets leagues where the user is a linked player (not organizer).
+    /// </summary>
+    Task<IReadOnlyList<LeagueDto>> GetLeaguesAsPlayerAsync(string userId);
+
+    /// <summary>
+    /// Checks if user can access a league (organizer or linked player).
+    /// </summary>
+    Task<bool> CanUserAccessLeagueAsync(Guid leagueId, string userId);
 }

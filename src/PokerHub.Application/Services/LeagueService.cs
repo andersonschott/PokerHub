@@ -217,4 +217,50 @@ public class LeagueService : ILeagueService
         return await _context.Leagues
             .AnyAsync(l => l.Id == leagueId && l.OrganizerId == userId);
     }
+
+    public async Task<IReadOnlyList<LeagueDto>> GetLeaguesAsPlayerAsync(string userId)
+    {
+        // Get league IDs where the user is a linked player
+        var leagueIds = await _context.Players
+            .Where(p => p.UserId == userId && p.IsActive)
+            .Select(p => p.LeagueId)
+            .Distinct()
+            .ToListAsync();
+
+        // Exclude leagues where user is organizer (those are returned by GetLeaguesByUserAsync)
+        return await _context.Leagues
+            .Where(l => leagueIds.Contains(l.Id) && l.IsActive && l.OrganizerId != userId)
+            .Include(l => l.Organizer)
+            .Select(l => new LeagueDto(
+                l.Id,
+                l.Name,
+                l.Description,
+                l.InviteCode,
+                l.OrganizerId,
+                l.Organizer.Name,
+                l.BlockCheckInWithDebt,
+                l.Players.Count(p => p.IsActive),
+                l.Tournaments.Count,
+                l.CreatedAt,
+                l.IsActive
+            ))
+            .ToListAsync();
+    }
+
+    public async Task<bool> CanUserAccessLeagueAsync(Guid leagueId, string userId)
+    {
+        var league = await _context.Leagues
+            .Include(l => l.Players)
+            .FirstOrDefaultAsync(l => l.Id == leagueId && l.IsActive);
+
+        if (league == null)
+            return false;
+
+        // Organizer can always access
+        if (league.OrganizerId == userId)
+            return true;
+
+        // Linked player can access
+        return league.Players.Any(p => p.UserId == userId && p.IsActive);
+    }
 }

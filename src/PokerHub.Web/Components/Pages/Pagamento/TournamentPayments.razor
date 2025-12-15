@@ -4,9 +4,11 @@
 @inject IPaymentService PaymentService
 @inject ITournamentService TournamentService
 @inject ITournamentExpenseService ExpenseService
+@inject ILeagueService LeagueService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Pagamentos - PokerHub</PageTitle>
 
@@ -154,6 +156,10 @@
                             <MudTh>PIX</MudTh>
                             <MudTh>Status</MudTh>
                             <MudTh>Dias</MudTh>
+                            @if (_isOrganizer)
+                            {
+                                <MudTh>Acoes</MudTh>
+                            }
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd>@context.FromPlayerName</MudTd>
@@ -190,6 +196,35 @@
                                     <text>-</text>
                                 }
                             </MudTd>
+                            @if (_isOrganizer)
+                            {
+                                <MudTd>
+                                    @if (context.Status == PaymentStatus.Pending)
+                                    {
+                                        <MudButton Size="Size.Small"
+                                                   Variant="Variant.Text"
+                                                   Color="Color.Primary"
+                                                   OnClick="@(() => AdminMarkPaid(context.Id))"
+                                                   Disabled="_processingPayment == context.Id">
+                                            Marcar Pago
+                                        </MudButton>
+                                    }
+                                    else if (context.Status == PaymentStatus.Paid)
+                                    {
+                                        <MudButton Size="Size.Small"
+                                                   Variant="Variant.Text"
+                                                   Color="Color.Success"
+                                                   OnClick="@(() => AdminConfirm(context.Id))"
+                                                   Disabled="_processingPayment == context.Id">
+                                            Confirmar
+                                        </MudButton>
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.Check" Color="Color.Success" Size="Size.Small" />
+                                    }
+                                </MudTd>
+                            }
                         </RowTemplate>
                     </MudTable>
                 </MudCardContent>
@@ -207,10 +242,16 @@
     private IReadOnlyList<ExpenseSummaryDto>? _expenseSummary;
     private bool _loading = true;
     private bool _processing;
+    private Guid? _processingPayment;
+    private bool _isOrganizer;
+    private string? _currentUserId;
     private List<BreadcrumbItem> _breadcrumbs = new();
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
         await LoadData();
     }
 
@@ -227,6 +268,12 @@
                 new(_tournament.Name, $"/torneios/{TournamentId}", false),
                 new("Pagamentos", null, true)
             };
+
+            // Check if user is organizer
+            if (!string.IsNullOrEmpty(_currentUserId))
+            {
+                _isOrganizer = await LeagueService.IsUserOrganizerAsync(_tournament.LeagueId, _currentUserId);
+            }
 
             if (_tournament.Status == TournamentStatus.Finished)
             {
@@ -281,4 +328,74 @@
         PaymentStatus.Confirmed => "Confirmado",
         _ => status.ToString()
     };
+
+    private async Task AdminMarkPaid(Guid paymentId)
+    {
+        if (string.IsNullOrEmpty(_currentUserId)) return;
+
+        var confirmed = await DialogService.ShowMessageBox(
+            "Confirmar Pagamento",
+            "Deseja marcar este pagamento como pago?",
+            yesText: "Sim", cancelText: "Cancelar");
+
+        if (confirmed != true) return;
+
+        _processingPayment = paymentId;
+        try
+        {
+            var success = await PaymentService.AdminMarkAsPaidAsync(paymentId, _currentUserId);
+            if (success)
+            {
+                Snackbar.Add("Pagamento marcado como pago!", Severity.Success);
+                _payments = await PaymentService.GetPaymentsByTournamentAsync(TournamentId);
+            }
+            else
+            {
+                Snackbar.Add("Erro ao marcar pagamento", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processingPayment = null;
+        }
+    }
+
+    private async Task AdminConfirm(Guid paymentId)
+    {
+        if (string.IsNullOrEmpty(_currentUserId)) return;
+
+        var confirmed = await DialogService.ShowMessageBox(
+            "Confirmar Recebimento",
+            "Deseja confirmar o recebimento deste pagamento?",
+            yesText: "Sim", cancelText: "Cancelar");
+
+        if (confirmed != true) return;
+
+        _processingPayment = paymentId;
+        try
+        {
+            var success = await PaymentService.AdminConfirmPaymentAsync(paymentId, _currentUserId);
+            if (success)
+            {
+                Snackbar.Add("Pagamento confirmado!", Severity.Success);
+                _payments = await PaymentService.GetPaymentsByTournamentAsync(TournamentId);
+            }
+            else
+            {
+                Snackbar.Add("Erro ao confirmar pagamento", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processingPayment = null;
+        }
+    }
 }

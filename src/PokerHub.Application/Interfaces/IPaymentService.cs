@@ -29,4 +29,19 @@ public interface IPaymentService
     /// Get player balances for a tournament (for display purposes).
     /// </summary>
     Task<IReadOnlyList<PlayerBalanceDto>> GetTournamentPlayerBalancesAsync(Guid tournamentId);
+
+    /// <summary>
+    /// Admin (league organizer) marks payment as paid.
+    /// </summary>
+    Task<bool> AdminMarkAsPaidAsync(Guid paymentId, string organizerUserId);
+
+    /// <summary>
+    /// Admin (league organizer) confirms receipt of payment.
+    /// </summary>
+    Task<bool> AdminConfirmPaymentAsync(Guid paymentId, string organizerUserId);
+
+    /// <summary>
+    /// Gets all pending payments for leagues organized by the user.
+    /// </summary>
+    Task<IReadOnlyList<PaymentDto>> GetPaymentsForOrganizerAsync(string organizerUserId);
 }

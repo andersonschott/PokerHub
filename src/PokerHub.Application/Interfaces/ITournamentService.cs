@@ -43,4 +43,10 @@ public interface ITournamentService
     IReadOnlyList<CreateBlindLevelDto> GetTurboBlindTemplate();
     IReadOnlyList<CreateBlindLevelDto> GetRegularBlindTemplate();
     IReadOnlyList<CreateBlindLevelDto> GetDeepStackBlindTemplate();
+
+    // Permission Check
+    /// <summary>
+    /// Checks if a user can manage a tournament (organizer or checked-in player).
+    /// </summary>
+    Task<bool> CanUserManageTournamentAsync(Guid tournamentId, string userId);
 }

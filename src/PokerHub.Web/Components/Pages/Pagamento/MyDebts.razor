@@ -8,6 +8,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject IJSRuntime JS
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Meus Debitos - PokerHub</PageTitle>
 
@@ -147,6 +148,79 @@
             </RowTemplate>
         </MudTable>
     }
+
+    <!-- Organizer Payments Section -->
+    @if (_organizerPayments != null && _organizerPayments.Any())
+    {
+        <MudDivider Class="my-6" />
+
+        <MudText Typo="Typo.h5" Class="mb-4">Pagamentos das Minhas Ligas (Admin)</MudText>
+
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            Como organizador, voce pode gerenciar @_organizerPayments.Count pagamento(s) pendente(s).
+        </MudAlert>
+
+        <MudTable Items="_organizerPayments" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>Torneio</MudTh>
+                <MudTh>De</MudTh>
+                <MudTh>Para</MudTh>
+                <MudTh Style="text-align: right;">Valor</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Dias</MudTh>
+                <MudTh>Acoes</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.TournamentName</MudTd>
+                <MudTd>@context.FromPlayerName</MudTd>
+                <MudTd>@context.ToPlayerName</MudTd>
+                <MudTd Style="text-align: right;">R$ @context.Amount.ToString("N2")</MudTd>
+                <MudTd>
+                    <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)">
+                        @GetStatusText(context.Status)
+                    </MudChip>
+                </MudTd>
+                <MudTd>
+                    @if (context.Status == PaymentStatus.Pending)
+                    {
+                        <MudText Color="@(context.DaysOpen > 7 ? Color.Error : (context.DaysOpen > 3 ? Color.Warning : Color.Default))">
+                            @context.DaysOpen d
+                        </MudText>
+                    }
+                    else
+                    {
+                        <text>-</text>
+                    }
+                </MudTd>
+                <MudTd>
+                    @if (context.Status == PaymentStatus.Pending)
+                    {
+                        <MudButton Size="Size.Small"
+                                   Variant="Variant.Text"
+                                   Color="Color.Primary"
+                                   OnClick="@(() => AdminMarkPaid(context.Id))"
+                                   Disabled="_processingPaymentId == context.Id">
+                            Marcar Pago
+                        </MudButton>
+                    }
+                    else if (context.Status == PaymentStatus.Paid)
+                    {
+                        <MudButton Size="Size.Small"
+                                   Variant="Variant.Text"
+                                   Color="Color.Success"
+                                   OnClick="@(() => AdminConfirm(context.Id))"
+                                   Disabled="_processingPaymentId == context.Id">
+                            Confirmar
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Check" Color="Color.Success" Size="Size.Small" />
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
 </MudContainer>
 
 @code {
@@ -155,10 +229,13 @@
 
     private IReadOnlyList<PendingDebtDto>? _debts;
     private IReadOnlyList<PaymentDto>? _toReceive;
+    private IReadOnlyList<PaymentDto>? _organizerPayments;
     private bool _loading = true;
     private bool _processing;
     private bool _noPlayerAssociated;
     private Guid _currentPlayerId;
+    private string? _currentUserId;
+    private Guid? _processingPaymentId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -168,6 +245,16 @@
     private async Task LoadData()
     {
         _loading = true;
+
+        // Get current user ID
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        // Load organizer payments (for leagues the user organizes)
+        if (!string.IsNullOrEmpty(_currentUserId))
+        {
+            _organizerPayments = await PaymentService.GetPaymentsForOrganizerAsync(_currentUserId);
+        }
 
         // Get current player ID (from route or logged-in user)
         if (PlayerId.HasValue)
@@ -179,45 +266,36 @@
         else
         {
             // Try to get player from current user
-            if (AuthState != null)
+            if (!string.IsNullOrEmpty(_currentUserId))
             {
-                var authState = await AuthState;
-                var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                // Get all players associated with this user
+                var players = await PlayerService.GetAllPlayersByUserAsync(_currentUserId);
 
-                if (!string.IsNullOrEmpty(userId))
+                if (players.Any())
                 {
-                    // Get all players associated with this user
-                    var players = await PlayerService.GetAllPlayersByUserAsync(userId);
+                    // Aggregate debts from all players
+                    var allDebts = new List<PendingDebtDto>();
+                    var allToReceive = new List<PaymentDto>();
 
-                    if (players.Any())
+                    foreach (var player in players)
                     {
-                        // Aggregate debts from all players
-                        var allDebts = new List<PendingDebtDto>();
-                        var allToReceive = new List<PaymentDto>();
+                        var playerDebts = await PlayerService.GetPendingDebtsAsync(player.Id);
+                        allDebts.AddRange(playerDebts);
 
-                        foreach (var player in players)
-                        {
-                            var playerDebts = await PlayerService.GetPendingDebtsAsync(player.Id);
-                            allDebts.AddRange(playerDebts);
-
-                            var playerToReceive = await PaymentService.GetPendingPaymentsToReceiveAsync(player.Id);
-                            allToReceive.AddRange(playerToReceive);
-                        }
-
-                        _debts = allDebts;
-                        _toReceive = allToReceive;
-
-                        // Use first player ID for payment operations
-                        _currentPlayerId = players.First().Id;
+                        var playerToReceive = await PaymentService.GetPendingPaymentsToReceiveAsync(player.Id);
+                        allToReceive.AddRange(playerToReceive);
                     }
-                    else
-                    {
-                        _noPlayerAssociated = true;
-                    }
+
+                    _debts = allDebts;
+                    _toReceive = allToReceive;
+
+                    // Use first player ID for payment operations
+                    _currentPlayerId = players.First().Id;
                 }
                 else
                 {
-                    _noPlayerAssociated = true;
+                    // User has no linked player, but may still be an organizer
+                    _noPlayerAssociated = _organizerPayments == null || !_organizerPayments.Any();
                 }
             }
             else
@@ -318,4 +396,74 @@
         PaymentStatus.Confirmed => "Confirmado",
         _ => status.ToString()
     };
+
+    private async Task AdminMarkPaid(Guid paymentId)
+    {
+        if (string.IsNullOrEmpty(_currentUserId)) return;
+
+        var confirmed = await DialogService.ShowMessageBox(
+            "Confirmar Pagamento",
+            "Deseja marcar este pagamento como pago?",
+            yesText: "Sim", cancelText: "Cancelar");
+
+        if (confirmed != true) return;
+
+        _processingPaymentId = paymentId;
+        try
+        {
+            var success = await PaymentService.AdminMarkAsPaidAsync(paymentId, _currentUserId);
+            if (success)
+            {
+                Snackbar.Add("Pagamento marcado como pago!", Severity.Success);
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Erro ao marcar pagamento", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processingPaymentId = null;
+        }
+    }
+
+    private async Task AdminConfirm(Guid paymentId)
+    {
+        if (string.IsNullOrEmpty(_currentUserId)) return;
+
+        var confirmed = await DialogService.ShowMessageBox(
+            "Confirmar Recebimento",
+            "Deseja confirmar o recebimento deste pagamento?",
+            yesText: "Sim", cancelText: "Cancelar");
+
+        if (confirmed != true) return;
+
+        _processingPaymentId = paymentId;
+        try
+        {
+            var success = await PaymentService.AdminConfirmPaymentAsync(paymentId, _currentUserId);
+            if (success)
+            {
+                Snackbar.Add("Pagamento confirmado!", Severity.Success);
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Erro ao confirmar pagamento", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processingPaymentId = null;
+        }
+    }
 }
