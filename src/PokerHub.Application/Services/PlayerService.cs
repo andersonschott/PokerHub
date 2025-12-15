@@ -199,6 +199,31 @@ public class PlayerService : IPlayerService
             .AnyAsync(p => p.FromPlayerId == playerId && p.Status == PaymentStatus.Pending);
     }
 
+    public async Task<int> LinkPlayersByEmailAsync(string email, string userId)
+    {
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(userId))
+            return 0;
+
+        var playersToLink = await _context.Players
+            .Where(p => p.Email != null &&
+                        p.Email.ToLower() == email.ToLower() &&
+                        p.UserId == null &&
+                        p.IsActive)
+            .ToListAsync();
+
+        foreach (var player in playersToLink)
+        {
+            player.UserId = userId;
+        }
+
+        if (playersToLink.Count > 0)
+        {
+            await _context.SaveChangesAsync();
+        }
+
+        return playersToLink.Count;
+    }
+
     private static PlayerDto MapToDto(Player player)
     {
         var finishedParticipations = player.Participations

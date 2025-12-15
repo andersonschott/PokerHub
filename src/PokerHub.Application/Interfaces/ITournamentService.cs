@@ -49,4 +49,10 @@ public interface ITournamentService
     /// Checks if a user can manage a tournament (organizer or checked-in player).
     /// </summary>
     Task<bool> CanUserManageTournamentAsync(Guid tournamentId, string userId);
+
+    // Duplicate Tournament
+    /// <summary>
+    /// Creates a copy of an existing tournament with its blind levels.
+    /// </summary>
+    Task<TournamentDto?> DuplicateTournamentAsync(Guid sourceTournamentId, Guid leagueId);
 }

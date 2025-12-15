@@ -75,6 +75,11 @@ public class TournamentService : ITournamentService
             .ToList();
 
         var players = tournament.Players
+            .OrderBy(tp => tp.Position.HasValue ? 0 : 1)           // Posicoes definidas primeiro
+            .ThenBy(tp => tp.Position ?? int.MaxValue)              // Por posicao (1o, 2o, 3o...)
+            .ThenByDescending(tp => tp.EliminatedAt.HasValue ? 1 : 0) // Eliminados depois
+            .ThenByDescending(tp => tp.CheckedInAt.HasValue ? 1 : 0)  // Check-in antes
+            .ThenBy(tp => tp.Player.Name)                            // Alfabetico por nome
             .Select(tp => new TournamentPlayerDto(
                 tp.Id,
                 tp.TournamentId,
@@ -630,5 +635,61 @@ public class TournamentService : ITournamentService
             .Select(s => decimal.TryParse(s.Trim(), out var val) ? val : 0)
             .Where(v => v > 0)
             .ToList();
+    }
+
+    public async Task<TournamentDto?> DuplicateTournamentAsync(Guid sourceTournamentId, Guid leagueId)
+    {
+        var source = await _context.Tournaments
+            .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
+            .FirstOrDefaultAsync(t => t.Id == sourceTournamentId);
+
+        if (source == null) return null;
+
+        var newTournament = new Tournament
+        {
+            Id = Guid.NewGuid(),
+            LeagueId = leagueId,
+            Name = $"{source.Name} - Copia",
+            ScheduledDateTime = DateTime.UtcNow.AddDays(7), // Uma semana no futuro
+            Location = source.Location,
+            BuyIn = source.BuyIn,
+            StartingStack = source.StartingStack,
+            RebuyValue = source.RebuyValue,
+            RebuyStack = source.RebuyStack,
+            RebuyLimitLevel = source.RebuyLimitLevel,
+            RebuyLimitMinutes = source.RebuyLimitMinutes,
+            RebuyLimitType = source.RebuyLimitType,
+            AddonValue = source.AddonValue,
+            AddonStack = source.AddonStack,
+            PrizeStructure = source.PrizeStructure,
+            Status = TournamentStatus.Scheduled,
+            CurrentLevel = 1,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        // Copiar blind levels
+        foreach (var bl in source.BlindLevels.OrderBy(b => b.Order))
+        {
+            newTournament.BlindLevels.Add(new BlindLevel
+            {
+                Id = Guid.NewGuid(),
+                TournamentId = newTournament.Id,
+                Order = bl.Order,
+                SmallBlind = bl.SmallBlind,
+                BigBlind = bl.BigBlind,
+                Ante = bl.Ante,
+                DurationMinutes = bl.DurationMinutes,
+                IsBreak = bl.IsBreak,
+                BreakDescription = bl.BreakDescription
+            });
+        }
+
+        _context.Tournaments.Add(newTournament);
+        await _context.SaveChangesAsync();
+
+        var league = await _context.Leagues.FindAsync(leagueId);
+        newTournament.League = league!;
+
+        return MapToDto(newTournament);
     }
 }

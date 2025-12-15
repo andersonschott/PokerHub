@@ -9,6 +9,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JS
 
 <PageTitle>Pagamentos - PokerHub</PageTitle>
 
@@ -168,11 +169,18 @@
                             <MudTd>
                                 @if (!string.IsNullOrEmpty(context.ToPlayerPixKey))
                                 {
-                                    <MudTooltip Text="@context.ToPlayerPixKey">
-                                        <MudChip T="string" Size="Size.Small" Color="Color.Info">
-                                            @GetPixTypeText(context.ToPlayerPixKeyType)
-                                        </MudChip>
-                                    </MudTooltip>
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudTooltip Text="@context.ToPlayerPixKey">
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                                                @GetPixTypeText(context.ToPlayerPixKeyType)
+                                            </MudChip>
+                                        </MudTooltip>
+                                        <MudIconButton Icon="@Icons.Material.Filled.ContentCopy"
+                                                       Size="Size.Small"
+                                                       Color="Color.Primary"
+                                                       Title="Copiar chave PIX"
+                                                       OnClick="@(() => CopyToClipboard(context.ToPlayerPixKey))" />
+                                    </MudStack>
                                 }
                                 else
                                 {
@@ -312,6 +320,19 @@
         PixKeyType.Random => "Aleatoria",
         _ => "PIX"
     };
+
+    private async Task CopyToClipboard(string text)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            Snackbar.Add("Chave PIX copiada!", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("Erro ao copiar", Severity.Error);
+        }
+    }
 
     private Color GetStatusColor(PaymentStatus status) => status switch
     {

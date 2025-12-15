@@ -256,6 +256,48 @@ public class TournamentTimerService : BackgroundService
         await TorneioHub.BroadcastTournamentFinished(_hubContext, tournamentId);
     }
 
+    /// <summary>
+    /// Sync timer state after manual level advance (called after TournamentService.AdvanceToNextLevelAsync)
+    /// </summary>
+    public async Task ManualAdvanceLevel(Guid tournamentId)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<PokerHubDbContext>();
+
+        var tournament = await context.Tournaments
+            .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
+            .FirstOrDefaultAsync(t => t.Id == tournamentId);
+
+        if (tournament == null) return;
+
+        // Use current level from DB (already advanced by AdvanceToNextLevelAsync)
+        var currentLevel = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == tournament.CurrentLevel);
+        if (currentLevel == null)
+        {
+            _logger.LogWarning("Tournament {TournamentId} current level {Level} not found", tournamentId, tournament.CurrentLevel);
+            return;
+        }
+
+        var currentLevelDto = MapToDto(currentLevel);
+        var nextLevel = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == tournament.CurrentLevel + 1);
+        var nextLevelDto = nextLevel != null ? MapToDto(nextLevel) : null;
+
+        // Update in-memory state if timer is active
+        if (_activeTimers.TryGetValue(tournamentId, out var timerState))
+        {
+            timerState.CurrentLevel = tournament.CurrentLevel;
+            timerState.TimeRemainingSeconds = tournament.TimeRemainingSeconds ?? currentLevel.DurationMinutes * 60;
+            timerState.CurrentBlindLevel = currentLevelDto;
+            timerState.NextBlindLevel = nextLevelDto;
+            timerState.LastTickTime = DateTime.UtcNow;
+        }
+
+        // Broadcast level change to all clients
+        await TorneioHub.BroadcastLevelChanged(_hubContext, tournamentId, currentLevelDto, nextLevelDto);
+
+        _logger.LogInformation("Tournament {TournamentId} synced to level {Level}", tournamentId, tournament.CurrentLevel);
+    }
+
     #endregion
 
     private static BlindLevelDto MapToDto(Domain.Entities.BlindLevel bl)

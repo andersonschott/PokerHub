@@ -6,6 +6,7 @@
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.WebUtilities
 @using PokerHub.Domain.Entities
+@using PokerHub.Application.Interfaces
 
 @inject UserManager<User> UserManager
 @inject IUserStore<User> UserStore
@@ -14,6 +15,7 @@
 @inject ILogger<Register> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
+@inject IPlayerService PlayerService
 
 <PageTitle>Register</PageTitle>
 
@@ -86,6 +88,13 @@
         Logger.LogInformation("User created a new account with password.");
 
         var userId = await UserManager.GetUserIdAsync(user);
+
+        // Auto-link players with the same email
+        var linkedCount = await PlayerService.LinkPlayersByEmailAsync(Input.Email, userId);
+        if (linkedCount > 0)
+        {
+            Logger.LogInformation("Linked {Count} existing player(s) to user {UserId}", linkedCount, userId);
+        }
         var code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
         code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
         var callbackUrl = NavigationManager.GetUriWithQueryParameters(

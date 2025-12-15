@@ -27,7 +27,15 @@
         </div>
 
         <div class="timer-main">
-            @if (_isBreak)
+            @if (_isFinished)
+            {
+                <div class="finished-display">
+                    <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Large" Style="font-size: 5rem; color: #FFD700;" />
+                    <MudText Typo="Typo.h1" Style="color: #FFD700; margin-top: 1rem;">TORNEIO FINALIZADO</MudText>
+                    <MudText Typo="Typo.h4" Style="color: white; margin-top: 1rem;">Parabens ao campeao!</MudText>
+                </div>
+            }
+            else if (_isBreak)
             {
                 <MudText Typo="Typo.h2" Class="break-text">INTERVALO</MudText>
                 <MudText Typo="Typo.h6" Color="Color.Secondary">@_breakDescription</MudText>
@@ -48,23 +56,26 @@
                 </div>
             }
 
-            <div class="time-display @GetTimeClass()">
-                <span class="time-value">@FormatTime(_secondsRemaining)</span>
-            </div>
-
-            @if (_nextLevel != null)
+            @if (!_isFinished)
             {
-                <div class="next-level">
-                    <MudText Typo="Typo.subtitle1" Color="Color.Secondary">PROXIMO NIVEL</MudText>
-                    @if (_nextLevel.IsBreak)
-                    {
-                        <MudText Typo="Typo.h6">Intervalo</MudText>
-                    }
-                    else
-                    {
-                        <MudText Typo="Typo.h6">@FormatChips(_nextLevel.SmallBlind) / @FormatChips(_nextLevel.BigBlind)@(_nextLevel.Ante > 0 ? $" (Ante: {FormatChips(_nextLevel.Ante)})" : "")</MudText>
-                    }
+                <div class="time-display @GetTimeClass()">
+                    <span class="time-value">@FormatTime(_secondsRemaining)</span>
                 </div>
+
+                @if (_nextLevel != null)
+                {
+                    <div class="next-level">
+                        <MudText Typo="Typo.subtitle1" Color="Color.Secondary">PROXIMO NIVEL</MudText>
+                        @if (_nextLevel.IsBreak)
+                        {
+                            <MudText Typo="Typo.h6">Intervalo</MudText>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.h6">@FormatChips(_nextLevel.SmallBlind) / @FormatChips(_nextLevel.BigBlind)@(_nextLevel.Ante > 0 ? $" (Ante: {FormatChips(_nextLevel.Ante)})" : "")</MudText>
+                        }
+                    </div>
+                }
             }
         </div>
 
@@ -111,6 +122,7 @@
     // Tournament info
     private string? _tournamentName;
     private bool _isPaused;
+    private bool _isFinished;
     private int _playersRemaining;
     private int _totalPlayers;
     private decimal _prizePool;
@@ -147,6 +159,7 @@
                 _prizePool = tournament.PrizePool;
                 _totalPlayers = tournament.PlayerCount;
                 _playersRemaining = tournament.CheckedInCount;
+                _isFinished = tournament.Status == TournamentStatus.Finished;
             }
             else
             {
@@ -220,8 +233,15 @@
                 _secondsRemaining = levelData.NewLevel.DurationMinutes * 60;
                 _nextLevel = levelData.NextLevel;
 
-                // Play level change sound
-                await PlayLevelChangeSound();
+                // Play appropriate sound
+                if (levelData.NewLevel.IsBreak)
+                {
+                    await PlayBreakSound();
+                }
+                else
+                {
+                    await PlayLevelChangeSound();
+                }
                 await InvokeAsync(StateHasChanged);
             }
         });
@@ -259,7 +279,9 @@
 
         _hubConnection.On("TorneioFinalizado", async () =>
         {
+            _isFinished = true;
             _isPaused = true;
+            await PlayFinishedSound();
             await InvokeAsync(StateHasChanged);
         });
 
@@ -276,6 +298,7 @@
         _secondsRemaining = state.TimeRemainingSeconds;
         _currentLevel = state.CurrentLevel;
         _isPaused = state.Status == TournamentStatus.Paused;
+        _isFinished = state.Status == TournamentStatus.Finished;
         _playersRemaining = state.PlayersRemaining;
         _totalPlayers = state.TotalPlayers;
         _prizePool = state.PrizePool;
@@ -335,7 +358,31 @@
     {
         try
         {
-            await JS.InvokeVoidAsync("eval", "new Audio('/sounds/level-change.mp3').play().catch(() => {})");
+            await JS.InvokeVoidAsync("timerSounds.playLevelChange");
+        }
+        catch
+        {
+            // Ignore audio errors
+        }
+    }
+
+    private async Task PlayBreakSound()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("timerSounds.playBreakStart");
+        }
+        catch
+        {
+            // Ignore audio errors
+        }
+    }
+
+    private async Task PlayFinishedSound()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("timerSounds.playFinished");
         }
         catch
         {

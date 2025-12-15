@@ -16,4 +16,10 @@ public interface IPlayerService
     Task<bool> LinkPlayerToUserAsync(Guid playerId, string? userId);
     Task<IReadOnlyList<PendingDebtDto>> GetPendingDebtsAsync(Guid playerId);
     Task<bool> HasPendingDebtsAsync(Guid playerId);
+
+    /// <summary>
+    /// Links all players with the given email to the user account.
+    /// Used during registration to auto-link existing players.
+    /// </summary>
+    Task<int> LinkPlayersByEmailAsync(string email, string userId);
 }

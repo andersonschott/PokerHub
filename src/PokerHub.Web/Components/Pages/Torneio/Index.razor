@@ -5,6 +5,7 @@
 @inject ITournamentService TournamentService
 @inject ILeagueService LeagueService
 @inject NavigationManager Navigation
+@inject ISnackbar Snackbar
 
 <PageTitle>Torneios - PokerHub</PageTitle>
 
@@ -48,10 +49,10 @@
     {
         <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
             <MudTabPanel Text="Proximos" Icon="@Icons.Material.Filled.Event">
-                @RenderTournaments(_tournaments.Where(t => t.Status == TournamentStatus.Scheduled).OrderBy(t => t.ScheduledDateTime).ToList())
+                @RenderTournaments(_tournaments.Where(t => t.Status == TournamentStatus.Scheduled).OrderByDescending(t => t.ScheduledDateTime).ToList())
             </MudTabPanel>
             <MudTabPanel Text="Em Andamento" Icon="@Icons.Material.Filled.PlayArrow" BadgeData="@_inProgressCount" BadgeColor="Color.Success">
-                @RenderTournaments(_tournaments.Where(t => t.Status == TournamentStatus.InProgress || t.Status == TournamentStatus.Paused).OrderBy(t => t.ScheduledDateTime).ToList())
+                @RenderTournaments(_tournaments.Where(t => t.Status == TournamentStatus.InProgress || t.Status == TournamentStatus.Paused).OrderByDescending(t => t.ScheduledDateTime).ToList())
             </MudTabPanel>
             <MudTabPanel Text="Finalizados" Icon="@Icons.Material.Filled.CheckCircle">
                 @RenderTournaments(_tournaments.Where(t => t.Status == TournamentStatus.Finished).OrderByDescending(t => t.ScheduledDateTime).ToList())
@@ -67,6 +68,7 @@
     private IReadOnlyList<TournamentDto>? _tournaments;
     private LeagueDto? _league;
     private bool _loading = true;
+    private bool _duplicating;
     private int _inProgressCount;
     private List<BreadcrumbItem> _breadcrumbs = new();
 
@@ -149,6 +151,12 @@
                                 <MudButton Variant="Variant.Text" Color="Color.Default" Href="@($"/torneios/{tournament.Id}")">
                                     @(tournament.Status == TournamentStatus.Scheduled ? "Gerenciar" : "Detalhes")
                                 </MudButton>
+                                <MudIconButton Icon="@Icons.Material.Filled.ContentCopy"
+                                               Size="Size.Small"
+                                               Color="Color.Primary"
+                                               Title="Copiar configuracoes"
+                                               Disabled="_duplicating"
+                                               OnClick="@(() => DuplicateTournament(tournament.Id, tournament.LeagueId))" />
                             </MudCardActions>
                         </MudCard>
                     </MudItem>
@@ -176,4 +184,46 @@
         TournamentStatus.Cancelled => "Cancelado",
         _ => status.ToString()
     };
+
+    private async Task DuplicateTournament(Guid tournamentId, Guid leagueId)
+    {
+        if (_duplicating) return;
+
+        _duplicating = true;
+        try
+        {
+            var result = await TournamentService.DuplicateTournamentAsync(tournamentId, leagueId);
+            if (result != null)
+            {
+                Snackbar.Add($"Torneio '{result.Name}' criado!", Severity.Success);
+                // Reload tournaments list
+                if (LeagueId.HasValue)
+                {
+                    _tournaments = await TournamentService.GetTournamentsByLeagueAsync(LeagueId.Value);
+                }
+                else
+                {
+                    var authState = await AuthState!;
+                    var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                    if (userId != null)
+                    {
+                        _tournaments = await TournamentService.GetTournamentsByUserAsync(userId);
+                    }
+                }
+                _inProgressCount = _tournaments?.Count(t => t.Status == TournamentStatus.InProgress || t.Status == TournamentStatus.Paused) ?? 0;
+            }
+            else
+            {
+                Snackbar.Add("Erro ao copiar torneio", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _duplicating = false;
+        }
+    }
 }

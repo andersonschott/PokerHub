@@ -75,6 +75,15 @@
                                 Retomar
                             </MudButton>
                         }
+                        else if (_tournament.Status == TournamentStatus.Finished)
+                        {
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Primary"
+                                      StartIcon="@Icons.Material.Filled.Payments"
+                                      Href="@($"/torneios/{TournamentId}/pagamentos")">
+                                Ver Pagamentos
+                            </MudButton>
+                        }
                     </MudStack>
                 </MudStack>
             </MudItem>
@@ -224,12 +233,13 @@
                                             <MudIconButton Icon="@Icons.Material.Filled.Remove"
                                                           Size="Size.Small"
                                                           Color="Color.Error"
-                                                          Disabled="context.RebuyCount <= 0"
+                                                          Disabled="@(context.RebuyCount <= 0 || _rebuyAddonInProgress)"
                                                           OnClick="@(() => RemoveRebuy(context.PlayerId))" />
                                             <MudText>@context.RebuyCount</MudText>
                                             <MudIconButton Icon="@Icons.Material.Filled.Add"
                                                           Size="Size.Small"
                                                           Color="Color.Success"
+                                                          Disabled="_rebuyAddonInProgress"
                                                           OnClick="@(() => AddRebuy(context.PlayerId))" />
                                         </MudStack>
                                     }
@@ -244,7 +254,8 @@
                                         <MudSwitch T="bool"
                                                   Value="@context.HasAddon"
                                                   ValueChanged="@((bool val) => SetAddon(context.PlayerId, val))"
-                                                  Color="Color.Primary" />
+                                                  Color="Color.Primary"
+                                                  Disabled="_rebuyAddonInProgress" />
                                     }
                                     else
                                     {
@@ -408,6 +419,7 @@
     private bool _rebuyAllowed;
     private bool _canManage;
     private string? _currentUserId;
+    private bool _rebuyAddonInProgress;
 
     protected override async Task OnInitializedAsync()
     {
@@ -468,6 +480,15 @@
         _loading = false;
     }
 
+    /// <summary>
+    /// Atualiza apenas os dados dos jogadores sem afetar o timer ou mostrar loading
+    /// </summary>
+    private async Task RefreshPlayerData()
+    {
+        _detail = await TournamentService.GetTournamentDetailAsync(TournamentId);
+        _rebuyAllowed = await TournamentService.IsRebuyAllowedAsync(TournamentId);
+    }
+
     private void RegisterHubHandlers()
     {
         if (_hubConnection == null) return;
@@ -491,14 +512,31 @@
 
         _hubConnection.On<object>("PrizePoolAtualizado", async (data) =>
         {
-            await LoadTournament();
+            await RefreshPlayerData();
             await InvokeAsync(StateHasChanged);
         });
 
         _hubConnection.On<object>("JogadorEliminado", async (data) =>
         {
-            await LoadTournament();
+            await RefreshPlayerData();
             await InvokeAsync(StateHasChanged);
+        });
+
+        _hubConnection.On<object>("NivelAlterado", async (data) =>
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(data);
+            var levelData = System.Text.Json.JsonSerializer.Deserialize<LevelChangedData>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (levelData?.NewLevel != null && _timerState != null)
+            {
+                _timerState = _timerState with
+                {
+                    CurrentLevel = levelData.NewLevel.Order,
+                    TimeRemainingSeconds = levelData.NewLevel.DurationMinutes * 60,
+                    CurrentBlindLevel = levelData.NewLevel,
+                    NextBlindLevel = levelData.NextLevel
+                };
+                await InvokeAsync(StateHasChanged);
+            }
         });
     }
 
@@ -594,8 +632,18 @@
     {
         try
         {
-            await TournamentService.AdvanceToNextLevelAsync(TournamentId);
-            Snackbar.Add("Nivel avancado", Severity.Success);
+            var success = await TournamentService.AdvanceToNextLevelAsync(TournamentId);
+            if (success)
+            {
+                // Sync timer service state and broadcast to all clients
+                await TimerService.ManualAdvanceLevel(TournamentId);
+                await LoadTournament();
+                Snackbar.Add("Nivel avancado", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Nao ha mais niveis para avancar", Severity.Warning);
+            }
         }
         catch (Exception ex)
         {
@@ -679,45 +727,63 @@
 
     private async Task AddRebuy(Guid playerId)
     {
+        if (_rebuyAddonInProgress) return;
+        _rebuyAddonInProgress = true;
         try
         {
             await TournamentService.AddRebuyAsync(TournamentId, playerId);
             await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail!.PrizePool + (_detail.RebuyValue ?? 0), GetTotalRebuys() + 1, GetTotalAddons());
-            await LoadTournament();
+            await RefreshPlayerData();
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _rebuyAddonInProgress = false;
         }
     }
 
     private async Task RemoveRebuy(Guid playerId)
     {
+        if (_rebuyAddonInProgress) return;
+        _rebuyAddonInProgress = true;
         try
         {
             await TournamentService.RemoveRebuyAsync(TournamentId, playerId);
             await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail!.PrizePool - (_detail.RebuyValue ?? 0), GetTotalRebuys() - 1, GetTotalAddons());
-            await LoadTournament();
+            await RefreshPlayerData();
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
         }
+        finally
+        {
+            _rebuyAddonInProgress = false;
+        }
     }
 
     private async Task SetAddon(Guid playerId, bool hasAddon)
     {
+        if (_rebuyAddonInProgress) return;
+        _rebuyAddonInProgress = true;
         try
         {
             await TournamentService.SetAddonAsync(TournamentId, playerId, hasAddon);
             var change = hasAddon ? 1 : -1;
             var prizeChange = hasAddon ? (_detail!.AddonValue ?? 0) : -(_detail!.AddonValue ?? 0);
             await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail!.PrizePool + prizeChange, GetTotalRebuys(), GetTotalAddons() + change);
-            await LoadTournament();
+            await RefreshPlayerData();
         }
         catch (Exception ex)
         {
             Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _rebuyAddonInProgress = false;
         }
     }
 
@@ -916,5 +982,11 @@
     private class TimerTickData
     {
         public int SecondsRemaining { get; set; }
+    }
+
+    private class LevelChangedData
+    {
+        public BlindLevelDto? NewLevel { get; set; }
+        public BlindLevelDto? NextLevel { get; set; }
     }
 }
