@@ -339,14 +339,13 @@ namespace PokerHub.Infrastructure.Data.Migrations
                         name: "FK_TournamentPlayers_Players_EliminatedByPlayerId",
                         column: x => x.EliminatedByPlayerId,
                         principalTable: "Players",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
+                        principalColumn: "Id");
                     table.ForeignKey(
                         name: "FK_TournamentPlayers_Players_PlayerId",
                         column: x => x.PlayerId,
                         principalTable: "Players",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_TournamentPlayers_Tournaments_TournamentId",
                         column: x => x.TournamentId,

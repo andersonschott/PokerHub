@@ -1,0 +1,400 @@
+@page "/ligas/{LeagueId:guid}"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject ILeagueService LeagueService
+@inject IPlayerService PlayerService
+@inject ITournamentService TournamentService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>@(_league?.Name ?? "Liga") - PokerHub</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+}
+else if (_league == null)
+{
+    <MudAlert Severity="Severity.Error">Liga nao encontrada</MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Large">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+            <MudStack>
+                <MudText Typo="Typo.h4">@_league.Name</MudText>
+                @if (!string.IsNullOrEmpty(_league.Description))
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@_league.Description</MudText>
+                }
+            </MudStack>
+            <MudStack Row Spacing="2">
+                <MudButton Variant="Variant.Outlined"
+                          Color="Color.Primary"
+                          StartIcon="@Icons.Material.Filled.ContentCopy"
+                          OnClick="ShowInviteCode">
+                    Convidar
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
+                          Color="Color.Default"
+                          StartIcon="@Icons.Material.Filled.Settings"
+                          Href="@($"/ligas/{LeagueId}/editar")">
+                    Editar
+                </MudButton>
+            </MudStack>
+        </MudStack>
+
+        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+            <MudTabPanel Text="Jogadores" Icon="@Icons.Material.Filled.People">
+                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+                    <MudText Typo="Typo.h6">Jogadores (@_league.Players.Count)</MudText>
+                    <MudButton Variant="Variant.Filled"
+                              Color="Color.Primary"
+                              StartIcon="@Icons.Material.Filled.PersonAdd"
+                              OnClick="OpenAddPlayerDialog">
+                        Adicionar Jogador
+                    </MudButton>
+                </MudStack>
+
+                @if (!_league.Players.Any())
+                {
+                    <MudAlert Severity="Severity.Info">
+                        Nenhum jogador cadastrado. Adicione jogadores para comecar a organizar torneios.
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudTable Items="_league.Players" Hover="true" Breakpoint="Breakpoint.Sm">
+                        <HeaderContent>
+                            <MudTh>Nome</MudTh>
+                            <MudTh>Apelido</MudTh>
+                            <MudTh>Torneios</MudTh>
+                            <MudTh>Vitorias</MudTh>
+                            <MudTh>Lucro</MudTh>
+                            <MudTh>Acoes</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Nome">@context.Name</MudTd>
+                            <MudTd DataLabel="Apelido">@(context.Nickname ?? "-")</MudTd>
+                            <MudTd DataLabel="Torneios">@context.TournamentsPlayed</MudTd>
+                            <MudTd DataLabel="Vitorias">@context.Wins</MudTd>
+                            <MudTd DataLabel="Lucro">
+                                <MudText Color="@(context.TotalProfit >= 0 ? Color.Success : Color.Error)">
+                                    R$ @context.TotalProfit.ToString("N2")
+                                </MudText>
+                            </MudTd>
+                            <MudTd DataLabel="Acoes">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                              Size="Size.Small"
+                                              OnClick="@(() => EditPlayer(context.Id))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                              Size="Size.Small"
+                                              Color="Color.Error"
+                                              OnClick="@(() => DeletePlayer(context))" />
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Text="Torneios" Icon="@Icons.Material.Filled.EmojiEvents">
+                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+                    <MudText Typo="Typo.h6">Torneios (@(_tournaments?.Count ?? 0))</MudText>
+                    <MudButton Variant="Variant.Filled"
+                              Color="Color.Primary"
+                              StartIcon="@Icons.Material.Filled.Add"
+                              Href="@($"/ligas/{LeagueId}/torneios/criar")">
+                        Criar Torneio
+                    </MudButton>
+                </MudStack>
+
+                @if (_tournaments == null || !_tournaments.Any())
+                {
+                    <MudAlert Severity="Severity.Info">
+                        Nenhum torneio criado. Clique em "Criar Torneio" para comecar!
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudGrid>
+                        @foreach (var tournament in _tournaments.OrderByDescending(t => t.ScheduledDateTime))
+                        {
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudCard Elevation="2" Class="cursor-pointer" @onclick="@(() => Navigation.NavigateTo($"/torneios/{tournament.Id}"))">
+                                    <MudCardHeader>
+                                        <CardHeaderContent>
+                                            <MudText Typo="Typo.h6">@tournament.Name</MudText>
+                                        </CardHeaderContent>
+                                        <CardHeaderActions>
+                                            <MudChip T="string" Color="@GetStatusColor(tournament.Status)" Size="Size.Small">
+                                                @GetStatusText(tournament.Status)
+                                            </MudChip>
+                                        </CardHeaderActions>
+                                    </MudCardHeader>
+                                    <MudCardContent>
+                                        <MudStack Spacing="2">
+                                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                                <MudIcon Icon="@Icons.Material.Filled.Event" Size="Size.Small" Color="Color.Secondary"/>
+                                                <MudText Typo="Typo.body2">@tournament.ScheduledDateTime.ToString("dd/MM/yyyy HH:mm")</MudText>
+                                            </MudStack>
+                                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                                <MudIcon Icon="@Icons.Material.Filled.Payments" Size="Size.Small" Color="Color.Secondary"/>
+                                                <MudText Typo="Typo.body2">Buy-in: R$ @tournament.BuyIn.ToString("N2")</MudText>
+                                            </MudStack>
+                                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                                <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Small" Color="Color.Secondary"/>
+                                                <MudText Typo="Typo.body2">@tournament.CheckedInCount/@tournament.PlayerCount jogadores</MudText>
+                                            </MudStack>
+                                            @if (tournament.PrizePool > 0)
+                                            {
+                                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                                    <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Small" Color="Color.Warning"/>
+                                                    <MudText Typo="Typo.body2" Color="Color.Warning">Prize Pool: R$ @tournament.PrizePool.ToString("N2")</MudText>
+                                                </MudStack>
+                                            }
+                                        </MudStack>
+                                    </MudCardContent>
+                                    <MudCardActions>
+                                        @if (tournament.Status == TournamentStatus.InProgress || tournament.Status == TournamentStatus.Paused)
+                                        {
+                                            <MudButton Variant="Variant.Text" Color="Color.Primary" Href="@($"/timer/{tournament.Id}")" Target="_blank" @onclick:stopPropagation="true">
+                                                Ver Timer
+                                            </MudButton>
+                                        }
+                                        <MudButton Variant="Variant.Text" Color="Color.Default" Href="@($"/torneios/{tournament.Id}")" @onclick:stopPropagation="true">
+                                            @(tournament.Status == TournamentStatus.Scheduled ? "Gerenciar" : "Detalhes")
+                                        </MudButton>
+                                    </MudCardActions>
+                                </MudCard>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Text="Ranking" Icon="@Icons.Material.Filled.Leaderboard">
+                <MudText Typo="Typo.h6" Class="mb-4">Ranking por Lucro/Prejuizo</MudText>
+
+                @if (!_league.Players.Any())
+                {
+                    <MudAlert Severity="Severity.Info">
+                        Nenhum jogador cadastrado. Adicione jogadores e realize torneios para ver o ranking.
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudTable Items="@_league.Players.OrderByDescending(p => p.TotalProfit).ToList()" Hover="true" Dense="true">
+                        <HeaderContent>
+                            <MudTh Style="width: 60px;">#</MudTh>
+                            <MudTh>Jogador</MudTh>
+                            <MudTh>Torneios</MudTh>
+                            <MudTh>Vitorias</MudTh>
+                            <MudTh>ITM</MudTh>
+                            <MudTh>Lucro/Prejuizo</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            @{
+                                var position = _league.Players.OrderByDescending(p => p.TotalProfit).ToList().IndexOf(context) + 1;
+                            }
+                            <MudTd>
+                                @if (position == 1)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Color="Color.Warning" Size="Size.Small"/>
+                                }
+                                else if (position == 2)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Color="Color.Default" Size="Size.Small"/>
+                                }
+                                else if (position == 3)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Color="Color.Tertiary" Size="Size.Small"/>
+                                }
+                                else
+                                {
+                                    <MudText>@position</MudText>
+                                }
+                            </MudTd>
+                            <MudTd>
+                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudAvatar Color="Color.Primary" Size="Size.Small">@context.Name[0]</MudAvatar>
+                                    <div>
+                                        <MudText>@context.Name</MudText>
+                                        @if (!string.IsNullOrEmpty(context.Nickname))
+                                        {
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Nickname</MudText>
+                                        }
+                                    </div>
+                                </MudStack>
+                            </MudTd>
+                            <MudTd>@context.TournamentsPlayed</MudTd>
+                            <MudTd>
+                                @if (context.Wins > 0)
+                                {
+                                    <MudChip T="string" Color="Color.Warning" Size="Size.Small">@context.Wins</MudChip>
+                                }
+                                else
+                                {
+                                    <text>0</text>
+                                }
+                            </MudTd>
+                            <MudTd>
+                                @if (context.TournamentsPlayed > 0)
+                                {
+                                    var itmRate = context.Wins > 0 ? (context.Wins * 100.0 / context.TournamentsPlayed) : 0;
+                                    <text>@itmRate.ToString("N0")%</text>
+                                }
+                                else
+                                {
+                                    <text>-</text>
+                                }
+                            </MudTd>
+                            <MudTd>
+                                <MudText Typo="Typo.body2" Color="@(context.TotalProfit >= 0 ? Color.Success : Color.Error)" Style="font-weight: bold;">
+                                    @(context.TotalProfit >= 0 ? "+" : "")R$ @context.TotalProfit.ToString("N2")
+                                </MudText>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
+            </MudTabPanel>
+        </MudTabs>
+    </MudContainer>
+}
+
+<MudDialog @bind-Visible="_inviteDialogVisible">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Codigo de Convite</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body1" Class="mb-2">
+            Compartilhe este codigo para convidar jogadores:
+        </MudText>
+        <MudPaper Elevation="0" Class="pa-4 d-flex justify-center" Style="background-color: var(--mud-palette-background-grey);">
+            <MudText Typo="Typo.h4" Style="font-family: monospace; letter-spacing: 0.3em;">
+                @_league?.InviteCode
+            </MudText>
+        </MudPaper>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _inviteDialogVisible = false)">Fechar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="RegenerateInviteCode">Gerar Novo Codigo</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [Parameter] public Guid LeagueId { get; set; }
+
+    private LeagueWithPlayersDto? _league;
+    private IReadOnlyList<TournamentDto>? _tournaments;
+    private bool _loading = true;
+    private bool _inviteDialogVisible;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            _league = await LeagueService.GetLeagueWithPlayersAsync(LeagueId);
+            _tournaments = await TournamentService.GetTournamentsByLeagueAsync(LeagueId);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadLeague()
+    {
+        _league = await LeagueService.GetLeagueWithPlayersAsync(LeagueId);
+    }
+
+    private Color GetStatusColor(TournamentStatus status) => status switch
+    {
+        TournamentStatus.Scheduled => Color.Info,
+        TournamentStatus.InProgress => Color.Success,
+        TournamentStatus.Paused => Color.Warning,
+        TournamentStatus.Finished => Color.Default,
+        TournamentStatus.Cancelled => Color.Error,
+        _ => Color.Default
+    };
+
+    private string GetStatusText(TournamentStatus status) => status switch
+    {
+        TournamentStatus.Scheduled => "Agendado",
+        TournamentStatus.InProgress => "Em Andamento",
+        TournamentStatus.Paused => "Pausado",
+        TournamentStatus.Finished => "Finalizado",
+        TournamentStatus.Cancelled => "Cancelado",
+        _ => status.ToString()
+    };
+
+    private void ShowInviteCode()
+    {
+        _inviteDialogVisible = true;
+    }
+
+    private async Task RegenerateInviteCode()
+    {
+        try
+        {
+            var newCode = await LeagueService.RegenerateInviteCodeAsync(LeagueId);
+            await LoadLeague();
+            Snackbar.Add("Novo codigo gerado!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenAddPlayerDialog()
+    {
+        var parameters = new DialogParameters<AddPlayerDialog>
+        {
+            { x => x.LeagueId, LeagueId }
+        };
+
+        var dialog = await DialogService.ShowAsync<AddPlayerDialog>("Adicionar Jogador", parameters);
+        var result = await dialog.Result;
+
+        if (!result!.Canceled)
+        {
+            await LoadLeague();
+            Snackbar.Add("Jogador adicionado!", Severity.Success);
+        }
+    }
+
+    private void EditPlayer(Guid playerId)
+    {
+        Navigation.NavigateTo($"/jogadores/{playerId}/editar");
+    }
+
+    private async Task DeletePlayer(PlayerDto player)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirmar Exclusao",
+            $"Deseja realmente excluir o jogador {player.Name}?",
+            yesText: "Excluir",
+            cancelText: "Cancelar");
+
+        if (result == true)
+        {
+            try
+            {
+                await PlayerService.DeletePlayerAsync(player.Id);
+                await LoadLeague();
+                Snackbar.Add("Jogador excluido!", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

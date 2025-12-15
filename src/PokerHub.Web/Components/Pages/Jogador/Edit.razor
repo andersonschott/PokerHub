@@ -1,0 +1,296 @@
+@page "/jogadores/{PlayerId:guid}/editar"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject IPlayerService PlayerService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Editar Jogador - PokerHub</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+}
+else if (_player == null)
+{
+    <MudAlert Severity="Severity.Error">Jogador nao encontrado</MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Small">
+        <MudPaper Elevation="2" Class="pa-6">
+            <MudText Typo="Typo.h5" Class="mb-4">Editar Jogador</MudText>
+
+            <EditForm Model="_model" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+
+                <MudTextField @bind-Value="_model.Name"
+                             Label="Nome"
+                             Variant="Variant.Outlined"
+                             Required="true"
+                             RequiredError="O nome e obrigatorio"
+                             Class="mb-3" />
+
+                <MudTextField @bind-Value="_model.Nickname"
+                             Label="Apelido (opcional)"
+                             Variant="Variant.Outlined"
+                             Class="mb-3" />
+
+                <MudTextField @bind-Value="_model.Email"
+                             Label="Email (opcional)"
+                             Variant="Variant.Outlined"
+                             InputType="InputType.Email"
+                             Class="mb-3" />
+
+                <MudTextField @bind-Value="_model.Phone"
+                             Label="Telefone (opcional)"
+                             Variant="Variant.Outlined"
+                             Class="mb-3" />
+
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Chave PIX (para receber premios)</MudText>
+
+                <MudSelect T="PixKeyType?"
+                          @bind-Value="_model.PixKeyType"
+                          Label="Tipo de Chave PIX"
+                          Variant="Variant.Outlined"
+                          Class="mb-3">
+                    <MudSelectItem T="PixKeyType?" Value="@((PixKeyType?)null)">Nenhuma</MudSelectItem>
+                    <MudSelectItem T="PixKeyType?" Value="@((PixKeyType?)PixKeyType.CPF)">CPF</MudSelectItem>
+                    <MudSelectItem T="PixKeyType?" Value="@((PixKeyType?)PixKeyType.Email)">Email</MudSelectItem>
+                    <MudSelectItem T="PixKeyType?" Value="@((PixKeyType?)PixKeyType.Phone)">Telefone</MudSelectItem>
+                    <MudSelectItem T="PixKeyType?" Value="@((PixKeyType?)PixKeyType.Random)">Chave Aleatoria</MudSelectItem>
+                </MudSelect>
+
+                @if (_model.PixKeyType.HasValue)
+                {
+                    <MudTextField @bind-Value="_model.PixKey"
+                                 Label="@GetPixKeyLabel()"
+                                 Variant="Variant.Outlined"
+                                 Class="mb-3" />
+                }
+
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Vinculo com Conta</MudText>
+
+                @if (_isLinkedToCurrentUser)
+                {
+                    <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3">
+                        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                            <MudText>Este jogador esta vinculado a sua conta</MudText>
+                            <MudButton Variant="Variant.Text"
+                                      Color="Color.Error"
+                                      Size="Size.Small"
+                                      OnClick="UnlinkFromAccount"
+                                      Disabled="_linkingAccount">
+                                Desvincular
+                            </MudButton>
+                        </MudStack>
+                    </MudAlert>
+                }
+                else if (!string.IsNullOrEmpty(_player?.UserId))
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+                        Este jogador esta vinculado a outra conta
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3">
+                        <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                            <MudText>Este jogador nao esta vinculado a nenhuma conta</MudText>
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Primary"
+                                      Size="Size.Small"
+                                      OnClick="LinkToMyAccount"
+                                      Disabled="_linkingAccount">
+                                @if (_linkingAccount)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                }
+                                Vincular a minha conta
+                            </MudButton>
+                        </MudStack>
+                    </MudAlert>
+                }
+
+                <MudStack Row Justify="Justify.SpaceBetween" Class="mt-4">
+                    <MudButton Variant="Variant.Text"
+                              Color="Color.Default"
+                              OnClick="GoBack">
+                        Cancelar
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled"
+                              Color="Color.Primary"
+                              ButtonType="ButtonType.Submit"
+                              Disabled="_saving">
+                        @if (_saving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        }
+                        Salvar
+                    </MudButton>
+                </MudStack>
+            </EditForm>
+        </MudPaper>
+    </MudContainer>
+}
+
+@code {
+    [Parameter] public Guid PlayerId { get; set; }
+
+    private PlayerDto? _player;
+    private PlayerModel _model = new();
+    private bool _loading = true;
+    private bool _saving;
+    private bool _linkingAccount;
+    private string? _currentUserId;
+    private bool _isLinkedToCurrentUser => _player?.UserId == _currentUserId && !string.IsNullOrEmpty(_currentUserId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        await LoadPlayer();
+    }
+
+    private async Task LoadPlayer()
+    {
+        _loading = true;
+        try
+        {
+            _player = await PlayerService.GetPlayerByIdAsync(PlayerId);
+            if (_player != null)
+            {
+                _model.Name = _player.Name;
+                _model.Nickname = _player.Nickname;
+                _model.Email = _player.Email;
+                _model.Phone = _player.Phone;
+                _model.PixKey = _player.PixKey;
+                _model.PixKeyType = _player.PixKeyType;
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LinkToMyAccount()
+    {
+        if (string.IsNullOrEmpty(_currentUserId)) return;
+
+        _linkingAccount = true;
+        try
+        {
+            var success = await PlayerService.LinkPlayerToUserAsync(PlayerId, _currentUserId);
+            if (success)
+            {
+                _player = await PlayerService.GetPlayerByIdAsync(PlayerId);
+                Snackbar.Add("Jogador vinculado a sua conta!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Erro ao vincular jogador", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _linkingAccount = false;
+        }
+    }
+
+    private async Task UnlinkFromAccount()
+    {
+        _linkingAccount = true;
+        try
+        {
+            var success = await PlayerService.LinkPlayerToUserAsync(PlayerId, null);
+            if (success)
+            {
+                _player = await PlayerService.GetPlayerByIdAsync(PlayerId);
+                Snackbar.Add("Jogador desvinculado da sua conta", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Erro ao desvincular jogador", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _linkingAccount = false;
+        }
+    }
+
+    private string GetPixKeyLabel()
+    {
+        return _model.PixKeyType switch
+        {
+            PixKeyType.CPF => "CPF (somente numeros)",
+            PixKeyType.Email => "Email",
+            PixKeyType.Phone => "Telefone (com DDD)",
+            PixKeyType.Random => "Chave Aleatoria",
+            _ => "Chave PIX"
+        };
+    }
+
+    private async Task HandleSubmit()
+    {
+        _saving = true;
+        try
+        {
+            var dto = new UpdatePlayerDto(
+                _model.Name!,
+                _model.Nickname,
+                _model.Email,
+                _model.Phone,
+                _model.PixKey,
+                _model.PixKeyType
+            );
+
+            await PlayerService.UpdatePlayerAsync(PlayerId, dto);
+
+            Snackbar.Add("Jogador atualizado com sucesso!", Severity.Success);
+            GoBack();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro ao atualizar jogador: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        if (_player != null)
+        {
+            Navigation.NavigateTo($"/ligas/{_player.LeagueId}");
+        }
+        else
+        {
+            Navigation.NavigateTo("/ligas");
+        }
+    }
+
+    private class PlayerModel
+    {
+        public string? Name { get; set; }
+        public string? Nickname { get; set; }
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? PixKey { get; set; }
+        public PixKeyType? PixKeyType { get; set; }
+    }
+}

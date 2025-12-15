@@ -1,0 +1,284 @@
+@page "/torneios/{TournamentId:guid}/pagamentos"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject IPaymentService PaymentService
+@inject ITournamentService TournamentService
+@inject ITournamentExpenseService ExpenseService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Pagamentos - PokerHub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <MudBreadcrumbs Items="_breadcrumbs" Class="mb-4" />
+
+    <div class="d-flex justify-space-between align-center mb-4">
+        <MudText Typo="Typo.h4">Pagamentos - @(_tournament?.Name ?? "Torneio")</MudText>
+        @if (_tournament?.Status == TournamentStatus.Finished && (_payments == null || !_payments.Any()))
+        {
+            <MudButton Variant="Variant.Filled"
+                      Color="Color.Primary"
+                      StartIcon="@Icons.Material.Filled.Calculate"
+                      OnClick="CalculatePayments"
+                      Disabled="_processing">
+                @if (_processing)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                }
+                Calcular Pagamentos
+            </MudButton>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (_tournament?.Status != TournamentStatus.Finished)
+    {
+        <MudAlert Severity="Severity.Info">
+            Os pagamentos sao calculados automaticamente apos o termino do torneio.
+        </MudAlert>
+    }
+    else
+    {
+        <!-- Player Balances -->
+        @if (_balances != null && _balances.Any())
+        {
+            <MudCard Elevation="2" Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Saldo do Torneio</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudTable Items="_balances" Dense="true" Hover="true">
+                        <HeaderContent>
+                            <MudTh>Jogador</MudTh>
+                            <MudTh Style="text-align: right;">Investimento</MudTh>
+                            <MudTh Style="text-align: right;">Premio</MudTh>
+                            <MudTh Style="text-align: right;">Saldo</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.PlayerName</MudTd>
+                            <MudTd Style="text-align: right;">R$ @context.TotalInvestment.ToString("N2")</MudTd>
+                            <MudTd Style="text-align: right;">R$ @context.Prize.ToString("N2")</MudTd>
+                            <MudTd Style="text-align: right;">
+                                <MudText Color="@(context.Balance > 0 ? Color.Success : (context.Balance < 0 ? Color.Error : Color.Default))">
+                                    @(context.Balance > 0 ? "+" : "")R$ @context.Balance.ToString("N2")
+                                </MudText>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudCardContent>
+            </MudCard>
+        }
+
+        <!-- Expense Summary -->
+        @if (_expenseSummary != null && _expenseSummary.Any())
+        {
+            <MudCard Elevation="2" Class="mb-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Despesas Extras</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudTable Items="_expenseSummary" Dense="true" Hover="true">
+                        <HeaderContent>
+                            <MudTh>Jogador</MudTh>
+                            <MudTh Style="text-align: right;">Pagou</MudTh>
+                            <MudTh Style="text-align: right;">Deve</MudTh>
+                            <MudTh Style="text-align: right;">Saldo</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.PlayerName</MudTd>
+                            <MudTd Style="text-align: right;">
+                                @if (context.TotalPaid > 0)
+                                {
+                                    <MudText Color="Color.Success">R$ @context.TotalPaid.ToString("N2")</MudText>
+                                }
+                                else
+                                {
+                                    <text>-</text>
+                                }
+                            </MudTd>
+                            <MudTd Style="text-align: right;">
+                                @if (context.TotalOwed > 0)
+                                {
+                                    <MudText Color="Color.Warning">R$ @context.TotalOwed.ToString("N2")</MudText>
+                                }
+                                else
+                                {
+                                    <text>-</text>
+                                }
+                            </MudTd>
+                            <MudTd Style="text-align: right;">
+                                <MudText Color="@(context.ExpenseBalance > 0 ? Color.Success : (context.ExpenseBalance < 0 ? Color.Error : Color.Default))">
+                                    @(context.ExpenseBalance > 0 ? "+" : "")R$ @context.ExpenseBalance.ToString("N2")
+                                </MudText>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                    <MudDivider Class="my-3" />
+                    <MudAlert Severity="Severity.Info" Dense="true">
+                        Os pagamentos de despesas extras devem ser combinados diretamente entre os jogadores.
+                        Quem pagou as despesas deve receber de quem participou do rateio.
+                    </MudAlert>
+                </MudCardContent>
+            </MudCard>
+        }
+
+        <!-- Payments List -->
+        @if (_payments == null || !_payments.Any())
+        {
+            <MudAlert Severity="Severity.Info">
+                Nenhum pagamento pendente. Clique em "Calcular Pagamentos" para gerar os pagamentos.
+            </MudAlert>
+        }
+        else
+        {
+            <MudCard Elevation="2">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Lista de Pagamentos</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudTable Items="_payments" Dense="true" Hover="true">
+                        <HeaderContent>
+                            <MudTh>De</MudTh>
+                            <MudTh>Para</MudTh>
+                            <MudTh Style="text-align: right;">Valor</MudTh>
+                            <MudTh>PIX</MudTh>
+                            <MudTh>Status</MudTh>
+                            <MudTh>Dias</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.FromPlayerName</MudTd>
+                            <MudTd>@context.ToPlayerName</MudTd>
+                            <MudTd Style="text-align: right;">R$ @context.Amount.ToString("N2")</MudTd>
+                            <MudTd>
+                                @if (!string.IsNullOrEmpty(context.ToPlayerPixKey))
+                                {
+                                    <MudTooltip Text="@context.ToPlayerPixKey">
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Info">
+                                            @GetPixTypeText(context.ToPlayerPixKeyType)
+                                        </MudChip>
+                                    </MudTooltip>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Sem PIX</MudText>
+                                }
+                            </MudTd>
+                            <MudTd>
+                                <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)">
+                                    @GetStatusText(context.Status)
+                                </MudChip>
+                            </MudTd>
+                            <MudTd>
+                                @if (context.Status == PaymentStatus.Pending)
+                                {
+                                    <MudText Color="@(context.DaysOpen > 7 ? Color.Error : (context.DaysOpen > 3 ? Color.Warning : Color.Default))">
+                                        @context.DaysOpen d
+                                    </MudText>
+                                }
+                                else
+                                {
+                                    <text>-</text>
+                                }
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudCardContent>
+            </MudCard>
+        }
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public Guid TournamentId { get; set; }
+
+    private TournamentDto? _tournament;
+    private IReadOnlyList<PaymentDto>? _payments;
+    private IReadOnlyList<PlayerBalanceDto>? _balances;
+    private IReadOnlyList<ExpenseSummaryDto>? _expenseSummary;
+    private bool _loading = true;
+    private bool _processing;
+    private List<BreadcrumbItem> _breadcrumbs = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _tournament = await TournamentService.GetTournamentByIdAsync(TournamentId);
+
+        if (_tournament != null)
+        {
+            _breadcrumbs = new List<BreadcrumbItem>
+            {
+                new("Torneios", "/torneios", false),
+                new(_tournament.Name, $"/torneios/{TournamentId}", false),
+                new("Pagamentos", null, true)
+            };
+
+            if (_tournament.Status == TournamentStatus.Finished)
+            {
+                _payments = await PaymentService.GetPaymentsByTournamentAsync(TournamentId);
+                _balances = await PaymentService.GetTournamentPlayerBalancesAsync(TournamentId);
+                _expenseSummary = await ExpenseService.GetExpenseSummaryByTournamentAsync(TournamentId);
+            }
+        }
+        _loading = false;
+    }
+
+    private async Task CalculatePayments()
+    {
+        _processing = true;
+        try
+        {
+            _payments = await PaymentService.CalculateAndCreatePaymentsAsync(TournamentId);
+            _balances = await PaymentService.GetTournamentPlayerBalancesAsync(TournamentId);
+            Snackbar.Add("Pagamentos calculados com sucesso!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro ao calcular pagamentos: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private string GetPixTypeText(PixKeyType? type) => type switch
+    {
+        PixKeyType.CPF => "CPF",
+        PixKeyType.Email => "Email",
+        PixKeyType.Phone => "Telefone",
+        PixKeyType.Random => "Aleatoria",
+        _ => "PIX"
+    };
+
+    private Color GetStatusColor(PaymentStatus status) => status switch
+    {
+        PaymentStatus.Pending => Color.Warning,
+        PaymentStatus.Paid => Color.Info,
+        PaymentStatus.Confirmed => Color.Success,
+        _ => Color.Default
+    };
+
+    private string GetStatusText(PaymentStatus status) => status switch
+    {
+        PaymentStatus.Pending => "Pendente",
+        PaymentStatus.Paid => "Pago",
+        PaymentStatus.Confirmed => "Confirmado",
+        _ => status.ToString()
+    };
+}

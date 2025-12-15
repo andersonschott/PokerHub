@@ -1,0 +1,898 @@
+@page "/torneios/{TournamentId:guid}"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@implements IAsyncDisposable
+@inject ITournamentService TournamentService
+@inject IPlayerService PlayerService
+@inject ITournamentExpenseService ExpenseService
+@inject TournamentTimerService TimerService
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>@(_tournament?.Name ?? "Torneio") - PokerHub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    @if (_loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (_tournament == null)
+    {
+        <MudAlert Severity="Severity.Error">Torneio nao encontrado</MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12">
+                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+                    <div>
+                        <MudText Typo="Typo.h4">@_tournament.Name</MudText>
+                        <MudChip T="string" Color="@GetStatusColor(_tournament.Status)" Size="Size.Small">
+                            @GetStatusText(_tournament.Status)
+                        </MudChip>
+                    </div>
+                    <MudStack Row="true" Spacing="2">
+                        @if (_tournament.Status == TournamentStatus.Scheduled)
+                        {
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Success"
+                                      StartIcon="@Icons.Material.Filled.PlayArrow"
+                                      OnClick="StartTournament"
+                                      Disabled="_processing">
+                                Iniciar Torneio
+                            </MudButton>
+                        }
+                        else if (_tournament.Status == TournamentStatus.InProgress)
+                        {
+                            <MudButton Variant="Variant.Outlined"
+                                      Color="Color.Warning"
+                                      StartIcon="@Icons.Material.Filled.Pause"
+                                      OnClick="PauseTournament"
+                                      Disabled="_processing">
+                                Pausar
+                            </MudButton>
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Primary"
+                                      StartIcon="@Icons.Material.Filled.Tv"
+                                      Href="@($"/timer/{TournamentId}")"
+                                      Target="_blank">
+                                Abrir Timer
+                            </MudButton>
+                        }
+                        else if (_tournament.Status == TournamentStatus.Paused)
+                        {
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Success"
+                                      StartIcon="@Icons.Material.Filled.PlayArrow"
+                                      OnClick="ResumeTournament"
+                                      Disabled="_processing">
+                                Retomar
+                            </MudButton>
+                        }
+                    </MudStack>
+                </MudStack>
+            </MudItem>
+
+            <!-- Info Cards -->
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <MudStack AlignItems="AlignItems.Center">
+                            <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary" Size="Size.Large" />
+                            <MudText Typo="Typo.h4">@GetPlayersRemaining() / @(_detail?.Players.Count ?? 0)</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Jogadores</MudText>
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <MudStack AlignItems="AlignItems.Center">
+                            <MudIcon Icon="@Icons.Material.Filled.Payments" Color="Color.Success" Size="Size.Large" />
+                            <MudText Typo="Typo.h4">R$ @(_detail?.PrizePool.ToString("N2") ?? "0,00")</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Prize Pool</MudText>
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <MudStack AlignItems="AlignItems.Center">
+                            <MudIcon Icon="@Icons.Material.Filled.Refresh" Color="Color.Warning" Size="Size.Large" />
+                            <MudText Typo="Typo.h4">@GetTotalRebuys()</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Rebuys</MudText>
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2">
+                    <MudCardContent>
+                        <MudStack AlignItems="AlignItems.Center">
+                            <MudIcon Icon="@Icons.Material.Filled.AddCircle" Color="Color.Info" Size="Size.Large" />
+                            <MudText Typo="Typo.h4">@GetTotalAddons()</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Add-ons</MudText>
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Timer Display (when in progress) -->
+            @if (_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused)
+            {
+                <MudItem xs="12" md="4">
+                    <MudCard Elevation="3" Class="pa-4" Style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);">
+                        <MudStack AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.h6" Style="color: #4CAF50;">NIVEL @_timerState?.CurrentLevel</MudText>
+                            @if (_timerState?.CurrentBlindLevel != null)
+                            {
+                                @if (_timerState.CurrentBlindLevel.IsBreak)
+                                {
+                                    <MudText Typo="Typo.h4" Style="color: #FFD54F;">INTERVALO</MudText>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.h3" Style="color: white;">
+                                        @FormatChips(_timerState.CurrentBlindLevel.SmallBlind) / @FormatChips(_timerState.CurrentBlindLevel.BigBlind)
+                                    </MudText>
+                                    @if (_timerState.CurrentBlindLevel.Ante > 0)
+                                    {
+                                        <MudText Style="color: #FFD54F;">Ante: @FormatChips(_timerState.CurrentBlindLevel.Ante)</MudText>
+                                    }
+                                }
+                            }
+                            <MudText Typo="Typo.h2" Style="color: white; font-family: 'Courier New', monospace;">
+                                @FormatTime(_timerState?.TimeRemainingSeconds ?? 0)
+                            </MudText>
+                            <MudStack Row="true" Spacing="2" Class="mt-2">
+                                <MudButton Variant="Variant.Outlined"
+                                          Color="Color.Primary"
+                                          Size="Size.Small"
+                                          OnClick="AdvanceLevel">
+                                    Proximo Nivel
+                                </MudButton>
+                            </MudStack>
+                        </MudStack>
+                    </MudCard>
+                </MudItem>
+            }
+
+            <!-- Players Table -->
+            <MudItem xs="12" md="@(_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused ? 8 : 12)">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Jogadores</MudText>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            @if (_tournament.Status == TournamentStatus.Scheduled)
+                            {
+                                <MudButton Variant="Variant.Outlined"
+                                          Color="Color.Primary"
+                                          StartIcon="@Icons.Material.Filled.PersonAdd"
+                                          OnClick="OpenAddPlayerDialog">
+                                    Adicionar
+                                </MudButton>
+                            }
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudTable Items="_detail?.Players" Dense="true" Hover="true">
+                            <HeaderContent>
+                                <MudTh>Jogador</MudTh>
+                                <MudTh>Status</MudTh>
+                                <MudTh>Rebuys</MudTh>
+                                <MudTh>Add-on</MudTh>
+                                <MudTh>Posicao</MudTh>
+                                <MudTh Style="width: 200px;">Acoes</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd>
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                        <MudAvatar Color="Color.Primary" Size="Size.Small">
+                                            @context.PlayerName[0]
+                                        </MudAvatar>
+                                        <div>
+                                            <MudText>@context.PlayerName</MudText>
+                                            @if (!string.IsNullOrEmpty(context.Nickname))
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Nickname</MudText>
+                                            }
+                                        </div>
+                                    </MudStack>
+                                </MudTd>
+                                <MudTd>
+                                    <MudChip T="string" Color="@GetPlayerStatusColor(context)" Size="Size.Small">
+                                        @GetPlayerStatusText(context)
+                                    </MudChip>
+                                </MudTd>
+                                <MudTd>
+                                    @if (_tournament.Status != TournamentStatus.Finished && IsPlayerPlaying(context) && _rebuyAllowed)
+                                    {
+                                        <MudStack Row="true" Spacing="1">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Remove"
+                                                          Size="Size.Small"
+                                                          Color="Color.Error"
+                                                          Disabled="context.RebuyCount <= 0"
+                                                          OnClick="@(() => RemoveRebuy(context.PlayerId))" />
+                                            <MudText>@context.RebuyCount</MudText>
+                                            <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                                          Size="Size.Small"
+                                                          Color="Color.Success"
+                                                          OnClick="@(() => AddRebuy(context.PlayerId))" />
+                                        </MudStack>
+                                    }
+                                    else
+                                    {
+                                        @context.RebuyCount
+                                    }
+                                </MudTd>
+                                <MudTd>
+                                    @if (_tournament.Status != TournamentStatus.Finished && IsPlayerPlaying(context) && _detail?.AddonValue != null)
+                                    {
+                                        <MudSwitch T="bool"
+                                                  Value="@context.HasAddon"
+                                                  ValueChanged="@((bool val) => SetAddon(context.PlayerId, val))"
+                                                  Color="Color.Primary" />
+                                    }
+                                    else
+                                    {
+                                        @(context.HasAddon ? "Sim" : "Nao")
+                                    }
+                                </MudTd>
+                                <MudTd>
+                                    @if (context.Position.HasValue)
+                                    {
+                                        <MudChip T="string" Color="@GetPositionColor(context.Position.Value)" Size="Size.Small">
+                                            @context.Position.Value o
+                                        </MudChip>
+                                    }
+                                    else
+                                    {
+                                        <text>-</text>
+                                    }
+                                </MudTd>
+                                <MudTd>
+                                    @if (_tournament.Status == TournamentStatus.Scheduled)
+                                    {
+                                        @if (!context.IsCheckedIn)
+                                        {
+                                            <MudButton Variant="Variant.Text"
+                                                      Color="Color.Success"
+                                                      Size="Size.Small"
+                                                      OnClick="@(() => CheckIn(context.PlayerId))">
+                                                Check-in
+                                            </MudButton>
+                                        }
+                                        else
+                                        {
+                                            <MudButton Variant="Variant.Text"
+                                                      Color="Color.Warning"
+                                                      Size="Size.Small"
+                                                      OnClick="@(() => CheckOut(context.PlayerId))">
+                                                Check-out
+                                            </MudButton>
+                                        }
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                      Color="Color.Error"
+                                                      Size="Size.Small"
+                                                      OnClick="@(() => RemovePlayer(context.PlayerId))" />
+                                    }
+                                    else if ((_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused) && IsPlayerPlaying(context))
+                                    {
+                                        <MudButton Variant="Variant.Text"
+                                                  Color="Color.Error"
+                                                  Size="Size.Small"
+                                                  OnClick="@(() => EliminatePlayer(context))">
+                                            Eliminar
+                                        </MudButton>
+                                    }
+                                </MudTd>
+                            </RowTemplate>
+                        </MudTable>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Expenses Section -->
+            @if (_tournament.Status != TournamentStatus.Scheduled && _tournament.Status != TournamentStatus.Cancelled)
+            {
+                <MudItem xs="12">
+                    <MudCard Elevation="2">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6">Despesas Extras</MudText>
+                            </CardHeaderContent>
+                            <CardHeaderActions>
+                                <MudButton Variant="Variant.Outlined"
+                                          Color="Color.Primary"
+                                          StartIcon="@Icons.Material.Filled.Add"
+                                          OnClick="OpenAddExpenseDialog">
+                                    Adicionar Despesa
+                                </MudButton>
+                            </CardHeaderActions>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            @if (_expenses == null || !_expenses.Any())
+                            {
+                                <MudText Color="Color.Secondary">Nenhuma despesa registrada</MudText>
+                            }
+                            else
+                            {
+                                <MudTable Items="_expenses" Dense="true" Hover="true">
+                                    <HeaderContent>
+                                        <MudTh>Descricao</MudTh>
+                                        <MudTh>Pago por</MudTh>
+                                        <MudTh Style="text-align: right;">Valor</MudTh>
+                                        <MudTh>Dividido entre</MudTh>
+                                        <MudTh>Acoes</MudTh>
+                                    </HeaderContent>
+                                    <RowTemplate>
+                                        <MudTd>@context.Description</MudTd>
+                                        <MudTd>@context.PaidByPlayerName</MudTd>
+                                        <MudTd Style="text-align: right;">R$ @context.TotalAmount.ToString("N2")</MudTd>
+                                        <MudTd>
+                                            <MudTooltip Text="@string.Join(", ", context.Shares.Select(s => $"{s.PlayerName}: R$ {s.Amount:N2}"))">
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.Shares.Count jogadores</MudChip>
+                                            </MudTooltip>
+                                        </MudTd>
+                                        <MudTd>
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                          Color="Color.Error"
+                                                          Size="Size.Small"
+                                                          OnClick="@(() => DeleteExpense(context.Id))" />
+                                        </MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+
+                                <MudDivider Class="my-3" />
+                                <MudText Typo="Typo.subtitle2">
+                                    Total de Despesas: R$ @_expenses.Sum(e => e.TotalAmount).ToString("N2")
+                                </MudText>
+                            }
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
+
+            <!-- Actions -->
+            @if (_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused)
+            {
+                <MudItem xs="12">
+                    <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
+                        <MudButton Variant="Variant.Outlined"
+                                  Color="Color.Error"
+                                  OnClick="CancelTournament">
+                            Cancelar Torneio
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled"
+                                  Color="Color.Success"
+                                  OnClick="FinishTournament"
+                                  Disabled="@(GetPlayersRemaining() > 1)">
+                            Finalizar Torneio
+                        </MudButton>
+                    </MudStack>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public Guid TournamentId { get; set; }
+
+    private HubConnection? _hubConnection;
+    private TournamentDto? _tournament;
+    private TournamentDetailDto? _detail;
+    private TimerStateDto? _timerState;
+    private IReadOnlyList<TournamentExpenseDto>? _expenses;
+    private bool _loading = true;
+    private bool _processing;
+    private bool _rebuyAllowed;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTournament();
+        await SetupSignalR();
+    }
+
+    private async Task SetupSignalR()
+    {
+        try
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/hubs/torneio"), options =>
+                {
+                    options.HttpMessageHandlerFactory = (handler) =>
+                    {
+                        if (handler is HttpClientHandler clientHandler)
+                        {
+                            clientHandler.ServerCertificateCustomValidationCallback =
+                                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+                        }
+                        return handler;
+                    };
+                })
+                .WithAutomaticReconnect()
+                .Build();
+
+            RegisterHubHandlers();
+
+            await _hubConnection.StartAsync();
+            await _hubConnection.SendAsync("JoinTorneio", TournamentId);
+        }
+        catch (Exception ex)
+        {
+            // SignalR connection failed - continue without real-time updates
+            Console.WriteLine($"SignalR connection failed: {ex.Message}");
+        }
+    }
+
+    private async Task LoadTournament()
+    {
+        _loading = true;
+        _tournament = await TournamentService.GetTournamentByIdAsync(TournamentId);
+        _detail = await TournamentService.GetTournamentDetailAsync(TournamentId);
+        _timerState = await TournamentService.GetTimerStateAsync(TournamentId);
+        _rebuyAllowed = await TournamentService.IsRebuyAllowedAsync(TournamentId);
+        _expenses = await ExpenseService.GetExpensesByTournamentAsync(TournamentId);
+        _loading = false;
+    }
+
+    private void RegisterHubHandlers()
+    {
+        if (_hubConnection == null) return;
+
+        _hubConnection.On<TimerStateDto>("TimerStateUpdated", async (state) =>
+        {
+            _timerState = state;
+            await InvokeAsync(StateHasChanged);
+        });
+
+        _hubConnection.On<object>("TimerTick", async (data) =>
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(data);
+            var tick = System.Text.Json.JsonSerializer.Deserialize<TimerTickData>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (tick != null && _timerState != null)
+            {
+                _timerState = _timerState with { TimeRemainingSeconds = tick.SecondsRemaining };
+                await InvokeAsync(StateHasChanged);
+            }
+        });
+
+        _hubConnection.On<object>("PrizePoolAtualizado", async (data) =>
+        {
+            await LoadTournament();
+            await InvokeAsync(StateHasChanged);
+        });
+
+        _hubConnection.On<object>("JogadorEliminado", async (data) =>
+        {
+            await LoadTournament();
+            await InvokeAsync(StateHasChanged);
+        });
+    }
+
+    // Helper methods to derive data from DTOs
+    private int GetPlayersRemaining()
+    {
+        if (_detail?.Players == null) return 0;
+        return _detail.Players.Count(p => IsPlayerPlaying(p));
+    }
+
+    private int GetTotalRebuys()
+    {
+        if (_detail?.Players == null) return 0;
+        return _detail.Players.Sum(p => p.RebuyCount);
+    }
+
+    private int GetTotalAddons()
+    {
+        if (_detail?.Players == null) return 0;
+        return _detail.Players.Count(p => p.HasAddon);
+    }
+
+    private bool IsPlayerPlaying(TournamentPlayerDto player)
+    {
+        return player.IsCheckedIn && !player.Position.HasValue && player.EliminatedAt == null;
+    }
+
+    private bool IsPlayerEliminated(TournamentPlayerDto player)
+    {
+        return player.Position.HasValue || player.EliminatedAt != null;
+    }
+
+    private async Task StartTournament()
+    {
+        _processing = true;
+        try
+        {
+            await TournamentService.StartTournamentAsync(TournamentId);
+            Snackbar.Add("Torneio iniciado!", Severity.Success);
+            await LoadTournament();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private async Task PauseTournament()
+    {
+        _processing = true;
+        try
+        {
+            await TournamentService.PauseTournamentAsync(TournamentId);
+            TimerService.PauseTournament(TournamentId);
+            Snackbar.Add("Torneio pausado", Severity.Info);
+            await LoadTournament();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private async Task ResumeTournament()
+    {
+        _processing = true;
+        try
+        {
+            await TournamentService.ResumeTournamentAsync(TournamentId);
+            TimerService.ResumeTournament(TournamentId);
+            Snackbar.Add("Torneio retomado", Severity.Success);
+            await LoadTournament();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private async Task AdvanceLevel()
+    {
+        try
+        {
+            await TournamentService.AdvanceToNextLevelAsync(TournamentId);
+            Snackbar.Add("Nivel avancado", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenAddPlayerDialog()
+    {
+        var leaguePlayers = await PlayerService.GetPlayersByLeagueAsync(_tournament!.LeagueId);
+        var existingPlayerIds = _detail!.Players.Select(p => p.PlayerId).ToHashSet();
+        var availablePlayers = leaguePlayers.Where(p => !existingPlayerIds.Contains(p.Id)).ToList();
+
+        if (!availablePlayers.Any())
+        {
+            Snackbar.Add("Todos os jogadores da liga ja estao no torneio", Severity.Info);
+            return;
+        }
+
+        var parameters = new DialogParameters<AddTournamentPlayerDialog>
+        {
+            { x => x.AvailablePlayers, availablePlayers },
+            { x => x.TournamentId, TournamentId }
+        };
+
+        var dialog = await DialogService.ShowAsync<AddTournamentPlayerDialog>("Adicionar Jogador", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadTournament();
+        }
+    }
+
+    private async Task CheckIn(Guid playerId)
+    {
+        try
+        {
+            await TournamentService.CheckInPlayerAsync(TournamentId, playerId);
+            await LoadTournament();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CheckOut(Guid playerId)
+    {
+        try
+        {
+            await TournamentService.CheckOutPlayerAsync(TournamentId, playerId);
+            await LoadTournament();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RemovePlayer(Guid playerId)
+    {
+        var confirm = await DialogService.ShowMessageBox(
+            "Remover Jogador",
+            "Tem certeza que deseja remover este jogador do torneio?",
+            "Sim", "Nao");
+
+        if (confirm == true)
+        {
+            try
+            {
+                await TournamentService.RemovePlayerFromTournamentAsync(TournamentId, playerId);
+                await LoadTournament();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task AddRebuy(Guid playerId)
+    {
+        try
+        {
+            await TournamentService.AddRebuyAsync(TournamentId, playerId);
+            await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail!.PrizePool + (_detail.RebuyValue ?? 0), GetTotalRebuys() + 1, GetTotalAddons());
+            await LoadTournament();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task RemoveRebuy(Guid playerId)
+    {
+        try
+        {
+            await TournamentService.RemoveRebuyAsync(TournamentId, playerId);
+            await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail!.PrizePool - (_detail.RebuyValue ?? 0), GetTotalRebuys() - 1, GetTotalAddons());
+            await LoadTournament();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task SetAddon(Guid playerId, bool hasAddon)
+    {
+        try
+        {
+            await TournamentService.SetAddonAsync(TournamentId, playerId, hasAddon);
+            var change = hasAddon ? 1 : -1;
+            var prizeChange = hasAddon ? (_detail!.AddonValue ?? 0) : -(_detail!.AddonValue ?? 0);
+            await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail!.PrizePool + prizeChange, GetTotalRebuys(), GetTotalAddons() + change);
+            await LoadTournament();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task EliminatePlayer(TournamentPlayerDto player)
+    {
+        var playersRemaining = GetPlayersRemaining();
+        var position = playersRemaining;
+
+        var confirm = await DialogService.ShowMessageBox(
+            "Eliminar Jogador",
+            $"Eliminar {player.PlayerName} na posicao {position}o lugar?",
+            "Confirmar", "Cancelar");
+
+        if (confirm == true)
+        {
+            try
+            {
+                await TournamentService.EliminatePlayerAsync(TournamentId, player.PlayerId, null, position);
+                await TimerService.NotifyPlayerEliminated(TournamentId, player.PlayerId, player.PlayerName, position);
+                await LoadTournament();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task FinishTournament()
+    {
+        // Pegar todas as posicoes dos eliminados
+        var positions = _detail!.Players
+            .Where(p => p.Position.HasValue)
+            .Select(p => (p.PlayerId, p.Position!.Value))
+            .ToList();
+
+        // Adicionar o vencedor (ultimo jogador restante) na posicao 1
+        var winner = _detail.Players.FirstOrDefault(p => IsPlayerPlaying(p));
+        if (winner != null)
+        {
+            positions.Add((winner.PlayerId, 1));
+        }
+
+        try
+        {
+            await TournamentService.FinishTournamentAsync(TournamentId, positions);
+            await TimerService.NotifyTournamentFinished(TournamentId);
+            Snackbar.Add("Torneio finalizado!", Severity.Success);
+            Navigation.NavigateTo($"/torneios/{TournamentId}/pagamentos");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task CancelTournament()
+    {
+        var confirm = await DialogService.ShowMessageBox(
+            "Cancelar Torneio",
+            "Tem certeza que deseja cancelar o torneio? Esta acao nao pode ser desfeita.",
+            "Sim, Cancelar", "Nao");
+
+        if (confirm == true)
+        {
+            try
+            {
+                await TournamentService.CancelTournamentAsync(TournamentId);
+                Snackbar.Add("Torneio cancelado", Severity.Warning);
+                await LoadTournament();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task OpenAddExpenseDialog()
+    {
+        var leaguePlayers = await ExpenseService.GetLeaguePlayersAsync(TournamentId);
+        var checkedInPlayers = await ExpenseService.GetEligiblePlayersForShareAsync(TournamentId);
+
+        if (!checkedInPlayers.Any())
+        {
+            Snackbar.Add("Nenhum jogador com check-in para dividir a despesa", Severity.Warning);
+            return;
+        }
+
+        var parameters = new DialogParameters<AddExpenseDialog>
+        {
+            { x => x.TournamentId, TournamentId },
+            { x => x.LeaguePlayers, leaguePlayers },
+            { x => x.CheckedInPlayers, checkedInPlayers }
+        };
+
+        var dialog = await DialogService.ShowAsync<AddExpenseDialog>("Adicionar Despesa", parameters);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            _expenses = await ExpenseService.GetExpensesByTournamentAsync(TournamentId);
+        }
+    }
+
+    private async Task DeleteExpense(Guid expenseId)
+    {
+        var confirm = await DialogService.ShowMessageBox(
+            "Remover Despesa",
+            "Tem certeza que deseja remover esta despesa?",
+            "Sim", "Nao");
+
+        if (confirm == true)
+        {
+            try
+            {
+                await ExpenseService.DeleteExpenseAsync(expenseId);
+                _expenses = await ExpenseService.GetExpensesByTournamentAsync(TournamentId);
+                Snackbar.Add("Despesa removida", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private string FormatTime(int totalSeconds)
+    {
+        if (totalSeconds < 0) totalSeconds = 0;
+        var minutes = totalSeconds / 60;
+        var seconds = totalSeconds % 60;
+        return $"{minutes:D2}:{seconds:D2}";
+    }
+
+    private string FormatChips(int value)
+    {
+        if (value >= 1000000) return $"{value / 1000000.0:0.#}M";
+        if (value >= 1000) return $"{value / 1000.0:0.#}K";
+        return value.ToString();
+    }
+
+    private Color GetStatusColor(TournamentStatus status) => status switch
+    {
+        TournamentStatus.Scheduled => Color.Info,
+        TournamentStatus.InProgress => Color.Success,
+        TournamentStatus.Paused => Color.Warning,
+        TournamentStatus.Finished => Color.Default,
+        TournamentStatus.Cancelled => Color.Error,
+        _ => Color.Default
+    };
+
+    private string GetStatusText(TournamentStatus status) => status switch
+    {
+        TournamentStatus.Scheduled => "Agendado",
+        TournamentStatus.InProgress => "Em Andamento",
+        TournamentStatus.Paused => "Pausado",
+        TournamentStatus.Finished => "Finalizado",
+        TournamentStatus.Cancelled => "Cancelado",
+        _ => status.ToString()
+    };
+
+    private Color GetPlayerStatusColor(TournamentPlayerDto player)
+    {
+        if (IsPlayerEliminated(player)) return Color.Error;
+        if (IsPlayerPlaying(player)) return Color.Success;
+        if (player.IsCheckedIn) return Color.Primary;
+        return Color.Info;
+    }
+
+    private string GetPlayerStatusText(TournamentPlayerDto player)
+    {
+        if (IsPlayerEliminated(player)) return "Eliminado";
+        if (IsPlayerPlaying(player)) return "Jogando";
+        if (player.IsCheckedIn) return "Check-in";
+        return "Inscrito";
+    }
+
+    private Color GetPositionColor(int position) => position switch
+    {
+        1 => Color.Warning,
+        2 => Color.Default,
+        3 => Color.Tertiary,
+        _ => Color.Default
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            await _hubConnection.SendAsync("LeaveTorneio", TournamentId);
+            await _hubConnection.DisposeAsync();
+        }
+    }
+
+    private class TimerTickData
+    {
+        public int SecondsRemaining { get; set; }
+    }
+}

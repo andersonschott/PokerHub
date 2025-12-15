@@ -1,0 +1,379 @@
+@page "/timer/{TournamentId:guid}"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@inject ITournamentService TournamentService
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Timer - @(_tournamentName ?? "Torneio")</PageTitle>
+
+<div class="timer-container @(_isFullscreen ? "fullscreen" : "")" @onclick="ToggleFullscreen">
+    @if (_loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+    }
+    else if (_error != null)
+    {
+        <MudAlert Severity="Severity.Error" Class="ma-4">@_error</MudAlert>
+    }
+    else
+    {
+        <div class="timer-header">
+            <MudText Typo="Typo.h4" Class="tournament-name">@_tournamentName</MudText>
+            @if (_isPaused)
+            {
+                <MudChip T="string" Color="Color.Warning" Size="Size.Large" Class="paused-chip">PAUSADO</MudChip>
+            }
+        </div>
+
+        <div class="timer-main">
+            @if (_isBreak)
+            {
+                <MudText Typo="Typo.h2" Class="break-text">INTERVALO</MudText>
+                <MudText Typo="Typo.h6" Color="Color.Secondary">@_breakDescription</MudText>
+            }
+            else
+            {
+                <div class="blinds-display">
+                    <MudText Typo="Typo.h6" Color="Color.Secondary">NIVEL @_currentLevel</MudText>
+                    <div class="blinds-values">
+                        <span class="blind-value">@FormatChips(_smallBlind)</span>
+                        <span class="blind-separator">/</span>
+                        <span class="blind-value">@FormatChips(_bigBlind)</span>
+                    </div>
+                    @if (_ante > 0)
+                    {
+                        <MudText Typo="Typo.h5" Class="ante-display">ANTE: @FormatChips(_ante)</MudText>
+                    }
+                </div>
+            }
+
+            <div class="time-display @GetTimeClass()">
+                <span class="time-value">@FormatTime(_secondsRemaining)</span>
+            </div>
+
+            @if (_nextLevel != null)
+            {
+                <div class="next-level">
+                    <MudText Typo="Typo.subtitle1" Color="Color.Secondary">PROXIMO NIVEL</MudText>
+                    @if (_nextLevel.IsBreak)
+                    {
+                        <MudText Typo="Typo.h6">Intervalo</MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.h6">@FormatChips(_nextLevel.SmallBlind) / @FormatChips(_nextLevel.BigBlind)@(_nextLevel.Ante > 0 ? $" (Ante: {FormatChips(_nextLevel.Ante)})" : "")</MudText>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="timer-footer">
+            <div class="info-card">
+                <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Medium" />
+                <div class="info-content">
+                    <MudText Typo="Typo.caption">JOGADORES</MudText>
+                    <MudText Typo="Typo.h5">@_playersRemaining / @_totalPlayers</MudText>
+                </div>
+            </div>
+
+            <div class="info-card">
+                <MudIcon Icon="@Icons.Material.Filled.Payments" Size="Size.Medium" />
+                <div class="info-content">
+                    <MudText Typo="Typo.caption">PRIZE POOL</MudText>
+                    <MudText Typo="Typo.h5">R$ @_prizePool.ToString("N2")</MudText>
+                </div>
+            </div>
+
+            <div class="info-card">
+                <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Medium" />
+                <div class="info-content">
+                    <MudText Typo="Typo.caption">REBUYS / ADD-ONS</MudText>
+                    <MudText Typo="Typo.h5">@_totalRebuys / @_totalAddons</MudText>
+                </div>
+            </div>
+        </div>
+
+        <div class="fullscreen-hint">
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Clique para @(_isFullscreen ? "sair da" : "entrar em") tela cheia</MudText>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid TournamentId { get; set; }
+
+    private HubConnection? _hubConnection;
+    private bool _loading = true;
+    private string? _error;
+    private bool _isFullscreen;
+
+    // Tournament info
+    private string? _tournamentName;
+    private bool _isPaused;
+    private int _playersRemaining;
+    private int _totalPlayers;
+    private decimal _prizePool;
+    private int _totalRebuys;
+    private int _totalAddons;
+
+    // Timer state
+    private int _secondsRemaining;
+    private int _currentLevel;
+    private decimal _smallBlind;
+    private decimal _bigBlind;
+    private decimal _ante;
+    private bool _isBreak;
+    private string? _breakDescription;
+    private BlindLevelDto? _nextLevel;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Get timer state (contains all needed info)
+            var timerState = await TournamentService.GetTimerStateAsync(TournamentId);
+            if (timerState == null)
+            {
+                // Try to get basic tournament info
+                var tournament = await TournamentService.GetTournamentByIdAsync(TournamentId);
+                if (tournament == null)
+                {
+                    _error = "Torneio nao encontrado";
+                    _loading = false;
+                    return;
+                }
+                _tournamentName = tournament.Name;
+                _prizePool = tournament.PrizePool;
+                _totalPlayers = tournament.PlayerCount;
+                _playersRemaining = tournament.CheckedInCount;
+            }
+            else
+            {
+                UpdateTimerState(timerState);
+            }
+
+            // Setup SignalR connection
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/hubs/torneio"), options =>
+                {
+                    options.HttpMessageHandlerFactory = (handler) =>
+                    {
+                        if (handler is HttpClientHandler clientHandler)
+                        {
+                            clientHandler.ServerCertificateCustomValidationCallback =
+                                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+                        }
+                        return handler;
+                    };
+                })
+                .WithAutomaticReconnect()
+                .Build();
+
+            RegisterHubHandlers();
+
+            await _hubConnection.StartAsync();
+            await _hubConnection.SendAsync("JoinTorneio", TournamentId);
+
+            _loading = false;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Erro ao carregar torneio: {ex.Message}";
+            _loading = false;
+        }
+    }
+
+    private void RegisterHubHandlers()
+    {
+        if (_hubConnection == null) return;
+
+        _hubConnection.On<object>("TimerTick", async (data) =>
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(data);
+            var tick = System.Text.Json.JsonSerializer.Deserialize<TimerTickData>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (tick != null)
+            {
+                _secondsRemaining = tick.SecondsRemaining;
+                _currentLevel = tick.CurrentLevel;
+                _smallBlind = tick.SmallBlind;
+                _bigBlind = tick.BigBlind;
+                _ante = tick.Ante;
+                _isBreak = tick.IsBreak;
+                _breakDescription = tick.BreakDescription;
+                await InvokeAsync(StateHasChanged);
+            }
+        });
+
+        _hubConnection.On<object>("NivelAlterado", async (data) =>
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(data);
+            var levelData = System.Text.Json.JsonSerializer.Deserialize<LevelChangedData>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (levelData?.NewLevel != null)
+            {
+                _currentLevel = levelData.NewLevel.Order;
+                _smallBlind = levelData.NewLevel.SmallBlind;
+                _bigBlind = levelData.NewLevel.BigBlind;
+                _ante = levelData.NewLevel.Ante;
+                _isBreak = levelData.NewLevel.IsBreak;
+                _breakDescription = levelData.NewLevel.BreakDescription;
+                _secondsRemaining = levelData.NewLevel.DurationMinutes * 60;
+                _nextLevel = levelData.NextLevel;
+
+                // Play level change sound
+                await PlayLevelChangeSound();
+                await InvokeAsync(StateHasChanged);
+            }
+        });
+
+        _hubConnection.On("TorneioPausado", async () =>
+        {
+            _isPaused = true;
+            await InvokeAsync(StateHasChanged);
+        });
+
+        _hubConnection.On("TorneioRetomado", async () =>
+        {
+            _isPaused = false;
+            await InvokeAsync(StateHasChanged);
+        });
+
+        _hubConnection.On<object>("JogadorEliminado", async (data) =>
+        {
+            _playersRemaining--;
+            await InvokeAsync(StateHasChanged);
+        });
+
+        _hubConnection.On<object>("PrizePoolAtualizado", async (data) =>
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(data);
+            var prizeData = System.Text.Json.JsonSerializer.Deserialize<PrizePoolData>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (prizeData != null)
+            {
+                _prizePool = prizeData.PrizePool;
+                _totalRebuys = prizeData.TotalRebuys;
+                _totalAddons = prizeData.TotalAddons;
+                await InvokeAsync(StateHasChanged);
+            }
+        });
+
+        _hubConnection.On("TorneioFinalizado", async () =>
+        {
+            _isPaused = true;
+            await InvokeAsync(StateHasChanged);
+        });
+
+        _hubConnection.On<TimerStateDto>("TimerStateUpdated", async (state) =>
+        {
+            UpdateTimerState(state);
+            await InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private void UpdateTimerState(TimerStateDto state)
+    {
+        _tournamentName = state.TournamentName;
+        _secondsRemaining = state.TimeRemainingSeconds;
+        _currentLevel = state.CurrentLevel;
+        _isPaused = state.Status == TournamentStatus.Paused;
+        _playersRemaining = state.PlayersRemaining;
+        _totalPlayers = state.TotalPlayers;
+        _prizePool = state.PrizePool;
+        _totalRebuys = state.TotalRebuys;
+        _totalAddons = state.TotalAddons;
+
+        if (state.CurrentBlindLevel != null)
+        {
+            _smallBlind = state.CurrentBlindLevel.SmallBlind;
+            _bigBlind = state.CurrentBlindLevel.BigBlind;
+            _ante = state.CurrentBlindLevel.Ante;
+            _isBreak = state.CurrentBlindLevel.IsBreak;
+            _breakDescription = state.CurrentBlindLevel.BreakDescription;
+        }
+
+        _nextLevel = state.NextBlindLevel;
+    }
+
+    private string FormatTime(int totalSeconds)
+    {
+        if (totalSeconds < 0) totalSeconds = 0;
+        var minutes = totalSeconds / 60;
+        var seconds = totalSeconds % 60;
+        return $"{minutes:D2}:{seconds:D2}";
+    }
+
+    private string FormatChips(decimal value)
+    {
+        if (value >= 1000000)
+            return $"{value / 1000000:0.#}M";
+        if (value >= 1000)
+            return $"{value / 1000:0.#}K";
+        return value.ToString("0");
+    }
+
+    private string GetTimeClass()
+    {
+        if (_secondsRemaining <= 10) return "time-critical";
+        if (_secondsRemaining <= 60) return "time-warning";
+        return "";
+    }
+
+    private async Task ToggleFullscreen()
+    {
+        _isFullscreen = !_isFullscreen;
+        if (_isFullscreen)
+        {
+            await JS.InvokeVoidAsync("document.documentElement.requestFullscreen");
+        }
+        else
+        {
+            await JS.InvokeVoidAsync("document.exitFullscreen");
+        }
+    }
+
+    private async Task PlayLevelChangeSound()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval", "new Audio('/sounds/level-change.mp3').play().catch(() => {})");
+        }
+        catch
+        {
+            // Ignore audio errors
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            await _hubConnection.SendAsync("LeaveTorneio", TournamentId);
+            await _hubConnection.DisposeAsync();
+        }
+    }
+
+    // DTOs for SignalR deserialization
+    private class TimerTickData
+    {
+        public int SecondsRemaining { get; set; }
+        public int CurrentLevel { get; set; }
+        public decimal SmallBlind { get; set; }
+        public decimal BigBlind { get; set; }
+        public decimal Ante { get; set; }
+        public bool IsBreak { get; set; }
+        public string? BreakDescription { get; set; }
+    }
+
+    private class LevelChangedData
+    {
+        public BlindLevelDto? NewLevel { get; set; }
+        public BlindLevelDto? NextLevel { get; set; }
+    }
+
+    private class PrizePoolData
+    {
+        public decimal PrizePool { get; set; }
+        public int TotalRebuys { get; set; }
+        public int TotalAddons { get; set; }
+    }
+}

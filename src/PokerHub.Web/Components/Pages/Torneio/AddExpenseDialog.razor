@@ -1,0 +1,235 @@
+@inject ITournamentExpenseService ExpenseService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Adicionar Despesa</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_formValid">
+            <MudTextField @bind-Value="_model.Description"
+                         Label="Descricao"
+                         Placeholder="Ex: Pizza, Bebidas, etc."
+                         Variant="Variant.Outlined"
+                         Required="true"
+                         RequiredError="Descricao e obrigatoria"
+                         Class="mb-3" />
+
+            <MudNumericField @bind-Value="_model.TotalAmount"
+                            Label="Valor Total (R$)"
+                            Variant="Variant.Outlined"
+                            Min="0.01m"
+                            Format="N2"
+                            Required="true"
+                            Class="mb-3" />
+
+            <MudSelect T="Guid?"
+                      @bind-Value="_model.PaidByPlayerId"
+                      Label="Quem pagou"
+                      Variant="Variant.Outlined"
+                      Required="true"
+                      RequiredError="Selecione quem pagou"
+                      Class="mb-3">
+                @foreach (var player in LeaguePlayers)
+                {
+                    <MudSelectItem T="Guid?" Value="@((Guid?)player.Id)">@player.Name</MudSelectItem>
+                }
+            </MudSelect>
+
+            <MudSelect T="ExpenseSplitType"
+                      @bind-Value="_model.SplitType"
+                      Label="Tipo de Divisao"
+                      Variant="Variant.Outlined"
+                      Class="mb-3">
+                <MudSelectItem T="ExpenseSplitType" Value="ExpenseSplitType.Equal">Dividir Igualmente</MudSelectItem>
+                <MudSelectItem T="ExpenseSplitType" Value="ExpenseSplitType.Custom">Valores Personalizados</MudSelectItem>
+            </MudSelect>
+
+            <MudDivider Class="my-3" />
+            <MudText Typo="Typo.subtitle1" Class="mb-2">Dividir entre:</MudText>
+
+            @if (_model.SplitType == ExpenseSplitType.Equal)
+            {
+                <MudStack>
+                    <MudStack Row="true" Spacing="2" Class="mb-2">
+                        <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" OnClick="SelectAll">Todos</MudButton>
+                        <MudButton Variant="Variant.Text" Color="Color.Secondary" Size="Size.Small" OnClick="SelectNone">Nenhum</MudButton>
+                    </MudStack>
+                    @foreach (var player in CheckedInPlayers)
+                    {
+                        <MudCheckBox T="bool"
+                                    Value="@_selectedPlayers.Contains(player.Id)"
+                                    ValueChanged="@((bool val) => TogglePlayer(player.Id, val))"
+                                    Label="@player.Name"
+                                    Color="Color.Primary" />
+                    }
+                    @if (_selectedPlayers.Any() && _model.TotalAmount > 0)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                            R$ @((_model.TotalAmount / _selectedPlayers.Count).ToString("N2")) por pessoa
+                        </MudAlert>
+                    }
+                </MudStack>
+            }
+            else
+            {
+                <MudStack>
+                    @foreach (var player in CheckedInPlayers)
+                    {
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                            <MudCheckBox T="bool"
+                                        Value="@_customShares.ContainsKey(player.Id)"
+                                        ValueChanged="@((bool val) => ToggleCustomShare(player.Id, val))"
+                                        Color="Color.Primary" />
+                            <MudText Style="min-width: 150px;">@player.Name</MudText>
+                            @if (_customShares.ContainsKey(player.Id))
+                            {
+                                <MudNumericField T="decimal"
+                                               Value="@_customShares[player.Id]"
+                                               ValueChanged="@((decimal val) => _customShares[player.Id] = val)"
+                                               Format="N2"
+                                               Variant="Variant.Outlined"
+                                               Adornment="Adornment.Start"
+                                               AdornmentText="R$"
+                                               Style="max-width: 130px;"
+                                               Margin="Margin.Dense" />
+                            }
+                        </MudStack>
+                    }
+                    <MudAlert Severity="@(_customSharesTotal == _model.TotalAmount ? Severity.Success : Severity.Warning)"
+                              Dense="true" Class="mt-2">
+                        Total: R$ @_customSharesTotal.ToString("N2") / R$ @_model.TotalAmount.ToString("N2")
+                        @if (_customSharesTotal != _model.TotalAmount)
+                        {
+                            <span> (Diferenca: R$ @((_model.TotalAmount - _customSharesTotal).ToString("N2")))</span>
+                        }
+                    </MudAlert>
+                </MudStack>
+            }
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary"
+                  Variant="Variant.Filled"
+                  Disabled="@(!IsValid() || _saving)"
+                  OnClick="Submit">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Adicionar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Guid TournamentId { get; set; }
+    [Parameter] public IReadOnlyList<PlayerDto> LeaguePlayers { get; set; } = new List<PlayerDto>();
+    [Parameter] public IReadOnlyList<PlayerDto> CheckedInPlayers { get; set; } = new List<PlayerDto>();
+
+    private MudForm _form = null!;
+    private bool _formValid;
+    private bool _saving;
+    private ExpenseModel _model = new();
+    private HashSet<Guid> _selectedPlayers = new();
+    private Dictionary<Guid, decimal> _customShares = new();
+    private decimal _customSharesTotal => _customShares.Values.Sum();
+
+    protected override void OnInitialized()
+    {
+        // Pre-select all checked-in players for equal split
+        _selectedPlayers = CheckedInPlayers.Select(p => p.Id).ToHashSet();
+    }
+
+    private void TogglePlayer(Guid playerId, bool include)
+    {
+        if (include)
+            _selectedPlayers.Add(playerId);
+        else
+            _selectedPlayers.Remove(playerId);
+    }
+
+    private void ToggleCustomShare(Guid playerId, bool include)
+    {
+        if (include)
+            _customShares[playerId] = 0;
+        else
+            _customShares.Remove(playerId);
+    }
+
+    private void SelectAll()
+    {
+        _selectedPlayers = CheckedInPlayers.Select(p => p.Id).ToHashSet();
+    }
+
+    private void SelectNone()
+    {
+        _selectedPlayers.Clear();
+    }
+
+    private bool IsValid()
+    {
+        if (!_formValid || !_model.PaidByPlayerId.HasValue || _model.TotalAmount <= 0)
+            return false;
+
+        if (string.IsNullOrWhiteSpace(_model.Description))
+            return false;
+
+        if (_model.SplitType == ExpenseSplitType.Equal)
+            return _selectedPlayers.Any();
+
+        return _customShares.Any() && Math.Abs(_customSharesTotal - _model.TotalAmount) < 0.01m;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        if (!IsValid()) return;
+
+        _saving = true;
+        try
+        {
+            IReadOnlyList<ExpenseShareInput> shares;
+
+            if (_model.SplitType == ExpenseSplitType.Equal)
+            {
+                shares = _selectedPlayers.Select(id => new ExpenseShareInput(id, 0)).ToList();
+            }
+            else
+            {
+                shares = _customShares.Select(kvp => new ExpenseShareInput(kvp.Key, kvp.Value)).ToList();
+            }
+
+            var dto = new CreateExpenseDto(
+                _model.PaidByPlayerId!.Value,
+                _model.Description!,
+                _model.TotalAmount,
+                _model.SplitType,
+                shares
+            );
+
+            await ExpenseService.CreateExpenseAsync(TournamentId, dto);
+            Snackbar.Add("Despesa adicionada com sucesso!", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private class ExpenseModel
+    {
+        public string? Description { get; set; }
+        public decimal TotalAmount { get; set; }
+        public Guid? PaidByPlayerId { get; set; }
+        public ExpenseSplitType SplitType { get; set; } = ExpenseSplitType.Equal;
+    }
+}

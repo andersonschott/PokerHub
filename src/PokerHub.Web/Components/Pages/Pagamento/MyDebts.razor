@@ -1,0 +1,321 @@
+@page "/meus-debitos"
+@page "/jogador/{PlayerId:guid}/debitos"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject IPaymentService PaymentService
+@inject IPlayerService PlayerService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject IJSRuntime JS
+
+<PageTitle>Meus Debitos - PokerHub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <MudText Typo="Typo.h4" Class="mb-4">Meus Debitos</MudText>
+
+    @if (_loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (_noPlayerAssociated)
+    {
+        <MudAlert Severity="Severity.Info" Icon="@Icons.Material.Filled.Info">
+            Voce nao possui um jogador vinculado a sua conta. Para ver seus debitos, peca ao administrador da liga para vincular seu jogador.
+        </MudAlert>
+    }
+    else if (_debts == null || !_debts.Any())
+    {
+        <MudAlert Severity="Severity.Success" Icon="@Icons.Material.Filled.CheckCircle">
+            Voce nao tem debitos pendentes. Parabens!
+        </MudAlert>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">
+            Voce tem @_debts.Count debito(s) pendente(s) no total de R$ @_debts.Sum(d => d.Amount).ToString("N2")
+        </MudAlert>
+
+        <MudGrid>
+            @foreach (var debt in _debts)
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="2" Class="@GetDebtCardClass(debt.DaysOpen)">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6">@debt.TournamentName</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                    @debt.TournamentDate.ToString("dd/MM/yyyy")
+                                </MudText>
+                            </CardHeaderContent>
+                            <CardHeaderActions>
+                                @if (debt.DaysOpen > 7)
+                                {
+                                    <MudChip T="string" Color="Color.Error" Size="Size.Small">@debt.DaysOpen dias</MudChip>
+                                }
+                                else if (debt.DaysOpen > 3)
+                                {
+                                    <MudChip T="string" Color="Color.Warning" Size="Size.Small">@debt.DaysOpen dias</MudChip>
+                                }
+                            </CardHeaderActions>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <MudStack>
+                                <div>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Pagar para:</MudText>
+                                    <MudText Typo="Typo.body1">@debt.CreditorPlayerName</MudText>
+                                </div>
+                                <div>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Valor:</MudText>
+                                    <MudText Typo="Typo.h5" Color="Color.Primary">R$ @debt.Amount.ToString("N2")</MudText>
+                                </div>
+                                @if (!string.IsNullOrEmpty(debt.CreditorPixKey))
+                                {
+                                    <div>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">Chave PIX:</MudText>
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                            <MudText Typo="Typo.body2" Style="word-break: break-all;">@debt.CreditorPixKey</MudText>
+                                            <MudIconButton Icon="@Icons.Material.Filled.ContentCopy"
+                                                          Size="Size.Small"
+                                                          OnClick="@(() => CopyToClipboard(debt.CreditorPixKey))" />
+                                        </MudStack>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <MudAlert Severity="Severity.Info" Dense="true">
+                                        Credor nao cadastrou chave PIX. Entre em contato diretamente.
+                                    </MudAlert>
+                                }
+                            </MudStack>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Success"
+                                      FullWidth="true"
+                                      OnClick="@(() => MarkAsPaid(debt))"
+                                      Disabled="_processing">
+                                Marcar como Pago
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+
+    <!-- Payments to Receive -->
+    @if (_toReceive != null && _toReceive.Any())
+    {
+        <MudDivider Class="my-6" />
+
+        <MudText Typo="Typo.h5" Class="mb-4">Pagamentos a Receber</MudText>
+
+        <MudAlert Severity="Severity.Info" Class="mb-4">
+            Voce tem @_toReceive.Count pagamento(s) a receber no total de R$ @_toReceive.Sum(p => p.Amount).ToString("N2")
+        </MudAlert>
+
+        <MudTable Items="_toReceive" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>Torneio</MudTh>
+                <MudTh>De</MudTh>
+                <MudTh Style="text-align: right;">Valor</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Acao</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.TournamentName</MudTd>
+                <MudTd>@context.FromPlayerName</MudTd>
+                <MudTd Style="text-align: right;">R$ @context.Amount.ToString("N2")</MudTd>
+                <MudTd>
+                    <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)">
+                        @GetStatusText(context.Status)
+                    </MudChip>
+                </MudTd>
+                <MudTd>
+                    @if (context.Status == PaymentStatus.Paid)
+                    {
+                        <MudButton Variant="Variant.Text"
+                                  Color="Color.Success"
+                                  Size="Size.Small"
+                                  OnClick="@(() => ConfirmPayment(context))"
+                                  Disabled="_processing">
+                            Confirmar Recebimento
+                        </MudButton>
+                    }
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public Guid? PlayerId { get; set; }
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private IReadOnlyList<PendingDebtDto>? _debts;
+    private IReadOnlyList<PaymentDto>? _toReceive;
+    private bool _loading = true;
+    private bool _processing;
+    private bool _noPlayerAssociated;
+    private Guid _currentPlayerId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+
+        // Get current player ID (from route or logged-in user)
+        if (PlayerId.HasValue)
+        {
+            _currentPlayerId = PlayerId.Value;
+            _debts = await PlayerService.GetPendingDebtsAsync(_currentPlayerId);
+            _toReceive = await PaymentService.GetPendingPaymentsToReceiveAsync(_currentPlayerId);
+        }
+        else
+        {
+            // Try to get player from current user
+            if (AuthState != null)
+            {
+                var authState = await AuthState;
+                var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    // Get all players associated with this user
+                    var players = await PlayerService.GetAllPlayersByUserAsync(userId);
+
+                    if (players.Any())
+                    {
+                        // Aggregate debts from all players
+                        var allDebts = new List<PendingDebtDto>();
+                        var allToReceive = new List<PaymentDto>();
+
+                        foreach (var player in players)
+                        {
+                            var playerDebts = await PlayerService.GetPendingDebtsAsync(player.Id);
+                            allDebts.AddRange(playerDebts);
+
+                            var playerToReceive = await PaymentService.GetPendingPaymentsToReceiveAsync(player.Id);
+                            allToReceive.AddRange(playerToReceive);
+                        }
+
+                        _debts = allDebts;
+                        _toReceive = allToReceive;
+
+                        // Use first player ID for payment operations
+                        _currentPlayerId = players.First().Id;
+                    }
+                    else
+                    {
+                        _noPlayerAssociated = true;
+                    }
+                }
+                else
+                {
+                    _noPlayerAssociated = true;
+                }
+            }
+            else
+            {
+                _noPlayerAssociated = true;
+            }
+        }
+
+        _loading = false;
+    }
+
+    private string GetDebtCardClass(int daysOpen)
+    {
+        if (daysOpen > 7) return "debt-card-critical";
+        if (daysOpen > 3) return "debt-card-warning";
+        return "";
+    }
+
+    private async Task CopyToClipboard(string text)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            Snackbar.Add("Chave PIX copiada!", Severity.Success);
+        }
+        catch
+        {
+            Snackbar.Add("Erro ao copiar", Severity.Error);
+        }
+    }
+
+    private async Task MarkAsPaid(PendingDebtDto debt)
+    {
+        var confirm = await DialogService.ShowMessageBox(
+            "Confirmar Pagamento",
+            $"Voce confirma que pagou R$ {debt.Amount:N2} para {debt.CreditorPlayerName}?",
+            "Sim, Paguei", "Cancelar");
+
+        if (confirm == true)
+        {
+            _processing = true;
+            try
+            {
+                await PaymentService.MarkAsPaidAsync(debt.PaymentId, _currentPlayerId);
+                Snackbar.Add("Pagamento marcado como pago. Aguardando confirmacao do credor.", Severity.Success);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                _processing = false;
+            }
+        }
+    }
+
+    private async Task ConfirmPayment(PaymentDto payment)
+    {
+        var confirm = await DialogService.ShowMessageBox(
+            "Confirmar Recebimento",
+            $"Voce confirma que recebeu R$ {payment.Amount:N2} de {payment.FromPlayerName}?",
+            "Sim, Recebi", "Cancelar");
+
+        if (confirm == true)
+        {
+            _processing = true;
+            try
+            {
+                await PaymentService.ConfirmPaymentAsync(payment.Id, _currentPlayerId);
+                Snackbar.Add("Pagamento confirmado!", Severity.Success);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                _processing = false;
+            }
+        }
+    }
+
+    private Color GetStatusColor(PaymentStatus status) => status switch
+    {
+        PaymentStatus.Pending => Color.Warning,
+        PaymentStatus.Paid => Color.Info,
+        PaymentStatus.Confirmed => Color.Success,
+        _ => Color.Default
+    };
+
+    private string GetStatusText(PaymentStatus status) => status switch
+    {
+        PaymentStatus.Pending => "Pendente",
+        PaymentStatus.Paid => "Pago",
+        PaymentStatus.Confirmed => "Confirmado",
+        _ => status.ToString()
+    };
+}

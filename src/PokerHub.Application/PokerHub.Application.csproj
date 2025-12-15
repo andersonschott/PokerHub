@@ -2,6 +2,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PokerHub.Domain\PokerHub.Domain.csproj" />
+    <ProjectReference Include="..\PokerHub.Infrastructure\PokerHub.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.1" />
   </ItemGroup>
 
   <PropertyGroup>

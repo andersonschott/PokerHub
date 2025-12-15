@@ -417,6 +417,68 @@ namespace PokerHub.Infrastructure.Data.Migrations
                     b.ToTable("Tournaments");
                 });
 
+            modelBuilder.Entity("PokerHub.Domain.Entities.TournamentExpense", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("PaidByPlayerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("SplitType")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("TournamentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PaidByPlayerId");
+
+                    b.HasIndex("TournamentId");
+
+                    b.ToTable("TournamentExpenses");
+                });
+
+            modelBuilder.Entity("PokerHub.Domain.Entities.TournamentExpenseShare", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid>("ExpenseId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("PlayerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlayerId");
+
+                    b.HasIndex("ExpenseId", "PlayerId")
+                        .IsUnique();
+
+                    b.ToTable("TournamentExpenseShares");
+                });
+
             modelBuilder.Entity("PokerHub.Domain.Entities.TournamentPlayer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -673,17 +735,55 @@ namespace PokerHub.Infrastructure.Data.Migrations
                     b.Navigation("League");
                 });
 
+            modelBuilder.Entity("PokerHub.Domain.Entities.TournamentExpense", b =>
+                {
+                    b.HasOne("PokerHub.Domain.Entities.Player", "PaidByPlayer")
+                        .WithMany("ExpensesPaid")
+                        .HasForeignKey("PaidByPlayerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("PokerHub.Domain.Entities.Tournament", "Tournament")
+                        .WithMany("Expenses")
+                        .HasForeignKey("TournamentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PaidByPlayer");
+
+                    b.Navigation("Tournament");
+                });
+
+            modelBuilder.Entity("PokerHub.Domain.Entities.TournamentExpenseShare", b =>
+                {
+                    b.HasOne("PokerHub.Domain.Entities.TournamentExpense", "Expense")
+                        .WithMany("Shares")
+                        .HasForeignKey("ExpenseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PokerHub.Domain.Entities.Player", "Player")
+                        .WithMany("ExpenseShares")
+                        .HasForeignKey("PlayerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Expense");
+
+                    b.Navigation("Player");
+                });
+
             modelBuilder.Entity("PokerHub.Domain.Entities.TournamentPlayer", b =>
                 {
                     b.HasOne("PokerHub.Domain.Entities.Player", "EliminatedByPlayer")
                         .WithMany()
                         .HasForeignKey("EliminatedByPlayerId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("PokerHub.Domain.Entities.Player", "Player")
                         .WithMany("Participations")
                         .HasForeignKey("PlayerId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("PokerHub.Domain.Entities.Tournament", "Tournament")
@@ -708,6 +808,10 @@ namespace PokerHub.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("PokerHub.Domain.Entities.Player", b =>
                 {
+                    b.Navigation("ExpenseShares");
+
+                    b.Navigation("ExpensesPaid");
+
                     b.Navigation("Participations");
 
                     b.Navigation("PaymentsMade");
@@ -719,9 +823,16 @@ namespace PokerHub.Infrastructure.Data.Migrations
                 {
                     b.Navigation("BlindLevels");
 
+                    b.Navigation("Expenses");
+
                     b.Navigation("Payments");
 
                     b.Navigation("Players");
+                });
+
+            modelBuilder.Entity("PokerHub.Domain.Entities.TournamentExpense", b =>
+                {
+                    b.Navigation("Shares");
                 });
 
             modelBuilder.Entity("PokerHub.Domain.Entities.User", b =>

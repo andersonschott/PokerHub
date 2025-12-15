@@ -38,14 +38,8 @@ public class TournamentConfiguration : IEntityTypeConfiguration<Tournament>
             .HasForeignKey(bl => bl.TournamentId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasMany(t => t.Players)
-            .WithOne(tp => tp.Tournament)
-            .HasForeignKey(tp => tp.TournamentId)
-            .OnDelete(DeleteBehavior.Cascade);
+        // Note: Tournament -> Players relationship is configured in TournamentPlayerConfiguration
 
-        builder.HasMany(t => t.Payments)
-            .WithOne(p => p.Tournament)
-            .HasForeignKey(p => p.TournamentId)
-            .OnDelete(DeleteBehavior.Cascade);
+        // Note: Tournament -> Payments relationship is configured in PaymentConfiguration
     }
 }

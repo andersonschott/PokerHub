@@ -1,16 +1,33 @@
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using MudBlazor.Services;
+using PokerHub.Application;
 using PokerHub.Domain.Entities;
 using PokerHub.Infrastructure.Data;
 using PokerHub.Web.Components;
 using PokerHub.Web.Components.Account;
+using PokerHub.Web.Hubs;
+using PokerHub.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// MudBlazor
+builder.Services.AddMudServices();
+
+// SignalR
+builder.Services.AddSignalR();
+
+// Background Services
+builder.Services.AddSingleton<TournamentTimerService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<TournamentTimerService>());
+
+// Application Services
+builder.Services.AddApplicationServices();
 
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityRedirectManager>();
@@ -64,6 +81,9 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// SignalR Hub
+app.MapHub<TorneioHub>("/hubs/torneio");
 
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();

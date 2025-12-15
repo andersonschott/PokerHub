@@ -1,0 +1,77 @@
+@inject ITournamentService TournamentService
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Adicionar Jogador ao Torneio</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudSelect T="Guid?"
+                  @bind-Value="_selectedPlayerId"
+                  Label="Selecione um jogador"
+                  Variant="Variant.Outlined"
+                  AnchorOrigin="Origin.BottomCenter"
+                  Class="mb-4">
+            @foreach (var player in AvailablePlayers)
+            {
+                <MudSelectItem Value="@((Guid?)player.Id)">
+                    @player.Name @(!string.IsNullOrEmpty(player.Nickname) ? $"({player.Nickname})" : "")
+                </MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudSwitch @bind-Value="_checkInImmediately"
+                  Color="Color.Primary"
+                  Label="Fazer check-in automaticamente" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary"
+                  Variant="Variant.Filled"
+                  Disabled="@(!_selectedPlayerId.HasValue || _saving)"
+                  OnClick="Submit">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Adicionar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public IReadOnlyList<PlayerDto> AvailablePlayers { get; set; } = new List<PlayerDto>();
+    [Parameter] public Guid TournamentId { get; set; }
+
+    private Guid? _selectedPlayerId;
+    private bool _checkInImmediately = true;
+    private bool _saving;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        if (!_selectedPlayerId.HasValue) return;
+
+        _saving = true;
+        try
+        {
+            await TournamentService.AddPlayerToTournamentAsync(TournamentId, _selectedPlayerId.Value);
+
+            if (_checkInImmediately)
+            {
+                await TournamentService.CheckInPlayerAsync(TournamentId, _selectedPlayerId.Value);
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception)
+        {
+            MudDialog.Close(DialogResult.Cancel());
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

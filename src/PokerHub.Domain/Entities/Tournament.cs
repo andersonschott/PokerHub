@@ -44,6 +44,7 @@ public class Tournament
     public ICollection<BlindLevel> BlindLevels { get; set; } = new List<BlindLevel>();
     public ICollection<TournamentPlayer> Players { get; set; } = new List<TournamentPlayer>();
     public ICollection<Payment> Payments { get; set; } = new List<Payment>();
+    public ICollection<TournamentExpense> Expenses { get; set; } = new List<TournamentExpense>();
 
     public bool IsRebuyAllowed(int currentLevel, int minutesElapsed)
     {

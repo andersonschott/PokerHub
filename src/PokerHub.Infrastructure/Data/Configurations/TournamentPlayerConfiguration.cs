@@ -16,9 +16,22 @@ public class TournamentPlayerConfiguration : IEntityTypeConfiguration<Tournament
         builder.HasIndex(tp => new { tp.TournamentId, tp.PlayerId })
             .IsUnique();
 
+        // Configure Tournament relationship - cascade delete when tournament is deleted
+        builder.HasOne(tp => tp.Tournament)
+            .WithMany(t => t.Players)
+            .HasForeignKey(tp => tp.TournamentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Configure Player relationship - restrict to avoid cascade cycles
+        builder.HasOne(tp => tp.Player)
+            .WithMany(p => p.Participations)
+            .HasForeignKey(tp => tp.PlayerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Configure EliminatedBy relationship - NO ACTION to avoid cascade cycles
         builder.HasOne(tp => tp.EliminatedByPlayer)
             .WithMany()
             .HasForeignKey(tp => tp.EliminatedByPlayerId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.NoAction);
     }
 }

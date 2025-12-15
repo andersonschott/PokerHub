@@ -1,7 +1,116 @@
-﻿@page "/"
+@page "/"
+@rendermode InteractiveServer
 
-<PageTitle>Home</PageTitle>
+<PageTitle>PokerHub - Gestao de Torneios de Poker</PageTitle>
 
-<h1>Hello, world!</h1>
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-8">
+    <AuthorizeView>
+        <Authorized>
+            <MudText Typo="Typo.h3" Class="mb-2">Bem-vindo, @context.User.Identity?.Name!</MudText>
+            <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-6">
+                Gerencie suas ligas e torneios de poker
+            </MudText>
 
-Welcome to your new app.
+            <MudGrid>
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="2" Class="cursor-pointer" @onclick="@(() => Navigation.NavigateTo("/ligas"))">
+                        <MudCardContent Class="d-flex flex-column align-center pa-6">
+                            <MudIcon Icon="@Icons.Material.Filled.Groups" Size="Size.Large" Color="Color.Primary" Class="mb-4" />
+                            <MudText Typo="Typo.h5">Minhas Ligas</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Gerencie suas ligas e jogadores
+                            </MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="2" Class="cursor-pointer" @onclick="@(() => Navigation.NavigateTo("/torneios"))">
+                        <MudCardContent Class="d-flex flex-column align-center pa-6">
+                            <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
+                            <MudText Typo="Typo.h5">Torneios</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Crie e gerencie torneios
+                            </MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="2" Class="cursor-pointer" @onclick="@(() => Navigation.NavigateTo("/ranking"))">
+                        <MudCardContent Class="d-flex flex-column align-center pa-6">
+                            <MudIcon Icon="@Icons.Material.Filled.Leaderboard" Size="Size.Large" Color="Color.Tertiary" Class="mb-4" />
+                            <MudText Typo="Typo.h5">Ranking</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                Veja a classificacao geral
+                            </MudText>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
+        </Authorized>
+        <NotAuthorized>
+            <MudStack AlignItems="AlignItems.Center" Class="mt-16">
+                <MudIcon Icon="@Icons.Material.Filled.Casino" Size="Size.Large" Color="Color.Primary" Style="font-size: 6rem;" />
+                <MudText Typo="Typo.h2" Class="mt-4">PokerHub</MudText>
+                <MudText Typo="Typo.h5" Color="Color.Secondary" Class="mb-6">
+                    Gestao de Torneios e Ligas de Poker
+                </MudText>
+                <MudText Typo="Typo.body1" Align="Align.Center" Class="mb-6" Style="max-width: 600px;">
+                    Organize seus torneios caseiros de poker com ranking por lucro/prejuizo,
+                    timer de blinds em tempo real e controle de pagamentos entre jogadores.
+                </MudText>
+                <MudStack Row Spacing="4">
+                    <MudButton Variant="Variant.Filled"
+                              Color="Color.Primary"
+                              Size="Size.Large"
+                              Href="Account/Register">
+                        Criar Conta
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                              Color="Color.Primary"
+                              Size="Size.Large"
+                              Href="Account/Login">
+                        Entrar
+                    </MudButton>
+                </MudStack>
+
+                <MudDivider Class="my-8" Style="width: 100%; max-width: 800px;" />
+
+                <MudGrid Class="mt-4" Style="max-width: 900px;">
+                    <MudItem xs="12" sm="4">
+                        <MudStack AlignItems="AlignItems.Center">
+                            <MudIcon Icon="@Icons.Material.Filled.Timer" Size="Size.Large" Color="Color.Primary" />
+                            <MudText Typo="Typo.h6">Timer de Blinds</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                                Timer sincronizado em tempo real para TV e celular
+                            </MudText>
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudStack AlignItems="AlignItems.Center">
+                            <MudIcon Icon="@Icons.Material.Filled.Payments" Size="Size.Large" Color="Color.Secondary" />
+                            <MudText Typo="Typo.h6">Pagamentos</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                                Calculo automatico de quem paga quem com PIX
+                            </MudText>
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudStack AlignItems="AlignItems.Center">
+                            <MudIcon Icon="@Icons.Material.Filled.Leaderboard" Size="Size.Large" Color="Color.Tertiary" />
+                            <MudText Typo="Typo.h6">Ranking</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center">
+                                Ranking por lucro/prejuizo e estatisticas
+                            </MudText>
+                        </MudStack>
+                    </MudItem>
+                </MudGrid>
+            </MudStack>
+        </NotAuthorized>
+    </AuthorizeView>
+</MudContainer>
+
+@code {
+    [Inject] private NavigationManager Navigation { get; set; } = null!;
+}

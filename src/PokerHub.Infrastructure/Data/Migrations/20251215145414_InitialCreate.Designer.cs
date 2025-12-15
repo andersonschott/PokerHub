@@ -12,7 +12,7 @@ using PokerHub.Infrastructure.Data;
 namespace PokerHub.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(PokerHubDbContext))]
-    [Migration("20251213170826_InitialCreate")]
+    [Migration("20251215145414_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -681,12 +681,12 @@ namespace PokerHub.Infrastructure.Data.Migrations
                     b.HasOne("PokerHub.Domain.Entities.Player", "EliminatedByPlayer")
                         .WithMany()
                         .HasForeignKey("EliminatedByPlayerId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("PokerHub.Domain.Entities.Player", "Player")
                         .WithMany("Participations")
                         .HasForeignKey("PlayerId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("PokerHub.Domain.Entities.Tournament", "Tournament")

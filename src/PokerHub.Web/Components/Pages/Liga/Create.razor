@@ -1,0 +1,97 @@
+@page "/ligas/criar"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject ILeagueService LeagueService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Criar Liga - PokerHub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small">
+    <MudPaper Elevation="2" Class="pa-6">
+        <MudText Typo="Typo.h5" Class="mb-4">Criar Nova Liga</MudText>
+
+        <EditForm Model="_model" OnValidSubmit="HandleSubmit">
+            <DataAnnotationsValidator />
+
+            <MudTextField @bind-Value="_model.Name"
+                         Label="Nome da Liga"
+                         Variant="Variant.Outlined"
+                         Required="true"
+                         RequiredError="O nome e obrigatorio"
+                         Class="mb-4" />
+
+            <MudTextField @bind-Value="_model.Description"
+                         Label="Descricao (opcional)"
+                         Variant="Variant.Outlined"
+                         Lines="3"
+                         Class="mb-4" />
+
+            <MudSwitch @bind-Value="_model.BlockCheckInWithDebt"
+                      Label="Bloquear check-in de jogadores com debitos pendentes"
+                      Color="Color.Primary"
+                      Class="mb-4" />
+
+            <MudStack Row Justify="Justify.SpaceBetween" Class="mt-4">
+                <MudButton Variant="Variant.Text"
+                          Color="Color.Default"
+                          Href="/ligas">
+                    Cancelar
+                </MudButton>
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          ButtonType="ButtonType.Submit"
+                          Disabled="_saving">
+                    @if (_saving)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    }
+                    Criar Liga
+                </MudButton>
+            </MudStack>
+        </EditForm>
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private CreateLeagueModel _model = new();
+    private bool _saving;
+
+    private async Task HandleSubmit()
+    {
+        _saving = true;
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                Snackbar.Add("Erro: Usuario nao autenticado", Severity.Error);
+                return;
+            }
+
+            var dto = new CreateLeagueDto(_model.Name!, _model.Description, _model.BlockCheckInWithDebt);
+            var league = await LeagueService.CreateLeagueAsync(userId, dto);
+
+            Snackbar.Add("Liga criada com sucesso!", Severity.Success);
+            Navigation.NavigateTo($"/ligas/{league.Id}");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro ao criar liga: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private class CreateLeagueModel
+    {
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public bool BlockCheckInWithDebt { get; set; }
+    }
+}

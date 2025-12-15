@@ -1,0 +1,179 @@
+@page "/torneios"
+@page "/ligas/{LeagueId:guid}/torneios"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject ITournamentService TournamentService
+@inject ILeagueService LeagueService
+@inject NavigationManager Navigation
+
+<PageTitle>Torneios - PokerHub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    @if (_league != null)
+    {
+        <MudBreadcrumbs Items="_breadcrumbs" Class="mb-4" />
+    }
+
+    <div class="d-flex justify-space-between align-center mb-4">
+        <MudText Typo="Typo.h4">@(_league != null ? $"Torneios - {_league.Name}" : "Meus Torneios")</MudText>
+        @if (_league != null)
+        {
+            <MudButton Variant="Variant.Filled"
+                      Color="Color.Primary"
+                      StartIcon="@Icons.Material.Filled.Add"
+                      Href="@($"/ligas/{LeagueId}/torneios/criar")">
+                Novo Torneio
+            </MudButton>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (_tournaments == null || !_tournaments.Any())
+    {
+        <MudAlert Severity="Severity.Info">
+            @if (_league != null)
+            {
+                <text>Nenhum torneio encontrado nesta liga. Crie o primeiro torneio!</text>
+            }
+            else
+            {
+                <text>Voce ainda nao tem torneios. Acesse uma liga para criar torneios.</text>
+            }
+        </MudAlert>
+    }
+    else
+    {
+        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+            <MudTabPanel Text="Proximos" Icon="@Icons.Material.Filled.Event">
+                @RenderTournaments(_tournaments.Where(t => t.Status == TournamentStatus.Scheduled).OrderBy(t => t.ScheduledDateTime).ToList())
+            </MudTabPanel>
+            <MudTabPanel Text="Em Andamento" Icon="@Icons.Material.Filled.PlayArrow" BadgeData="@_inProgressCount" BadgeColor="Color.Success">
+                @RenderTournaments(_tournaments.Where(t => t.Status == TournamentStatus.InProgress || t.Status == TournamentStatus.Paused).OrderBy(t => t.ScheduledDateTime).ToList())
+            </MudTabPanel>
+            <MudTabPanel Text="Finalizados" Icon="@Icons.Material.Filled.CheckCircle">
+                @RenderTournaments(_tournaments.Where(t => t.Status == TournamentStatus.Finished).OrderByDescending(t => t.ScheduledDateTime).ToList())
+            </MudTabPanel>
+        </MudTabs>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public Guid? LeagueId { get; set; }
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private IReadOnlyList<TournamentDto>? _tournaments;
+    private LeagueDto? _league;
+    private bool _loading = true;
+    private int _inProgressCount;
+    private List<BreadcrumbItem> _breadcrumbs = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (LeagueId.HasValue)
+        {
+            _league = await LeagueService.GetLeagueByIdAsync(LeagueId.Value);
+            if (_league != null)
+            {
+                _breadcrumbs = new List<BreadcrumbItem>
+                {
+                    new("Ligas", "/ligas", false),
+                    new(_league.Name, $"/ligas/{LeagueId}", false),
+                    new("Torneios", null, true)
+                };
+            }
+            _tournaments = await TournamentService.GetTournamentsByLeagueAsync(LeagueId.Value);
+        }
+        else
+        {
+            var authState = await AuthState!;
+            var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (userId != null)
+            {
+                _tournaments = await TournamentService.GetTournamentsByUserAsync(userId);
+            }
+        }
+
+        _inProgressCount = _tournaments?.Count(t => t.Status == TournamentStatus.InProgress || t.Status == TournamentStatus.Paused) ?? 0;
+        _loading = false;
+    }
+
+    private RenderFragment RenderTournaments(List<TournamentDto> tournaments) => @<text>
+        @if (!tournaments.Any())
+        {
+            <MudAlert Severity="Severity.Info">Nenhum torneio nesta categoria</MudAlert>
+        }
+        else
+        {
+            <MudGrid>
+                @foreach (var tournament in tournaments)
+                {
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudCard Elevation="2">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudText Typo="Typo.h6">@tournament.Name</MudText>
+                                </CardHeaderContent>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudChip T="string" Color="@GetStatusColor(tournament.Status)" Size="Size.Small">
+                                    @GetStatusText(tournament.Status)
+                                </MudChip>
+
+                                <div class="mt-3">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                                        <MudIcon Icon="@Icons.Material.Filled.Event" Size="Size.Small" />
+                                        <MudText Typo="Typo.body2">@tournament.ScheduledDateTime.ToString("dd/MM/yyyy HH:mm")</MudText>
+                                    </MudStack>
+
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                                        <MudIcon Icon="@Icons.Material.Filled.Payments" Size="Size.Small" />
+                                        <MudText Typo="Typo.body2">Buy-in: R$ @tournament.BuyIn.ToString("N2")</MudText>
+                                    </MudStack>
+
+                                    <MudStack Row="true" AlignItems="AlignItems.Center">
+                                        <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Small" />
+                                        <MudText Typo="Typo.body2">Jogadores: @tournament.CheckedInCount/@tournament.PlayerCount</MudText>
+                                    </MudStack>
+                                </div>
+                            </MudCardContent>
+                            <MudCardActions>
+                                @if (tournament.Status == TournamentStatus.InProgress || tournament.Status == TournamentStatus.Paused)
+                                {
+                                    <MudButton Variant="Variant.Text" Color="Color.Primary" Href="@($"/timer/{tournament.Id}")">
+                                        Ver Timer
+                                    </MudButton>
+                                }
+                                <MudButton Variant="Variant.Text" Color="Color.Default" Href="@($"/torneios/{tournament.Id}")">
+                                    @(tournament.Status == TournamentStatus.Scheduled ? "Gerenciar" : "Detalhes")
+                                </MudButton>
+                            </MudCardActions>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </text>;
+
+    private Color GetStatusColor(TournamentStatus status) => status switch
+    {
+        TournamentStatus.Scheduled => Color.Info,
+        TournamentStatus.InProgress => Color.Success,
+        TournamentStatus.Paused => Color.Warning,
+        TournamentStatus.Finished => Color.Default,
+        TournamentStatus.Cancelled => Color.Error,
+        _ => Color.Default
+    };
+
+    private string GetStatusText(TournamentStatus status) => status switch
+    {
+        TournamentStatus.Scheduled => "Agendado",
+        TournamentStatus.InProgress => "Em Andamento",
+        TournamentStatus.Paused => "Pausado",
+        TournamentStatus.Finished => "Finalizado",
+        TournamentStatus.Cancelled => "Cancelado",
+        _ => status.ToString()
+    };
+}

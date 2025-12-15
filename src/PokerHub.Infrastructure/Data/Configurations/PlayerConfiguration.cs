@@ -33,10 +33,8 @@ public class PlayerConfiguration : IEntityTypeConfiguration<Player>
             .IsRequired()
             .HasDefaultValue(true);
 
-        builder.HasMany(p => p.Participations)
-            .WithOne(tp => tp.Player)
-            .HasForeignKey(tp => tp.PlayerId)
-            .OnDelete(DeleteBehavior.Cascade);
+        // Note: Player -> Participations relationship is configured in TournamentPlayerConfiguration
+        // with RESTRICT to avoid multiple cascade paths through League
 
         builder.HasMany(p => p.PaymentsMade)
             .WithOne(pay => pay.FromPlayer)

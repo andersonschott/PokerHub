@@ -1,0 +1,165 @@
+@page "/ligas/{LeagueId:guid}/editar"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject ILeagueService LeagueService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Editar Liga - PokerHub</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+}
+else if (_league == null)
+{
+    <MudAlert Severity="Severity.Error">Liga nao encontrada</MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Small">
+        <MudPaper Elevation="2" Class="pa-6">
+            <MudText Typo="Typo.h5" Class="mb-4">Editar Liga</MudText>
+
+            <EditForm Model="_model" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+
+                <MudTextField @bind-Value="_model.Name"
+                             Label="Nome da Liga"
+                             Variant="Variant.Outlined"
+                             Required="true"
+                             RequiredError="O nome e obrigatorio"
+                             Class="mb-4" />
+
+                <MudTextField @bind-Value="_model.Description"
+                             Label="Descricao (opcional)"
+                             Variant="Variant.Outlined"
+                             Lines="3"
+                             Class="mb-4" />
+
+                <MudSwitch @bind-Value="_model.BlockCheckInWithDebt"
+                          Label="Bloquear check-in de jogadores com debitos pendentes"
+                          Color="Color.Primary"
+                          Class="mb-4" />
+
+                <MudDivider Class="my-4" />
+
+                <MudAlert Severity="Severity.Warning" Class="mb-4">
+                    <MudText Typo="Typo.body2">
+                        Excluir a liga ira remover todos os jogadores e torneios associados.
+                    </MudText>
+                </MudAlert>
+
+                <MudStack Row Justify="Justify.SpaceBetween" Class="mt-4">
+                    <MudButton Variant="Variant.Text"
+                              Color="Color.Error"
+                              OnClick="ConfirmDelete">
+                        Excluir Liga
+                    </MudButton>
+                    <MudStack Row Spacing="2">
+                        <MudButton Variant="Variant.Text"
+                                  Color="Color.Default"
+                                  Href="@($"/ligas/{LeagueId}")">
+                            Cancelar
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled"
+                                  Color="Color.Primary"
+                                  ButtonType="ButtonType.Submit"
+                                  Disabled="_saving">
+                            @if (_saving)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            }
+                            Salvar
+                        </MudButton>
+                    </MudStack>
+                </MudStack>
+            </EditForm>
+        </MudPaper>
+    </MudContainer>
+}
+
+@code {
+    [Parameter] public Guid LeagueId { get; set; }
+
+    private LeagueDto? _league;
+    private EditLeagueModel _model = new();
+    private bool _loading = true;
+    private bool _saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLeague();
+    }
+
+    private async Task LoadLeague()
+    {
+        _loading = true;
+        try
+        {
+            _league = await LeagueService.GetLeagueByIdAsync(LeagueId);
+            if (_league != null)
+            {
+                _model.Name = _league.Name;
+                _model.Description = _league.Description;
+                _model.BlockCheckInWithDebt = _league.BlockCheckInWithDebt;
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _saving = true;
+        try
+        {
+            var dto = new UpdateLeagueDto(_model.Name!, _model.Description, _model.BlockCheckInWithDebt);
+            await LeagueService.UpdateLeagueAsync(LeagueId, dto);
+
+            Snackbar.Add("Liga atualizada com sucesso!", Severity.Success);
+            Navigation.NavigateTo($"/ligas/{LeagueId}");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro ao atualizar liga: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ConfirmDelete()
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirmar Exclusao",
+            "Tem certeza que deseja excluir esta liga? Esta acao nao pode ser desfeita.",
+            yesText: "Excluir",
+            cancelText: "Cancelar");
+
+        if (result == true)
+        {
+            try
+            {
+                await LeagueService.DeleteLeagueAsync(LeagueId);
+                Snackbar.Add("Liga excluida com sucesso!", Severity.Success);
+                Navigation.NavigateTo("/ligas");
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Erro ao excluir liga: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private class EditLeagueModel
+    {
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public bool BlockCheckInWithDebt { get; set; }
+    }
+}

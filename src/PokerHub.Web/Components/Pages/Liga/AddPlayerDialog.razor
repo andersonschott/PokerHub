@@ -1,0 +1,152 @@
+@inject IPlayerService PlayerService
+@inject AuthenticationStateProvider AuthStateProvider
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">Adicionar Jogador</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="_formValid">
+            <MudTextField @bind-Value="_model.Name"
+                         Label="Nome"
+                         Variant="Variant.Outlined"
+                         Required="true"
+                         RequiredError="O nome e obrigatorio"
+                         Class="mb-3" />
+
+            <MudTextField @bind-Value="_model.Nickname"
+                         Label="Apelido (opcional)"
+                         Variant="Variant.Outlined"
+                         Class="mb-3" />
+
+            <MudTextField @bind-Value="_model.Email"
+                         Label="Email (opcional)"
+                         Variant="Variant.Outlined"
+                         InputType="InputType.Email"
+                         Class="mb-3" />
+
+            <MudTextField @bind-Value="_model.Phone"
+                         Label="Telefone (opcional)"
+                         Variant="Variant.Outlined"
+                         Class="mb-3" />
+
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.subtitle1" Class="mb-2">Chave PIX (para receber premios)</MudText>
+
+            <MudSelect T="PixKeyType?" @bind-Value="_model.PixKeyType"
+                      Label="Tipo de Chave PIX"
+                      Variant="Variant.Outlined"
+                      Class="mb-3">
+                <MudSelectItem T="PixKeyType?" Value="@((PixKeyType?)null)">Nenhuma</MudSelectItem>
+                <MudSelectItem T="PixKeyType?" Value="@((PixKeyType?)PixKeyType.CPF)">CPF</MudSelectItem>
+                <MudSelectItem T="PixKeyType?" Value="@((PixKeyType?)PixKeyType.Email)">Email</MudSelectItem>
+                <MudSelectItem T="PixKeyType?" Value="@((PixKeyType?)PixKeyType.Phone)">Telefone</MudSelectItem>
+                <MudSelectItem T="PixKeyType?" Value="@((PixKeyType?)PixKeyType.Random)">Chave Aleatoria</MudSelectItem>
+            </MudSelect>
+
+            @if (_model.PixKeyType.HasValue)
+            {
+                <MudTextField @bind-Value="_model.PixKey"
+                             Label="@GetPixKeyLabel()"
+                             Variant="Variant.Outlined"
+                             Class="mb-3" />
+            }
+
+            <MudDivider Class="my-4" />
+            <MudCheckBox @bind-Value="_linkToAccount" Color="Color.Primary" Label="Vincular este jogador a minha conta" />
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="ml-9">
+                Permite que voce veja seus debitos e recebimentos na pagina "Meus Debitos"
+            </MudText>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary"
+                  Variant="Variant.Filled"
+                  Disabled="@(!_formValid || _saving)"
+                  OnClick="Submit">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Adicionar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Guid LeagueId { get; set; }
+
+    private MudForm _form = null!;
+    private bool _formValid;
+    private bool _saving;
+    private bool _linkToAccount;
+    private PlayerModel _model = new();
+
+    private string GetPixKeyLabel()
+    {
+        return _model.PixKeyType switch
+        {
+            PixKeyType.CPF => "CPF (somente numeros)",
+            PixKeyType.Email => "Email",
+            PixKeyType.Phone => "Telefone (com DDD)",
+            PixKeyType.Random => "Chave Aleatoria",
+            _ => "Chave PIX"
+        };
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        await _form.Validate();
+        if (!_formValid) return;
+
+        _saving = true;
+        try
+        {
+            var dto = new CreatePlayerDto(
+                _model.Name!,
+                _model.Nickname,
+                _model.Email,
+                _model.Phone,
+                _model.PixKey,
+                _model.PixKeyType
+            );
+
+            var player = await PlayerService.CreatePlayerAsync(LeagueId, dto);
+
+            // Link player to current user if checkbox is checked
+            if (_linkToAccount)
+            {
+                var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+                var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    await PlayerService.LinkPlayerToUserAsync(player.Id, userId);
+                }
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception)
+        {
+            MudDialog.Close(DialogResult.Cancel());
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private class PlayerModel
+    {
+        public string? Name { get; set; }
+        public string? Nickname { get; set; }
+        public string? Email { get; set; }
+        public string? Phone { get; set; }
+        public string? PixKey { get; set; }
+        public PixKeyType? PixKeyType { get; set; }
+    }
+}

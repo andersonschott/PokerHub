@@ -16,5 +16,23 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
 
         builder.Property(p => p.CreatedAt)
             .IsRequired();
+
+        // Configure Tournament relationship - cascade delete when tournament is deleted
+        builder.HasOne(p => p.Tournament)
+            .WithMany(t => t.Payments)
+            .HasForeignKey(p => p.TournamentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Configure FromPlayer relationship - restrict to avoid cascade cycles
+        builder.HasOne(p => p.FromPlayer)
+            .WithMany(pl => pl.PaymentsMade)
+            .HasForeignKey(p => p.FromPlayerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Configure ToPlayer relationship - restrict to avoid cascade cycles
+        builder.HasOne(p => p.ToPlayer)
+            .WithMany(pl => pl.PaymentsReceived)
+            .HasForeignKey(p => p.ToPlayerId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

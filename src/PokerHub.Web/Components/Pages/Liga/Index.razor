@@ -1,0 +1,152 @@
+@page "/ligas"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject ILeagueService LeagueService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Minhas Ligas - PokerHub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large">
+    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+        <MudText Typo="Typo.h4">Minhas Ligas</MudText>
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   Href="/ligas/criar">
+            Criar Liga
+        </MudButton>
+    </MudStack>
+
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    }
+    else if (_leagues == null || !_leagues.Any())
+    {
+        <MudAlert Severity="Severity.Info">
+            Voce ainda nao tem nenhuma liga. Crie sua primeira liga para comecar!
+        </MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            @foreach (var league in _leagues)
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="2" Class="cursor-pointer" @onclick="() => NavigateToLeague(league.Id)">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.h6">@league.Name</MudText>
+                            </CardHeaderContent>
+                            <CardHeaderActions>
+                                <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                                              OnClick="@(() => NavigateToEdit(league.Id))"
+                                              Color="Color.Default" />
+                            </CardHeaderActions>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            @if (!string.IsNullOrEmpty(league.Description))
+                            {
+                                <MudText Typo="Typo.body2" Class="mb-2">@league.Description</MudText>
+                            }
+                            <MudStack Row Spacing="4">
+                                <MudChip T="string" Icon="@Icons.Material.Filled.People" Size="Size.Small">
+                                    @league.PlayerCount jogadores
+                                </MudChip>
+                                <MudChip T="string" Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Small">
+                                    @league.TournamentCount torneios
+                                </MudChip>
+                            </MudStack>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Variant="Variant.Text"
+                                      Color="Color.Primary"
+                                      OnClick="@(() => ShowInviteCode(league))">
+                                Codigo de Convite
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudContainer>
+
+<MudDialog @bind-Visible="_inviteDialogVisible">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Codigo de Convite</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body1" Class="mb-2">
+            Compartilhe este codigo para convidar jogadores para a liga <strong>@_selectedLeague?.Name</strong>:
+        </MudText>
+        <MudPaper Elevation="0" Class="pa-4 d-flex justify-center" Style="background-color: var(--mud-palette-background-grey);">
+            <MudText Typo="Typo.h4" Style="font-family: monospace; letter-spacing: 0.3em;">
+                @_selectedLeague?.InviteCode
+            </MudText>
+        </MudPaper>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _inviteDialogVisible = false)">Fechar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="CopyInviteCode">Copiar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private IReadOnlyList<LeagueDto>? _leagues;
+    private bool _loading = true;
+    private bool _inviteDialogVisible;
+    private LeagueDto? _selectedLeague;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLeagues();
+    }
+
+    private async Task LoadLeagues()
+    {
+        _loading = true;
+        try
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var userId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+            if (!string.IsNullOrEmpty(userId))
+            {
+                _leagues = await LeagueService.GetLeaguesByUserAsync(userId);
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void NavigateToLeague(Guid leagueId)
+    {
+        Navigation.NavigateTo($"/ligas/{leagueId}");
+    }
+
+    private void NavigateToEdit(Guid leagueId)
+    {
+        Navigation.NavigateTo($"/ligas/{leagueId}/editar");
+    }
+
+    private void ShowInviteCode(LeagueDto league)
+    {
+        _selectedLeague = league;
+        _inviteDialogVisible = true;
+    }
+
+    private async Task CopyInviteCode()
+    {
+        if (_selectedLeague != null)
+        {
+            // Note: Clipboard API requires JavaScript interop
+            Snackbar.Add($"Codigo copiado: {_selectedLeague.InviteCode}", Severity.Success);
+            _inviteDialogVisible = false;
+        }
+    }
+}

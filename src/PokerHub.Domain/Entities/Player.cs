@@ -22,4 +22,6 @@ public class Player
     public ICollection<TournamentPlayer> Participations { get; set; } = new List<TournamentPlayer>();
     public ICollection<Payment> PaymentsMade { get; set; } = new List<Payment>();
     public ICollection<Payment> PaymentsReceived { get; set; } = new List<Payment>();
+    public ICollection<TournamentExpense> ExpensesPaid { get; set; } = new List<TournamentExpense>();
+    public ICollection<TournamentExpenseShare> ExpenseShares { get; set; } = new List<TournamentExpenseShare>();
 }

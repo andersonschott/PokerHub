@@ -1,0 +1,230 @@
+@page "/jogador/{PlayerId:guid}/stats"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject IRankingService RankingService
+@inject NavigationManager Navigation
+
+<PageTitle>Estatisticas - PokerHub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    @if (_loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (_stats == null)
+    {
+        <MudAlert Severity="Severity.Warning">Jogador nao encontrado ou sem historico de torneios.</MudAlert>
+    }
+    else
+    {
+        <MudText Typo="Typo.h4" Class="mb-2">
+            @_stats.PlayerName
+            @if (!string.IsNullOrEmpty(_stats.Nickname))
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary"> (@_stats.Nickname)</MudText>
+            }
+        </MudText>
+
+        <!-- Summary Cards -->
+        <MudGrid Class="mb-4">
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2" Class="text-center pa-4">
+                    <MudIcon Icon="@Icons.Material.Filled.Casino" Size="Size.Large" Color="Color.Primary" />
+                    <MudText Typo="Typo.h3">@_stats.TournamentsPlayed</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Torneios</MudText>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2" Class="text-center pa-4">
+                    <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Large" Color="Color.Warning" />
+                    <MudText Typo="Typo.h3">@_stats.Wins</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Vitorias</MudText>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2" Class="text-center pa-4">
+                    <MudIcon Icon="@Icons.Material.Filled.Star" Size="Size.Large" Color="Color.Tertiary" />
+                    <MudText Typo="Typo.h3">@_stats.Top3Finishes</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Top 3</MudText>
+                </MudCard>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudCard Elevation="2" Class="text-center pa-4">
+                    <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Large" Color="@(_stats.Profit >= 0 ? Color.Success : Color.Error)" />
+                    <MudText Typo="Typo.h3" Color="@(_stats.Profit >= 0 ? Color.Success : Color.Error)">
+                        @(_stats.Profit >= 0 ? "+" : "")R$ @_stats.Profit.ToString("N0")
+                    </MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Lucro/Prejuizo</MudText>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Detailed Stats -->
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">Estatisticas Detalhadas</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudSimpleTable Dense="true" Hover="true">
+                            <tbody>
+                                <tr>
+                                    <td><strong>Total em Buy-ins</strong></td>
+                                    <td style="text-align: right;">R$ @_stats.TotalBuyIns.ToString("N2")</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Total em Premios</strong></td>
+                                    <td style="text-align: right;">R$ @_stats.TotalPrizes.ToString("N2")</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Lucro/Prejuizo</strong></td>
+                                    <td style="text-align: right; color: @(_stats.Profit >= 0 ? "#4CAF50" : "#f44336");">
+                                        @(_stats.Profit >= 0 ? "+" : "")R$ @_stats.Profit.ToString("N2")
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Posicao Media</strong></td>
+                                    <td style="text-align: right;">@_stats.AveragePosition.ToString("N1") o</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Melhor Resultado</strong></td>
+                                    <td style="text-align: right; color: #4CAF50;">
+                                        @(_stats.BestResult.HasValue ? $"+R$ {_stats.BestResult:N2}" : "-")
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Pior Resultado</strong></td>
+                                    <td style="text-align: right; color: #f44336;">
+                                        @(_stats.WorstResult.HasValue ? $"R$ {_stats.WorstResult:N2}" : "-")
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Taxa de Vitoria</strong></td>
+                                    <td style="text-align: right;">
+                                        @((_stats.TournamentsPlayed > 0 ? (_stats.Wins * 100.0 / _stats.TournamentsPlayed) : 0).ToString("N1"))%
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>ITM (In The Money)</strong></td>
+                                    <td style="text-align: right;">
+                                        @((_stats.TournamentsPlayed > 0 ? (_stats.Top3Finishes * 100.0 / _stats.TournamentsPlayed) : 0).ToString("N1"))%
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="2">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6">ROI (Return on Investment)</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @{
+                            var roi = _stats.TotalBuyIns > 0 ? (_stats.Profit / _stats.TotalBuyIns * 100) : 0;
+                            var roiColor = roi >= 0 ? Color.Success : Color.Error;
+                        }
+                        <MudStack AlignItems="AlignItems.Center" Class="pa-4">
+                            <MudText Typo="Typo.h1" Color="@roiColor">@roi.ToString("N1")%</MudText>
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                @if (roi >= 20)
+                                {
+                                    <text>Excelente! Voce esta muito acima da media.</text>
+                                }
+                                else if (roi >= 0)
+                                {
+                                    <text>Positivo! Continue assim.</text>
+                                }
+                                else if (roi >= -20)
+                                {
+                                    <text>Fique atento, mas esta dentro do normal.</text>
+                                }
+                                else
+                                {
+                                    <text>Momento dificil, mas a sorte pode mudar!</text>
+                                }
+                            </MudText>
+                        </MudStack>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Recent Results -->
+        @if (_stats.RecentResults.Any())
+        {
+            <MudCard Elevation="2" Class="mt-4">
+                <MudCardHeader>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">Historico de Torneios</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent>
+                    <MudTable Items="_stats.RecentResults" Dense="true" Hover="true">
+                        <HeaderContent>
+                            <MudTh>Torneio</MudTh>
+                            <MudTh>Data</MudTh>
+                            <MudTh Style="text-align: center;">Posicao</MudTh>
+                            <MudTh Style="text-align: right;">Investimento</MudTh>
+                            <MudTh Style="text-align: right;">Premio</MudTh>
+                            <MudTh Style="text-align: right;">Resultado</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>
+                                <MudLink Href="@($"/torneios/{context.TournamentId}")">@context.TournamentName</MudLink>
+                            </MudTd>
+                            <MudTd>@context.Date.ToString("dd/MM/yyyy")</MudTd>
+                            <MudTd Style="text-align: center;">
+                                @if (context.Position.HasValue)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="@GetPositionColor(context.Position.Value)">
+                                        @context.Position.Value o / @context.TotalPlayers
+                                    </MudChip>
+                                }
+                                else
+                                {
+                                    <text>-</text>
+                                }
+                            </MudTd>
+                            <MudTd Style="text-align: right;">R$ @context.Investment.ToString("N2")</MudTd>
+                            <MudTd Style="text-align: right;">R$ @context.Prize.ToString("N2")</MudTd>
+                            <MudTd Style="text-align: right;">
+                                <MudText Color="@(context.Profit >= 0 ? Color.Success : Color.Error)">
+                                    @(context.Profit >= 0 ? "+" : "")R$ @context.Profit.ToString("N2")
+                                </MudText>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudCardContent>
+            </MudCard>
+        }
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public Guid PlayerId { get; set; }
+
+    private PlayerStatsDto? _stats;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _stats = await RankingService.GetPlayerStatsAsync(PlayerId);
+        _loading = false;
+    }
+
+    private Color GetPositionColor(int position) => position switch
+    {
+        1 => Color.Warning,
+        2 => Color.Default,
+        3 => Color.Tertiary,
+        _ => Color.Default
+    };
+}

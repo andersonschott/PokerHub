@@ -1,23 +1,142 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@inject IJSRuntime JSRuntime
 
-<div class="page">
-    <div class="sidebar">
+<MudThemeProvider Theme="_theme" @bind-IsDarkMode="_isDarkMode"/>
+<MudPopoverProvider/>
+<MudDialogProvider/>
+<MudSnackbarProvider/>
+
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@ToggleDrawer"/>
+        <MudText Typo="Typo.h5" Class="ml-3">PokerHub</MudText>
+        <MudSpacer/>
+        <AuthorizeView>
+            <Authorized>
+                <MudMenu Icon="@Icons.Material.Filled.Person" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                    <MudMenuItem Href="Account/Manage">
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small"/>
+                            <MudText>@context.User.Identity?.Name</MudText>
+                        </div>
+                    </MudMenuItem>
+                    <MudDivider/>
+                    <MudMenuItem Href="Account/Manage/ChangePassword">
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small"/>
+                            <MudText>Alterar Senha</MudText>
+                        </div>
+                    </MudMenuItem>
+                    <MudMenuItem OnClick="ToggleTheme">
+                        <div class="d-flex align-center gap-2">
+                            <MudIcon Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)" Size="Size.Small"/>
+                            <MudText>@(_isDarkMode ? "Modo Claro" : "Modo Escuro")</MudText>
+                        </div>
+                    </MudMenuItem>
+                    <MudDivider/>
+                    <MudMenuItem>
+                        <form action="Account/Logout" method="post">
+                            <AntiforgeryToken/>
+                            <input type="hidden" name="ReturnUrl" value="/"/>
+                            <MudButton ButtonType="ButtonType.Submit" Color="Color.Error" StartIcon="@Icons.Material.Filled.Logout" Variant="Variant.Text">
+                                Sair
+                            </MudButton>
+                        </form>
+                    </MudMenuItem>
+                </MudMenu>
+            </Authorized>
+            <NotAuthorized>
+                <MudButton Href="Account/Login" Color="Color.Inherit" StartIcon="@Icons.Material.Filled.Login">Entrar</MudButton>
+                <MudButton Href="Account/Register" Color="Color.Secondary" Variant="Variant.Filled" Class="ml-2">Cadastrar</MudButton>
+            </NotAuthorized>
+        </AuthorizeView>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
+        <MudDrawerHeader>
+            <MudText Typo="Typo.h6">Menu</MudText>
+        </MudDrawerHeader>
         <NavMenu/>
-    </div>
+    </MudDrawer>
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
-
-        <article class="content px-4">
+    <MudMainContent Class="pt-16 px-4">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
             @Body
-        </article>
-    </main>
-</div>
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
     <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
+    <span class="dismiss">X</span>
 </div>
+
+@code {
+    private bool _drawerOpen = true;
+    private bool _isDarkMode = true;
+    private bool _themeLoaded;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_themeLoaded)
+        {
+            _themeLoaded = true;
+            try
+            {
+                _isDarkMode = await JSRuntime.InvokeAsync<bool>("themeManager.getTheme");
+                StateHasChanged();
+            }
+            catch
+            {
+                // Fallback to dark mode if JS fails
+            }
+        }
+    }
+
+    private void ToggleDrawer()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private async Task ToggleTheme()
+    {
+        _isDarkMode = !_isDarkMode;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("themeManager.setTheme", _isDarkMode);
+        }
+        catch
+        {
+            // Ignore JS errors
+        }
+    }
+
+    private readonly MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight()
+        {
+            Primary = "#2E7D32",
+            Secondary = "#FFC107",
+            AppbarBackground = "#1B5E20"
+        },
+        PaletteDark = new PaletteDark()
+        {
+            Primary = "#4CAF50",
+            Secondary = "#FFD54F",
+            Background = "#121212",
+            Surface = "#1E1E1E",
+            AppbarBackground = "#1B5E20",
+            DrawerBackground = "#1A1A1A",
+            TextPrimary = "#FFFFFF",
+            TextSecondary = "#B0B0B0"
+        },
+        Typography = new Typography()
+        {
+            Default = new DefaultTypography()
+            {
+                FontFamily = ["Roboto", "Helvetica", "Arial", "sans-serif"]
+            }
+        }
+    };
+}

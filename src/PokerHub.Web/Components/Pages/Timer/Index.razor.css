@@ -1,0 +1,243 @@
+.timer-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2rem;
+    color: white;
+    cursor: pointer;
+    user-select: none;
+}
+
+.timer-container.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9999;
+    padding: 3rem;
+}
+
+.timer-header {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.tournament-name {
+    color: #4CAF50;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.paused-chip {
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.05); }
+}
+
+.timer-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.break-text {
+    color: #FFD54F;
+    animation: pulse 2s infinite;
+}
+
+.blinds-display {
+    text-align: center;
+}
+
+.blinds-values {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+}
+
+.blind-value {
+    font-size: 4rem;
+    font-weight: bold;
+    color: #4CAF50;
+}
+
+.fullscreen .blind-value {
+    font-size: 6rem;
+}
+
+.blind-separator {
+    font-size: 3rem;
+    color: #666;
+}
+
+.fullscreen .blind-separator {
+    font-size: 5rem;
+}
+
+.ante-display {
+    color: #FFD54F;
+}
+
+.time-display {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 1rem;
+    padding: 1.5rem 3rem;
+    margin: 1rem 0;
+    border: 3px solid #4CAF50;
+}
+
+.time-display.time-warning {
+    border-color: #FFD54F;
+    animation: border-pulse-warning 1s infinite;
+}
+
+.time-display.time-critical {
+    border-color: #f44336;
+    animation: border-pulse-critical 0.5s infinite;
+}
+
+@keyframes border-pulse-warning {
+    0%, 100% { border-color: #FFD54F; }
+    50% { border-color: rgba(255, 213, 79, 0.5); }
+}
+
+@keyframes border-pulse-critical {
+    0%, 100% { border-color: #f44336; box-shadow: 0 0 20px rgba(244, 67, 54, 0.5); }
+    50% { border-color: rgba(244, 67, 54, 0.3); box-shadow: 0 0 40px rgba(244, 67, 54, 0.8); }
+}
+
+.time-value {
+    font-size: 8rem;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    color: white;
+    text-shadow: 0 0 20px rgba(76, 175, 80, 0.5);
+}
+
+.fullscreen .time-value {
+    font-size: 12rem;
+}
+
+.time-warning .time-value {
+    color: #FFD54F;
+    text-shadow: 0 0 20px rgba(255, 213, 79, 0.5);
+}
+
+.time-critical .time-value {
+    color: #f44336;
+    text-shadow: 0 0 20px rgba(244, 67, 54, 0.5);
+}
+
+.next-level {
+    text-align: center;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 0.5rem;
+    min-width: 300px;
+}
+
+.timer-footer {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.info-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1rem 1.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.info-content {
+    text-align: left;
+}
+
+.fullscreen-hint {
+    position: absolute;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0.5;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+    .timer-container {
+        padding: 1rem;
+    }
+
+    .blind-value {
+        font-size: 2.5rem;
+    }
+
+    .blind-separator {
+        font-size: 2rem;
+    }
+
+    .time-value {
+        font-size: 4rem;
+    }
+
+    .time-display {
+        padding: 1rem 2rem;
+    }
+
+    .timer-footer {
+        gap: 1rem;
+    }
+
+    .info-card {
+        padding: 0.75rem 1rem;
+    }
+
+    .fullscreen .time-value {
+        font-size: 6rem;
+    }
+
+    .fullscreen .blind-value {
+        font-size: 3.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .blind-value {
+        font-size: 2rem;
+    }
+
+    .time-value {
+        font-size: 3rem;
+    }
+
+    .fullscreen .time-value {
+        font-size: 4rem;
+    }
+
+    .fullscreen .blind-value {
+        font-size: 2.5rem;
+    }
+
+    .info-card {
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+    }
+}
