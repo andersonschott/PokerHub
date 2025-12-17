@@ -28,6 +28,12 @@ public class Tournament
     // Prize structure (JSON array of percentages, e.g., "50,30,20")
     public string? PrizeStructure { get; set; }
 
+    // Invite code for self-registration
+    public string InviteCode { get; set; } = GenerateInviteCode();
+
+    // Early check-in configuration (null = only before start, 0+ = until level X)
+    public int? AllowCheckInUntilLevel { get; set; }
+
     // Tournament state
     public TournamentStatus Status { get; set; } = TournamentStatus.Scheduled;
     public int CurrentLevel { get; set; }
@@ -57,5 +63,35 @@ public class Tournament
             Enums.RebuyLimitType.Both => currentLevel <= (RebuyLimitLevel ?? 0) && minutesElapsed <= (RebuyLimitMinutes ?? 0),
             _ => true
         };
+    }
+
+    public bool IsCheckInAllowed()
+    {
+        // Before tournament starts, check-in is always allowed
+        if (Status == TournamentStatus.Scheduled)
+            return true;
+
+        // Tournament finished or cancelled - no check-in
+        if (Status == TournamentStatus.Finished || Status == TournamentStatus.Cancelled)
+            return false;
+
+        // Tournament in progress or paused - check early check-in config
+        if (AllowCheckInUntilLevel.HasValue)
+            return CurrentLevel <= AllowCheckInUntilLevel.Value;
+
+        // No early check-in configured - not allowed after start
+        return false;
+    }
+
+    public static string GenerateInviteCode()
+    {
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        var random = new Random();
+        return new string(Enumerable.Range(0, 8).Select(_ => chars[random.Next(chars.Length)]).ToArray());
+    }
+
+    public void RegenerateInviteCode()
+    {
+        InviteCode = GenerateInviteCode();
     }
 }

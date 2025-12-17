@@ -117,6 +117,8 @@ public class TournamentService : ITournamentService
             tournament.AddonValue,
             tournament.AddonStack,
             tournament.PrizeStructure,
+            tournament.InviteCode,
+            tournament.AllowCheckInUntilLevel,
             tournament.Status,
             tournament.CurrentLevel,
             tournament.TimeRemainingSeconds,
@@ -149,6 +151,7 @@ public class TournamentService : ITournamentService
             AddonValue = dto.AddonValue,
             AddonStack = dto.AddonStack,
             PrizeStructure = dto.PrizeStructure,
+            AllowCheckInUntilLevel = dto.AllowCheckInUntilLevel,
             Status = TournamentStatus.Scheduled,
             CurrentLevel = 1,
             CreatedAt = DateTime.UtcNow
@@ -183,7 +186,6 @@ public class TournamentService : ITournamentService
     public async Task<bool> UpdateTournamentAsync(Guid tournamentId, CreateTournamentDto dto)
     {
         var tournament = await _context.Tournaments
-            .Include(t => t.BlindLevels)
             .FirstOrDefaultAsync(t => t.Id == tournamentId);
 
         if (tournament == null || tournament.Status != TournamentStatus.Scheduled)
@@ -202,25 +204,29 @@ public class TournamentService : ITournamentService
         tournament.AddonValue = dto.AddonValue;
         tournament.AddonStack = dto.AddonStack;
         tournament.PrizeStructure = dto.PrizeStructure;
+        tournament.AllowCheckInUntilLevel = dto.AllowCheckInUntilLevel;
 
-        // Update blind levels
-        _context.BlindLevels.RemoveRange(tournament.BlindLevels);
-        foreach (var bl in dto.BlindLevels)
+        // Remove existing blind levels directly from database
+        var existingBlindLevels = await _context.BlindLevels
+            .Where(bl => bl.TournamentId == tournamentId)
+            .ToListAsync();
+        _context.BlindLevels.RemoveRange(existingBlindLevels);
+
+        // Add new blind levels
+        var newBlindLevels = dto.BlindLevels.Select(bl => new BlindLevel
         {
-            tournament.BlindLevels.Add(new BlindLevel
-            {
-                Id = Guid.NewGuid(),
-                TournamentId = tournament.Id,
-                Order = bl.Order,
-                SmallBlind = bl.SmallBlind,
-                BigBlind = bl.BigBlind,
-                Ante = bl.Ante,
-                DurationMinutes = bl.DurationMinutes,
-                IsBreak = bl.IsBreak,
-                BreakDescription = bl.BreakDescription
-            });
-        }
+            Id = Guid.NewGuid(),
+            TournamentId = tournament.Id,
+            Order = bl.Order,
+            SmallBlind = bl.SmallBlind,
+            BigBlind = bl.BigBlind,
+            Ante = bl.Ante,
+            DurationMinutes = bl.DurationMinutes,
+            IsBreak = bl.IsBreak,
+            BreakDescription = bl.BreakDescription
+        }).ToList();
 
+        await _context.BlindLevels.AddRangeAsync(newBlindLevels);
         await _context.SaveChangesAsync();
         return true;
     }
@@ -610,9 +616,12 @@ public class TournamentService : ITournamentService
             t.AddonValue,
             t.StartingStack,
             t.Status,
+            t.CurrentLevel,
             t.Players.Count,
             t.Players.Count(p => p.IsCheckedIn),
             CalculatePrizePool(t),
+            t.InviteCode,
+            t.AllowCheckInUntilLevel,
             t.CreatedAt
         );
     }
@@ -640,14 +649,16 @@ public class TournamentService : ITournamentService
     public async Task<TournamentDto?> DuplicateTournamentAsync(Guid sourceTournamentId, Guid leagueId)
     {
         var source = await _context.Tournaments
+            .AsNoTracking()
             .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
             .FirstOrDefaultAsync(t => t.Id == sourceTournamentId);
 
         if (source == null) return null;
 
+        var newTournamentId = Guid.NewGuid();
         var newTournament = new Tournament
         {
-            Id = Guid.NewGuid(),
+            Id = newTournamentId,
             LeagueId = leagueId,
             Name = $"{source.Name} - Copia",
             ScheduledDateTime = DateTime.UtcNow.AddDays(7), // Uma semana no futuro
@@ -662,34 +673,161 @@ public class TournamentService : ITournamentService
             AddonValue = source.AddonValue,
             AddonStack = source.AddonStack,
             PrizeStructure = source.PrizeStructure,
+            AllowCheckInUntilLevel = source.AllowCheckInUntilLevel,
             Status = TournamentStatus.Scheduled,
             CurrentLevel = 1,
             CreatedAt = DateTime.UtcNow
         };
 
-        // Copiar blind levels
-        foreach (var bl in source.BlindLevels.OrderBy(b => b.Order))
-        {
-            newTournament.BlindLevels.Add(new BlindLevel
-            {
-                Id = Guid.NewGuid(),
-                TournamentId = newTournament.Id,
-                Order = bl.Order,
-                SmallBlind = bl.SmallBlind,
-                BigBlind = bl.BigBlind,
-                Ante = bl.Ante,
-                DurationMinutes = bl.DurationMinutes,
-                IsBreak = bl.IsBreak,
-                BreakDescription = bl.BreakDescription
-            });
-        }
-
         _context.Tournaments.Add(newTournament);
+
+        // Copiar blind levels diretamente para o contexto
+        var newBlindLevels = source.BlindLevels.OrderBy(b => b.Order).Select(bl => new BlindLevel
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = newTournamentId,
+            Order = bl.Order,
+            SmallBlind = bl.SmallBlind,
+            BigBlind = bl.BigBlind,
+            Ante = bl.Ante,
+            DurationMinutes = bl.DurationMinutes,
+            IsBreak = bl.IsBreak,
+            BreakDescription = bl.BreakDescription
+        }).ToList();
+
+        await _context.BlindLevels.AddRangeAsync(newBlindLevels);
         await _context.SaveChangesAsync();
 
         var league = await _context.Leagues.FindAsync(leagueId);
-        newTournament.League = league!;
 
-        return MapToDto(newTournament);
+        return new TournamentDto(
+            newTournament.Id,
+            newTournament.LeagueId,
+            league?.Name ?? "",
+            newTournament.Name,
+            newTournament.ScheduledDateTime,
+            newTournament.Location,
+            newTournament.BuyIn,
+            newTournament.RebuyValue,
+            newTournament.AddonValue,
+            newTournament.StartingStack,
+            newTournament.Status,
+            newTournament.CurrentLevel,
+            0, // PlayerCount
+            0, // CheckedInCount
+            0, // PrizePool
+            newTournament.InviteCode,
+            newTournament.AllowCheckInUntilLevel,
+            newTournament.CreatedAt
+        );
+    }
+
+    public async Task<TournamentDto?> GetTournamentByInviteCodeAsync(string inviteCode)
+    {
+        var tournament = await _context.Tournaments
+            .Include(t => t.League)
+            .Include(t => t.Players)
+            .FirstOrDefaultAsync(t => t.InviteCode == inviteCode.ToUpper());
+
+        return tournament == null ? null : MapToDto(tournament);
+    }
+
+    public async Task<bool> SelfRegisterPlayerAsync(Guid tournamentId, string userId)
+    {
+        var tournament = await _context.Tournaments
+            .Include(t => t.League)
+                .ThenInclude(l => l.Players)
+            .Include(t => t.Players)
+            .FirstOrDefaultAsync(t => t.Id == tournamentId);
+
+        if (tournament == null) return false;
+
+        // Tournament must allow check-in (scheduled or early check-in period)
+        if (!tournament.IsCheckInAllowed()) return false;
+
+        // Find the player linked to this user in the league
+        var player = tournament.League.Players
+            .FirstOrDefault(p => p.UserId == userId && p.IsActive);
+
+        if (player == null) return false;
+
+        // Check if already registered
+        if (tournament.Players.Any(tp => tp.PlayerId == player.Id)) return false;
+
+        // Add player to tournament and auto-checkin if tournament already started
+        var tournamentPlayer = new TournamentPlayer
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournamentId,
+            PlayerId = player.Id,
+            IsCheckedIn = tournament.Status != TournamentStatus.Scheduled,
+            CheckedInAt = tournament.Status != TournamentStatus.Scheduled ? DateTime.UtcNow : null
+        };
+
+        _context.TournamentPlayers.Add(tournamentPlayer);
+        await _context.SaveChangesAsync();
+
+        return true;
+    }
+
+    public async Task<bool> SelfUnregisterPlayerAsync(Guid tournamentId, string userId)
+    {
+        var tournament = await _context.Tournaments
+            .Include(t => t.League)
+                .ThenInclude(l => l.Players)
+            .Include(t => t.Players)
+            .FirstOrDefaultAsync(t => t.Id == tournamentId);
+
+        if (tournament == null) return false;
+
+        // Tournament must be scheduled
+        if (tournament.Status != TournamentStatus.Scheduled) return false;
+
+        // Find the player linked to this user in the league
+        var player = tournament.League.Players
+            .FirstOrDefault(p => p.UserId == userId && p.IsActive);
+
+        if (player == null) return false;
+
+        // Find tournament player record
+        var tournamentPlayer = tournament.Players.FirstOrDefault(tp => tp.PlayerId == player.Id);
+        if (tournamentPlayer == null) return false;
+
+        // Cannot unregister if already checked in
+        if (tournamentPlayer.IsCheckedIn) return false;
+
+        _context.TournamentPlayers.Remove(tournamentPlayer);
+        await _context.SaveChangesAsync();
+
+        return true;
+    }
+
+    public async Task<string?> RegenerateTournamentInviteCodeAsync(Guid tournamentId)
+    {
+        var tournament = await _context.Tournaments.FindAsync(tournamentId);
+        if (tournament == null) return null;
+
+        tournament.RegenerateInviteCode();
+        await _context.SaveChangesAsync();
+
+        return tournament.InviteCode;
+    }
+
+    public async Task<bool> IsUserRegisteredInTournamentAsync(Guid tournamentId, string userId)
+    {
+        var tournament = await _context.Tournaments
+            .Include(t => t.League)
+                .ThenInclude(l => l.Players)
+            .Include(t => t.Players)
+            .FirstOrDefaultAsync(t => t.Id == tournamentId);
+
+        if (tournament == null) return false;
+
+        var player = tournament.League.Players
+            .FirstOrDefault(p => p.UserId == userId && p.IsActive);
+
+        if (player == null) return false;
+
+        return tournament.Players.Any(tp => tp.PlayerId == player.Id);
     }
 }

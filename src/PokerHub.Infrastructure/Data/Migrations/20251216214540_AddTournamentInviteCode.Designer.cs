@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PokerHub.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using PokerHub.Infrastructure.Data;
 namespace PokerHub.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(PokerHubDbContext))]
-    partial class PokerHubDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251216214540_AddTournamentInviteCode")]
+    partial class AddTournamentInviteCode
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -346,9 +349,6 @@ namespace PokerHub.Infrastructure.Data.Migrations
                     b.Property<decimal?>("AddonValue")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
-
-                    b.Property<int?>("AllowCheckInUntilLevel")
-                        .HasColumnType("int");
 
                     b.Property<decimal>("BuyIn")
                         .HasPrecision(18, 2)

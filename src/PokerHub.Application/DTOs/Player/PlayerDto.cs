@@ -16,5 +16,14 @@ public record PlayerDto(
     bool IsActive,
     decimal TotalProfit,
     int TournamentsPlayed,
-    int Wins
-);
+    int Wins,
+    int SecondPlaces,
+    int ThirdPlaces,
+    decimal TotalBuyIns,
+    decimal TotalPrizes,
+    int ITMCount
+)
+{
+    public decimal ROI => TotalBuyIns > 0 ? (TotalProfit / TotalBuyIns) * 100 : 0;
+    public decimal ITMRate => TournamentsPlayed > 0 ? (decimal)ITMCount / TournamentsPlayed * 100 : 0;
+}

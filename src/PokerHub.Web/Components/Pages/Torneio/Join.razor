@@ -1,0 +1,294 @@
+@page "/torneios/entrar/{InviteCode}"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@inject ITournamentService TournamentService
+@inject ILeagueService LeagueService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Inscrever-se no Torneio - PokerHub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-6">
+    @if (_loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (_tournament == null)
+    {
+        <MudAlert Severity="Severity.Error">
+            Torneio nao encontrado. Verifique se o codigo de convite esta correto.
+        </MudAlert>
+        <MudButton Href="/" Variant="Variant.Text" Color="Color.Primary" Class="mt-4">
+            Voltar ao Inicio
+        </MudButton>
+    }
+    else
+    {
+        <MudPaper Elevation="4" Class="pa-6">
+            <MudStack AlignItems="AlignItems.Center" Spacing="4">
+                <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Large" Color="Color.Warning"/>
+                <MudText Typo="Typo.h4">@_tournament.Name</MudText>
+                <MudText Typo="Typo.body1" Color="Color.Secondary">@_tournament.LeagueName</MudText>
+            </MudStack>
+
+            <MudDivider Class="my-4"/>
+
+            <MudStack Spacing="2">
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Event" Size="Size.Small" Color="Color.Secondary"/>
+                    <MudText>@_tournament.ScheduledDateTime.ToString("dddd, dd/MM/yyyy 'as' HH:mm")</MudText>
+                </MudStack>
+
+                @if (!string.IsNullOrEmpty(_tournament.Location))
+                {
+                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                        <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" Color="Color.Secondary"/>
+                        <MudText>@_tournament.Location</MudText>
+                    </MudStack>
+                }
+
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Payments" Size="Size.Small" Color="Color.Secondary"/>
+                    <MudText>Buy-in: R$ @_tournament.BuyIn.ToString("N2")</MudText>
+                </MudStack>
+
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Small" Color="Color.Secondary"/>
+                    <MudText>@_tournament.PlayerCount jogadores inscritos</MudText>
+                </MudStack>
+
+                <MudChip T="string" Color="@GetStatusColor(_tournament.Status)" Size="Size.Medium" Class="mt-2">
+                    @GetStatusText(_tournament.Status)
+                </MudChip>
+            </MudStack>
+
+            <MudDivider Class="my-4"/>
+
+            <AuthorizeView>
+                <Authorized>
+                    @if (!_tournament.IsCheckInAllowed)
+                    {
+                        <MudAlert Severity="Severity.Warning">
+                            Este torneio nao esta mais aceitando inscricoes.
+                            @if (_tournament.AllowCheckInUntilLevel.HasValue && _tournament.Status is TournamentStatus.InProgress or TournamentStatus.Paused)
+                            {
+                                <br/>
+                                <MudText Typo="Typo.caption">O periodo de inscricao tardio encerrou (nivel @(_tournament.CurrentLevel) de @(_tournament.AllowCheckInUntilLevel)).</MudText>
+                            }
+                        </MudAlert>
+                    }
+                    else if (!_isUserInLeague)
+                    {
+                        <MudAlert Severity="Severity.Info">
+                            Voce precisa ser membro da liga "@_tournament.LeagueName" para se inscrever neste torneio.
+                        </MudAlert>
+                        <MudButton Variant="Variant.Filled"
+                                  Color="Color.Primary"
+                                  FullWidth="true"
+                                  Class="mt-4"
+                                  OnClick="JoinLeague">
+                            Entrar na Liga
+                        </MudButton>
+                    }
+                    else if (_isRegistered)
+                    {
+                        <MudAlert Severity="Severity.Success" Class="mb-4">
+                            Voce ja esta inscrito neste torneio!
+                        </MudAlert>
+                        <MudButton Variant="Variant.Outlined"
+                                  Color="Color.Error"
+                                  FullWidth="true"
+                                  Disabled="_processing"
+                                  OnClick="Unregister">
+                            @if (_processing)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2"/>
+                            }
+                            Cancelar Inscricao
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Filled"
+                                  Color="Color.Primary"
+                                  FullWidth="true"
+                                  Size="Size.Large"
+                                  Disabled="_processing"
+                                  OnClick="Register">
+                            @if (_processing)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2"/>
+                            }
+                            Inscrever-se
+                        </MudButton>
+                    }
+
+                    <MudButton Href="@($"/torneios/{_tournament.Id}")"
+                              Variant="Variant.Text"
+                              Color="Color.Default"
+                              FullWidth="true"
+                              Class="mt-2">
+                        Ver Detalhes do Torneio
+                    </MudButton>
+                </Authorized>
+                <NotAuthorized>
+                    <MudAlert Severity="Severity.Info" Class="mb-4">
+                        Faca login para se inscrever neste torneio.
+                    </MudAlert>
+                    <MudButton Variant="Variant.Filled"
+                              Color="Color.Primary"
+                              FullWidth="true"
+                              Size="Size.Large"
+                              Href="@GetLoginUrl()">
+                        Entrar
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                              Color="Color.Primary"
+                              FullWidth="true"
+                              Class="mt-2"
+                              Href="@GetRegisterUrl()">
+                        Criar Conta
+                    </MudButton>
+                </NotAuthorized>
+            </AuthorizeView>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public string InviteCode { get; set; } = string.Empty;
+
+    private TournamentDto? _tournament;
+    private bool _loading = true;
+    private bool _processing;
+    private bool _isRegistered;
+    private bool _isUserInLeague;
+    private string? _currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            _tournament = await TournamentService.GetTournamentByInviteCodeAsync(InviteCode);
+
+            if (_tournament != null)
+            {
+                var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+                _currentUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+                if (!string.IsNullOrEmpty(_currentUserId))
+                {
+                    _isUserInLeague = await LeagueService.CanUserAccessLeagueAsync(_tournament.LeagueId, _currentUserId);
+                    _isRegistered = await TournamentService.IsUserRegisteredInTournamentAsync(_tournament.Id, _currentUserId);
+                }
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task Register()
+    {
+        if (string.IsNullOrEmpty(_currentUserId) || _tournament == null) return;
+
+        _processing = true;
+        try
+        {
+            var success = await TournamentService.SelfRegisterPlayerAsync(_tournament.Id, _currentUserId);
+            if (success)
+            {
+                Snackbar.Add("Inscricao realizada com sucesso!", Severity.Success);
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Nao foi possivel realizar a inscricao.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private async Task Unregister()
+    {
+        if (string.IsNullOrEmpty(_currentUserId) || _tournament == null) return;
+
+        _processing = true;
+        try
+        {
+            var success = await TournamentService.SelfUnregisterPlayerAsync(_tournament.Id, _currentUserId);
+            if (success)
+            {
+                Snackbar.Add("Inscricao cancelada.", Severity.Info);
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Nao foi possivel cancelar a inscricao. Voce ja fez check-in?", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private void JoinLeague()
+    {
+        if (_tournament != null)
+        {
+            Navigation.NavigateTo($"/ligas/entrar?leagueId={_tournament.LeagueId}");
+        }
+    }
+
+    private string GetLoginUrl()
+    {
+        var returnUrl = Uri.EscapeDataString($"/torneios/entrar/{InviteCode}");
+        return $"/Account/Login?ReturnUrl={returnUrl}";
+    }
+
+    private string GetRegisterUrl()
+    {
+        var returnUrl = Uri.EscapeDataString($"/torneios/entrar/{InviteCode}");
+        return $"/Account/Register?ReturnUrl={returnUrl}";
+    }
+
+    private Color GetStatusColor(TournamentStatus status) => status switch
+    {
+        TournamentStatus.Scheduled => Color.Info,
+        TournamentStatus.InProgress => Color.Success,
+        TournamentStatus.Paused => Color.Warning,
+        TournamentStatus.Finished => Color.Default,
+        TournamentStatus.Cancelled => Color.Error,
+        _ => Color.Default
+    };
+
+    private string GetStatusText(TournamentStatus status) => status switch
+    {
+        TournamentStatus.Scheduled => "Agendado",
+        TournamentStatus.InProgress => "Em Andamento",
+        TournamentStatus.Paused => "Pausado",
+        TournamentStatus.Finished => "Finalizado",
+        TournamentStatus.Cancelled => "Cancelado",
+        _ => status.ToString()
+    };
+}

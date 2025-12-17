@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
+using PokerHub.Application.Interfaces;
 using PokerHub.Domain.Entities;
 using PokerHub.Web.Components.Account.Pages;
 using PokerHub.Web.Components.Account.Pages.Manage;
@@ -21,6 +22,118 @@ internal static class IdentityComponentsEndpointRouteBuilderExtensions
         ArgumentNullException.ThrowIfNull(endpoints);
 
         var accountGroup = endpoints.MapGroup("/Account");
+
+        accountGroup.MapPost("/PerformLogin", async (
+            HttpContext context,
+            [FromServices] SignInManager<User> signInManager,
+            [FromServices] ILogger<User> logger,
+            [FromForm] string email,
+            [FromForm] string password,
+            [FromForm] bool? rememberMe,
+            [FromForm] string? returnUrl) =>
+        {
+            var result = await signInManager.PasswordSignInAsync(email, password, rememberMe ?? false, lockoutOnFailure: false);
+
+            if (result.Succeeded)
+            {
+                logger.LogInformation("User logged in.");
+                return TypedResults.LocalRedirect(string.IsNullOrEmpty(returnUrl) ? "~/" : $"~/{returnUrl.TrimStart('/')}");
+            }
+            else if (result.RequiresTwoFactor)
+            {
+                var query = QueryString.Create(new Dictionary<string, string?>
+                {
+                    ["returnUrl"] = returnUrl,
+                    ["rememberMe"] = (rememberMe ?? false).ToString()
+                });
+                return TypedResults.LocalRedirect($"~/Account/LoginWith2fa{query}");
+            }
+            else if (result.IsLockedOut)
+            {
+                logger.LogWarning("User account locked out.");
+                return TypedResults.LocalRedirect("~/Account/Lockout");
+            }
+            else
+            {
+                var query = QueryString.Create(new Dictionary<string, string?>
+                {
+                    ["ReturnUrl"] = returnUrl,
+                    ["Error"] = "Email ou senha invalidos."
+                });
+                return TypedResults.LocalRedirect($"~/Account/Login{query}");
+            }
+        });
+
+        accountGroup.MapPost("/PerformRegister", async (
+            HttpContext context,
+            [FromServices] UserManager<User> userManager,
+            [FromServices] IUserStore<User> userStore,
+            [FromServices] SignInManager<User> signInManager,
+            [FromServices] IPlayerService playerService,
+            [FromServices] ILogger<User> logger,
+            [FromForm] string email,
+            [FromForm] string password,
+            [FromForm] string confirmPassword,
+            [FromForm] string? returnUrl) =>
+        {
+            // Validate passwords match
+            if (password != confirmPassword)
+            {
+                var query = QueryString.Create(new Dictionary<string, string?>
+                {
+                    ["ReturnUrl"] = returnUrl,
+                    ["Error"] = "As senhas nao coincidem."
+                });
+                return TypedResults.LocalRedirect($"~/Account/Register{query}");
+            }
+
+            // Validate password length
+            if (string.IsNullOrEmpty(password) || password.Length < 6)
+            {
+                var query = QueryString.Create(new Dictionary<string, string?>
+                {
+                    ["ReturnUrl"] = returnUrl,
+                    ["Error"] = "A senha deve ter no minimo 6 caracteres."
+                });
+                return TypedResults.LocalRedirect($"~/Account/Register{query}");
+            }
+
+            var user = Activator.CreateInstance<User>();
+            await userStore.SetUserNameAsync(user, email, CancellationToken.None);
+
+            if (userStore is IUserEmailStore<User> emailStore)
+            {
+                await emailStore.SetEmailAsync(user, email, CancellationToken.None);
+            }
+
+            var result = await userManager.CreateAsync(user, password);
+
+            if (!result.Succeeded)
+            {
+                var errorMessage = string.Join(", ", result.Errors.Select(e => e.Description));
+                var query = QueryString.Create(new Dictionary<string, string?>
+                {
+                    ["ReturnUrl"] = returnUrl,
+                    ["Error"] = errorMessage
+                });
+                return TypedResults.LocalRedirect($"~/Account/Register{query}");
+            }
+
+            logger.LogInformation("User created a new account with password.");
+
+            var userId = await userManager.GetUserIdAsync(user);
+
+            // Auto-link players with the same email
+            var linkedCount = await playerService.LinkPlayersByEmailAsync(email, userId);
+            if (linkedCount > 0)
+            {
+                logger.LogInformation("Linked {Count} existing player(s) to user {UserId}", linkedCount, userId);
+            }
+
+            // Sign in the user
+            await signInManager.SignInAsync(user, isPersistent: false);
+            return TypedResults.LocalRedirect(string.IsNullOrEmpty(returnUrl) ? "~/" : $"~/{returnUrl.TrimStart('/')}");
+        });
 
         accountGroup.MapPost("/PerformExternalLogin", (
             HttpContext context,

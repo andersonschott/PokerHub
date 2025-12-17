@@ -230,6 +230,9 @@ public class PlayerService : IPlayerService
             .Where(tp => tp.Tournament.Status == TournamentStatus.Finished)
             .ToList();
 
+        var totalBuyIns = finishedParticipations.Sum(tp => tp.TotalInvestment(tp.Tournament));
+        var totalPrizes = finishedParticipations.Sum(tp => tp.Prize);
+
         return new PlayerDto(
             player.Id,
             player.LeagueId,
@@ -242,9 +245,14 @@ public class PlayerService : IPlayerService
             player.UserId,
             player.CreatedAt,
             player.IsActive,
-            finishedParticipations.Sum(tp => tp.ProfitLoss(tp.Tournament)),
+            totalPrizes - totalBuyIns,
             finishedParticipations.Count,
-            finishedParticipations.Count(tp => tp.Position == 1)
+            finishedParticipations.Count(tp => tp.Position == 1),
+            finishedParticipations.Count(tp => tp.Position == 2),
+            finishedParticipations.Count(tp => tp.Position == 3),
+            totalBuyIns,
+            totalPrizes,
+            finishedParticipations.Count(tp => tp.Prize > 0)
         );
     }
 }

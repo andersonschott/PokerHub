@@ -32,16 +32,33 @@ public class RankingService : IRankingService
 
                 var totalBuyIns = finishedParticipations.Sum(tp => tp.TotalInvestment(tp.Tournament));
                 var totalPrizes = finishedParticipations.Sum(tp => tp.Prize);
+                var profit = totalPrizes - totalBuyIns;
+                var wins = finishedParticipations.Count(tp => tp.Position == 1);
+                var secondPlaces = finishedParticipations.Count(tp => tp.Position == 2);
+                var thirdPlaces = finishedParticipations.Count(tp => tp.Position == 3);
+                var top3 = wins + secondPlaces + thirdPlaces;
+                var tournamentsPlayed = finishedParticipations.Count;
+
+                // ITM (In The Money) - posicoes que receberam premio
+                var itmCount = finishedParticipations.Count(tp => tp.Prize > 0);
+                var itmRate = tournamentsPlayed > 0 ? (decimal)itmCount / tournamentsPlayed * 100 : 0;
+
+                // ROI (Return on Investment)
+                var roi = totalBuyIns > 0 ? (profit / totalBuyIns) * 100 : 0;
 
                 return new
                 {
                     Player = p,
-                    TournamentsPlayed = finishedParticipations.Count,
-                    Wins = finishedParticipations.Count(tp => tp.Position == 1),
-                    Top3Finishes = finishedParticipations.Count(tp => tp.Position is >= 1 and <= 3),
+                    TournamentsPlayed = tournamentsPlayed,
+                    Wins = wins,
+                    SecondPlaces = secondPlaces,
+                    ThirdPlaces = thirdPlaces,
+                    Top3Finishes = top3,
                     TotalBuyIns = totalBuyIns,
                     TotalPrizes = totalPrizes,
-                    Profit = totalPrizes - totalBuyIns
+                    Profit = profit,
+                    ROI = roi,
+                    ITMRate = itmRate
                 };
             })
             .Where(r => r.TournamentsPlayed > 0)
@@ -56,10 +73,14 @@ public class RankingService : IRankingService
                 r.Player.Nickname,
                 r.TournamentsPlayed,
                 r.Wins,
+                r.SecondPlaces,
+                r.ThirdPlaces,
                 r.Top3Finishes,
                 r.TotalBuyIns,
                 r.TotalPrizes,
-                r.Profit
+                r.Profit,
+                r.ROI,
+                r.ITMRate
             ))
             .ToList();
     }

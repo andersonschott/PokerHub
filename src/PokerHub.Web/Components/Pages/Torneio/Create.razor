@@ -152,6 +152,24 @@
                                                 Min="100" />
                             </MudItem>
                         }
+                        <MudItem xs="12">
+                            <MudDivider Class="my-2" />
+                            <MudText Typo="Typo.subtitle1" Class="mb-2">Check-in Tardio</MudText>
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudSwitch @bind-Value="_allowEarlyCheckIn" Label="Permitir check-in apos inicio" Color="Color.Primary" />
+                        </MudItem>
+                        @if (_allowEarlyCheckIn)
+                        {
+                            <MudItem xs="12" sm="6">
+                                <MudNumericField @bind-Value="_model.AllowCheckInUntilLevel"
+                                                Label="Check-in ate o nivel"
+                                                Variant="Variant.Outlined"
+                                                HelperText="Jogadores podem entrar ate este nivel"
+                                                Min="1"
+                                                Max="20" />
+                            </MudItem>
+                        }
                     </MudGrid>
                 </MudForm>
                 break;
@@ -341,6 +359,7 @@
                             <tr><td><strong>Stack Inicial</strong></td><td>@_model.StartingStack.ToString("N0")</td></tr>
                             <tr><td><strong>Rebuy</strong></td><td>@GetRebuyDescription()</td></tr>
                             <tr><td><strong>Add-on</strong></td><td>@(_allowAddon ? $"R$ {_model.AddonValue:N2} ({_model.AddonStack} fichas)" : "Nao")</td></tr>
+                            <tr><td><strong>Check-in Tardio</strong></td><td>@(_allowEarlyCheckIn ? $"Ate nivel {_model.AllowCheckInUntilLevel}" : "Nao")</td></tr>
                             <tr><td><strong>Niveis de Blind</strong></td><td>@_model.BlindLevels.Count niveis (@_model.BlindLevels.Count(bl => bl.IsBreak) intervalos)</td></tr>
                             <tr><td><strong>Premiacao</strong></td><td>@string.Join(", ", _payoutStructure.Select((p, i) => $"{i+1}o: {p}%"))</td></tr>
                         </tbody>
@@ -403,6 +422,7 @@
     private TimeSpan? _time = new TimeSpan(20, 0, 0);
     private bool _allowRebuy = true;
     private bool _allowAddon = true;
+    private bool _allowEarlyCheckIn = false;
     private string _selectedTemplate = "regular";
     private List<BreadcrumbItem> _breadcrumbs = new();
     private LeagueDto? _league;
@@ -418,7 +438,8 @@
         RebuyLimitLevel = 4,
         RebuyLimitMinutes = 60,
         AddonValue = 50,
-        AddonStack = 10000
+        AddonStack = 10000,
+        AllowCheckInUntilLevel = 3
     };
 
     protected override async Task OnInitializedAsync()
@@ -617,6 +638,7 @@
                 _allowAddon ? _model.AddonValue : null,
                 _allowAddon ? _model.AddonStack : null,
                 prizeStructure,
+                _allowEarlyCheckIn ? _model.AllowCheckInUntilLevel : null,
                 _model.BlindLevels.Select(bl => new CreateBlindLevelDto(
                     bl.Order,
                     bl.SmallBlind,
@@ -655,6 +677,7 @@
         public int? RebuyLimitMinutes { get; set; }
         public decimal? AddonValue { get; set; }
         public int? AddonStack { get; set; }
+        public int? AllowCheckInUntilLevel { get; set; }
         public List<BlindLevelModel> BlindLevels { get; set; } = new();
     }
 

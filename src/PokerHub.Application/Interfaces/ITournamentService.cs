@@ -55,4 +55,30 @@ public interface ITournamentService
     /// Creates a copy of an existing tournament with its blind levels.
     /// </summary>
     Task<TournamentDto?> DuplicateTournamentAsync(Guid sourceTournamentId, Guid leagueId);
+
+    // Invite System
+    /// <summary>
+    /// Gets a tournament by its invite code.
+    /// </summary>
+    Task<TournamentDto?> GetTournamentByInviteCodeAsync(string inviteCode);
+
+    /// <summary>
+    /// Allows a logged-in user to register themselves for a tournament.
+    /// </summary>
+    Task<bool> SelfRegisterPlayerAsync(Guid tournamentId, string userId);
+
+    /// <summary>
+    /// Allows a logged-in user to unregister themselves from a tournament.
+    /// </summary>
+    Task<bool> SelfUnregisterPlayerAsync(Guid tournamentId, string userId);
+
+    /// <summary>
+    /// Regenerates the invite code for a tournament.
+    /// </summary>
+    Task<string?> RegenerateTournamentInviteCodeAsync(Guid tournamentId);
+
+    /// <summary>
+    /// Checks if a user is registered (as player) in a tournament.
+    /// </summary>
+    Task<bool> IsUserRegisteredInTournamentAsync(Guid tournamentId, string userId);
 }

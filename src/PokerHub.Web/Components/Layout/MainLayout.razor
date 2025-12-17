@@ -81,8 +81,8 @@
 </div>
 
 @code {
-    private bool _drawerOpen = true;
-    private bool _isDarkMode = true;
+    private bool _drawerOpen = false;
+    private bool _isDarkMode = false;
     private bool _themeLoaded;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -126,18 +126,24 @@
         {
             Primary = "#2E7D32",
             Secondary = "#FFC107",
-            AppbarBackground = "#1B5E20"
+            AppbarBackground = "#1B5E20",
+            Background = "#FAFAFA",
+            Surface = "#FFFFFF",
+            LinesDefault = "#BDBDBD",
+            LinesInputs = "#9E9E9E",
+            TextPrimary = "#212121",
+            TextSecondary = "#757575"
         },
         PaletteDark = new PaletteDark()
         {
             Primary = "#4CAF50",
             Secondary = "#FFD54F",
-            Background = "#121212",
-            Surface = "#1E1E1E",
+            Background = "#252525",
+            Surface = "#2D2D2D",
             AppbarBackground = "#1B5E20",
-            DrawerBackground = "#1A1A1A",
+            DrawerBackground = "#2A2A2A",
             TextPrimary = "#FFFFFF",
-            TextSecondary = "#B0B0B0"
+            TextSecondary = "#B8B8B8"
         },
         Typography = new Typography()
         {

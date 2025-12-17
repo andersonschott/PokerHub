@@ -56,8 +56,19 @@
                             </MudText>
                             <MudStack Row="true" Justify="Justify.Center" Class="mt-2">
                                 <MudChip T="string" Size="Size.Small" Color="Color.Primary">@player.TournamentsPlayed torneios</MudChip>
-                                <MudChip T="string" Size="Size.Small" Color="Color.Warning">@player.Wins vitorias</MudChip>
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning">@player.Wins vit</MudChip>
+                                @if (player.SecondPlaces > 0)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default">@player.SecondPlaces x 2o</MudChip>
+                                }
+                                @if (player.ThirdPlaces > 0)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Tertiary">@player.ThirdPlaces x 3o</MudChip>
+                                }
                             </MudStack>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                                ROI: @player.ROI.ToString("N1")% | ITM: @player.ITMRate.ToString("N1")%
+                            </MudText>
                         </MudCardContent>
                         <MudCardActions Class="justify-center">
                             <MudButton Variant="Variant.Text"
@@ -81,15 +92,16 @@
             <MudCardContent>
                 <MudTable Items="_ranking" Dense="true" Hover="true" Striped="true">
                     <HeaderContent>
-                        <MudTh Style="width: 60px;">#</MudTh>
+                        <MudTh Style="width: 50px;">#</MudTh>
                         <MudTh>Jogador</MudTh>
                         <MudTh Style="text-align: center;">Torneios</MudTh>
-                        <MudTh Style="text-align: center;">Vitorias</MudTh>
-                        <MudTh Style="text-align: center;">Top 3</MudTh>
-                        <MudTh Style="text-align: right;">Buy-ins</MudTh>
-                        <MudTh Style="text-align: right;">Premios</MudTh>
+                        <MudTh Style="text-align: center;">1o</MudTh>
+                        <MudTh Style="text-align: center;">2o</MudTh>
+                        <MudTh Style="text-align: center;">3o</MudTh>
+                        <MudTh Style="text-align: center;">ROI</MudTh>
+                        <MudTh Style="text-align: center;">ITM</MudTh>
                         <MudTh Style="text-align: right;">Lucro/Prej.</MudTh>
-                        <MudTh Style="width: 100px;"></MudTh>
+                        <MudTh Style="width: 80px;"></MudTh>
                     </HeaderContent>
                     <RowTemplate>
                         <MudTd>
@@ -114,12 +126,35 @@
                             }
                             else
                             {
-                                <text>0</text>
+                                <text>-</text>
                             }
                         </MudTd>
-                        <MudTd Style="text-align: center;">@context.Top3Finishes</MudTd>
-                        <MudTd Style="text-align: right;">R$ @context.TotalBuyIns.ToString("N2")</MudTd>
-                        <MudTd Style="text-align: right;">R$ @context.TotalPrizes.ToString("N2")</MudTd>
+                        <MudTd Style="text-align: center;">
+                            @if (context.SecondPlaces > 0)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default">@context.SecondPlaces</MudChip>
+                            }
+                            else
+                            {
+                                <text>-</text>
+                            }
+                        </MudTd>
+                        <MudTd Style="text-align: center;">
+                            @if (context.ThirdPlaces > 0)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Tertiary">@context.ThirdPlaces</MudChip>
+                            }
+                            else
+                            {
+                                <text>-</text>
+                            }
+                        </MudTd>
+                        <MudTd Style="text-align: center;">
+                            <MudText Color="@(context.ROI >= 0 ? Color.Success : Color.Error)">
+                                @context.ROI.ToString("N1")%
+                            </MudText>
+                        </MudTd>
+                        <MudTd Style="text-align: center;">@context.ITMRate.ToString("N1")%</MudTd>
                         <MudTd Style="text-align: right;">
                             <MudText Color="@(context.Profit >= 0 ? Color.Success : Color.Error)">
                                 @(context.Profit >= 0 ? "+" : "")R$ @context.Profit.ToString("N2")

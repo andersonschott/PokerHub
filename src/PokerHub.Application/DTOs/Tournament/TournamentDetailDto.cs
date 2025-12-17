@@ -19,6 +19,8 @@ public record TournamentDetailDto(
     decimal? AddonValue,
     int? AddonStack,
     string? PrizeStructure,
+    string InviteCode,
+    int? AllowCheckInUntilLevel,
     TournamentStatus Status,
     int CurrentLevel,
     int? TimeRemainingSeconds,
@@ -29,4 +31,9 @@ public record TournamentDetailDto(
     decimal PrizePool,
     IReadOnlyList<BlindLevelDto> BlindLevels,
     IReadOnlyList<TournamentPlayerDto> Players
-);
+)
+{
+    public bool IsCheckInAllowed => Status == TournamentStatus.Scheduled ||
+        (Status is TournamentStatus.InProgress or TournamentStatus.Paused &&
+         AllowCheckInUntilLevel.HasValue && CurrentLevel <= AllowCheckInUntilLevel.Value);
+}

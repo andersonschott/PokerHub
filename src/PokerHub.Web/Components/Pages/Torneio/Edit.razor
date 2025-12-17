@@ -1,0 +1,749 @@
+@page "/torneios/{TournamentId:guid}/editar"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject ITournamentService TournamentService
+@inject ILeagueService LeagueService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Editar Torneio - PokerHub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
+    @if (_loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (_tournament == null)
+    {
+        <MudAlert Severity="Severity.Error">Torneio nao encontrado</MudAlert>
+    }
+    else if (_tournament.Status != TournamentStatus.Scheduled)
+    {
+        <MudAlert Severity="Severity.Warning">Apenas torneios agendados podem ser editados</MudAlert>
+        <MudButton Href="@($"/torneios/{TournamentId}")" Variant="Variant.Text" Class="mt-4">Voltar</MudButton>
+    }
+    else
+    {
+        <MudBreadcrumbs Items="_breadcrumbs" Class="mb-4" />
+
+        <MudText Typo="Typo.h4" Class="mb-4">Editar Torneio</MudText>
+
+        <MudPaper Class="pa-4 mb-4">
+            <MudStack Row="true" Justify="Justify.Center" Class="mb-4">
+                @foreach (var (step, index) in _steps.Select((s, i) => (s, i)))
+                {
+                    var stepIndex = index;
+                    var stepName = step;
+                    <MudButton Variant="@(stepIndex == _currentStep ? Variant.Filled : (stepIndex < _currentStep ? Variant.Outlined : Variant.Text))"
+                              Color="@(stepIndex <= _currentStep ? Color.Primary : Color.Default)"
+                              OnClick="@(() => GoToStep(stepIndex))"
+                              Disabled="@(stepIndex > _currentStep)">
+                        @(stepIndex + 1). @stepName
+                    </MudButton>
+                }
+            </MudStack>
+
+            @switch (_currentStep)
+            {
+                case 0:
+                    <MudForm @ref="_form1" @bind-IsValid="_step1Valid">
+                        <MudGrid>
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_model.Name"
+                                             Label="Nome do Torneio"
+                                             Variant="Variant.Outlined"
+                                             Required="true"
+                                             RequiredError="O nome e obrigatorio" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudDatePicker @bind-Date="_date"
+                                              Label="Data"
+                                              Variant="Variant.Outlined"
+                                              Required="true" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudTimePicker @bind-Time="_time"
+                                              Label="Horario"
+                                              Variant="Variant.Outlined"
+                                              Required="true" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_model.Location"
+                                             Label="Local (opcional)"
+                                             Variant="Variant.Outlined" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudForm>
+                    break;
+
+                case 1:
+                    <MudForm @ref="_form2" @bind-IsValid="_step2Valid">
+                        <MudGrid>
+                            <MudItem xs="12" sm="6">
+                                <MudNumericField @bind-Value="_model.BuyIn"
+                                                Label="Buy-in (R$)"
+                                                Variant="Variant.Outlined"
+                                                Min="0m"
+                                                Format="N2"
+                                                Required="true" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudNumericField @bind-Value="_model.StartingStack"
+                                                Label="Stack Inicial"
+                                                Variant="Variant.Outlined"
+                                                Min="100"
+                                                Required="true" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudDivider Class="my-2" />
+                                <MudText Typo="Typo.subtitle1" Class="mb-2">Rebuy</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudSwitch @bind-Value="_allowRebuy" Label="Permitir Rebuy" Color="Color.Primary" />
+                            </MudItem>
+                            @if (_allowRebuy)
+                            {
+                                <MudItem xs="12" sm="6">
+                                    <MudNumericField @bind-Value="_model.RebuyValue"
+                                                    Label="Valor do Rebuy (R$)"
+                                                    Variant="Variant.Outlined"
+                                                    Min="0m"
+                                                    Format="N2" />
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudNumericField @bind-Value="_model.RebuyStack"
+                                                    Label="Stack do Rebuy"
+                                                    Variant="Variant.Outlined"
+                                                    Min="100" />
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudSelect @bind-Value="_model.RebuyLimitType"
+                                              Label="Limite de Rebuy"
+                                              Variant="Variant.Outlined">
+                                        <MudSelectItem Value="RebuyLimitType.Level">Por Nivel</MudSelectItem>
+                                        <MudSelectItem Value="RebuyLimitType.Time">Por Tempo</MudSelectItem>
+                                        <MudSelectItem Value="RebuyLimitType.Both">Ambos</MudSelectItem>
+                                    </MudSelect>
+                                </MudItem>
+                                @if (_model.RebuyLimitType == RebuyLimitType.Level || _model.RebuyLimitType == RebuyLimitType.Both)
+                                {
+                                    <MudItem xs="12" sm="6">
+                                        <MudNumericField @bind-Value="_model.RebuyLimitLevel"
+                                                        Label="Rebuy Ate o Nivel"
+                                                        Variant="Variant.Outlined"
+                                                        Min="1" />
+                                    </MudItem>
+                                }
+                                @if (_model.RebuyLimitType == RebuyLimitType.Time || _model.RebuyLimitType == RebuyLimitType.Both)
+                                {
+                                    <MudItem xs="12" sm="6">
+                                        <MudNumericField @bind-Value="_model.RebuyLimitMinutes"
+                                                        Label="Rebuy Ate (minutos)"
+                                                        Variant="Variant.Outlined"
+                                                        Min="1" />
+                                    </MudItem>
+                                }
+                            }
+                            <MudItem xs="12">
+                                <MudDivider Class="my-2" />
+                                <MudText Typo="Typo.subtitle1" Class="mb-2">Add-on</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudSwitch @bind-Value="_allowAddon" Label="Permitir Add-on" Color="Color.Primary" />
+                            </MudItem>
+                            @if (_allowAddon)
+                            {
+                                <MudItem xs="12" sm="6">
+                                    <MudNumericField @bind-Value="_model.AddonValue"
+                                                    Label="Valor do Add-on (R$)"
+                                                    Variant="Variant.Outlined"
+                                                    Min="0m"
+                                                    Format="N2" />
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudNumericField @bind-Value="_model.AddonStack"
+                                                    Label="Stack do Add-on"
+                                                    Variant="Variant.Outlined"
+                                                    Min="100" />
+                                </MudItem>
+                            }
+                            <MudItem xs="12">
+                                <MudDivider Class="my-2" />
+                                <MudText Typo="Typo.subtitle1" Class="mb-2">Check-in Tardio</MudText>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudSwitch @bind-Value="_allowEarlyCheckIn" Label="Permitir check-in apos inicio" Color="Color.Primary" />
+                            </MudItem>
+                            @if (_allowEarlyCheckIn)
+                            {
+                                <MudItem xs="12" sm="6">
+                                    <MudNumericField @bind-Value="_model.AllowCheckInUntilLevel"
+                                                    Label="Check-in ate o nivel"
+                                                    Variant="Variant.Outlined"
+                                                    HelperText="Jogadores podem entrar ate este nivel"
+                                                    Min="1"
+                                                    Max="20" />
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    </MudForm>
+                    break;
+
+                case 2:
+                    <MudGrid>
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.subtitle1" Class="mb-3">Escolha um template ou configure manualmente</MudText>
+                            <MudButtonGroup Color="Color.Primary" Variant="Variant.Outlined" Class="mb-4">
+                                <MudButton OnClick="@(() => ApplyTemplate("turbo"))"
+                                          Variant="@(_selectedTemplate == "turbo" ? Variant.Filled : Variant.Outlined)">
+                                    Turbo (10 min)
+                                </MudButton>
+                                <MudButton OnClick="@(() => ApplyTemplate("regular"))"
+                                          Variant="@(_selectedTemplate == "regular" ? Variant.Filled : Variant.Outlined)">
+                                    Regular (15 min)
+                                </MudButton>
+                                <MudButton OnClick="@(() => ApplyTemplate("deepstack"))"
+                                          Variant="@(_selectedTemplate == "deepstack" ? Variant.Filled : Variant.Outlined)">
+                                    Deep Stack (20 min)
+                                </MudButton>
+                                <MudButton OnClick="@(() => ApplyTemplate("custom"))"
+                                          Variant="@(_selectedTemplate == "custom" ? Variant.Filled : Variant.Outlined)">
+                                    Personalizado
+                                </MudButton>
+                            </MudButtonGroup>
+                        </MudItem>
+
+                        <MudItem xs="12">
+                            <MudTable Items="_model.BlindLevels" Dense="true" Hover="true" Elevation="0" Bordered="true">
+                                <HeaderContent>
+                                    <MudTh>Nivel</MudTh>
+                                    <MudTh>SB</MudTh>
+                                    <MudTh>BB</MudTh>
+                                    <MudTh>Ante</MudTh>
+                                    <MudTh>Duracao (min)</MudTh>
+                                    <MudTh>Tipo</MudTh>
+                                    @if (_selectedTemplate == "custom")
+                                    {
+                                        <MudTh Style="width: 80px;">Acoes</MudTh>
+                                    }
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd>@context.Order</MudTd>
+                                    <MudTd>
+                                        @if (_selectedTemplate == "custom" && !context.IsBreak)
+                                        {
+                                            <MudNumericField @bind-Value="context.SmallBlind" Min="0" Margin="Margin.Dense" Variant="Variant.Text" HideSpinButtons="true" />
+                                        }
+                                        else
+                                        {
+                                            @(context.IsBreak ? "-" : context.SmallBlind.ToString("N0"))
+                                        }
+                                    </MudTd>
+                                    <MudTd>
+                                        @if (_selectedTemplate == "custom" && !context.IsBreak)
+                                        {
+                                            <MudNumericField @bind-Value="context.BigBlind" Min="0" Margin="Margin.Dense" Variant="Variant.Text" HideSpinButtons="true" />
+                                        }
+                                        else
+                                        {
+                                            @(context.IsBreak ? "-" : context.BigBlind.ToString("N0"))
+                                        }
+                                    </MudTd>
+                                    <MudTd>
+                                        @if (_selectedTemplate == "custom" && !context.IsBreak)
+                                        {
+                                            <MudNumericField @bind-Value="context.Ante" Min="0" Margin="Margin.Dense" Variant="Variant.Text" HideSpinButtons="true" />
+                                        }
+                                        else
+                                        {
+                                            @(context.IsBreak ? "-" : context.Ante.ToString("N0"))
+                                        }
+                                    </MudTd>
+                                    <MudTd>
+                                        @if (_selectedTemplate == "custom")
+                                        {
+                                            <MudNumericField @bind-Value="context.DurationMinutes" Min="1" Max="60" Margin="Margin.Dense" Variant="Variant.Text" HideSpinButtons="true" />
+                                        }
+                                        else
+                                        {
+                                            @context.DurationMinutes
+                                        }
+                                    </MudTd>
+                                    <MudTd>
+                                        @if (context.IsBreak)
+                                        {
+                                            <MudChip T="string" Color="Color.Warning" Size="Size.Small">Intervalo</MudChip>
+                                        }
+                                        else
+                                        {
+                                            <MudChip T="string" Color="Color.Default" Size="Size.Small">Jogo</MudChip>
+                                        }
+                                    </MudTd>
+                                    @if (_selectedTemplate == "custom")
+                                    {
+                                        <MudTd>
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                          Size="Size.Small"
+                                                          Color="Color.Error"
+                                                          OnClick="@(() => RemoveLevel(context))" />
+                                        </MudTd>
+                                    }
+                                </RowTemplate>
+                            </MudTable>
+
+                            @if (_selectedTemplate == "custom")
+                            {
+                                <MudStack Row="true" Class="mt-2">
+                                    <MudButton Variant="Variant.Outlined"
+                                              Color="Color.Primary"
+                                              StartIcon="@Icons.Material.Filled.Add"
+                                              OnClick="AddLevel">
+                                        Adicionar Nivel
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Outlined"
+                                              Color="Color.Warning"
+                                              StartIcon="@Icons.Material.Filled.Coffee"
+                                              OnClick="AddBreak">
+                                        Adicionar Intervalo
+                                    </MudButton>
+                                </MudStack>
+                            }
+                        </MudItem>
+                    </MudGrid>
+                    break;
+
+                case 3:
+                    <MudGrid>
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.subtitle1" Class="mb-3">Estrutura de Premiacao (% do Prize Pool)</MudText>
+                        </MudItem>
+
+                        @for (var i = 0; i < _payoutStructure.Count; i++)
+                        {
+                            var index = i;
+                            <MudItem xs="12" sm="6" md="3">
+                                <MudNumericField @bind-Value="_payoutStructure[index]"
+                                                Label="@($"{index + 1}o Lugar (%)")"
+                                                Variant="Variant.Outlined"
+                                                Min="0"
+                                                Max="100"
+                                                Format="N0" />
+                            </MudItem>
+                        }
+
+                        <MudItem xs="12">
+                            <MudStack Row="true" Spacing="2">
+                                <MudButton Variant="Variant.Outlined"
+                                          Size="Size.Small"
+                                          OnClick="AddPayoutPosition"
+                                          Disabled="_payoutStructure.Count >= 10">
+                                    + Posicao
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined"
+                                          Size="Size.Small"
+                                          Color="Color.Error"
+                                          OnClick="RemovePayoutPosition"
+                                          Disabled="_payoutStructure.Count <= 1">
+                                    - Posicao
+                                </MudButton>
+                            </MudStack>
+                        </MudItem>
+
+                        <MudItem xs="12">
+                            @{
+                                var total = _payoutStructure.Sum();
+                                var isValid = Math.Abs(total - 100) < 1;
+                            }
+                            <MudAlert Severity="@(isValid ? Severity.Success : Severity.Warning)">
+                                Total: @total% @(isValid ? "(OK)" : "- deve somar 100%")
+                            </MudAlert>
+                        </MudItem>
+                    </MudGrid>
+                    break;
+
+                case 4:
+                    <MudCard Elevation="0" Class="pa-4">
+                        <MudText Typo="Typo.h6" Class="mb-4">Resumo do Torneio</MudText>
+
+                        <MudSimpleTable Dense="true" Hover="true" Bordered="true">
+                            <tbody>
+                                <tr><td><strong>Nome</strong></td><td>@_model.Name</td></tr>
+                                <tr><td><strong>Data/Hora</strong></td><td>@(_date?.Add(_time ?? TimeSpan.Zero).ToString("dd/MM/yyyy HH:mm"))</td></tr>
+                                <tr><td><strong>Local</strong></td><td>@(_model.Location ?? "-")</td></tr>
+                                <tr><td><strong>Buy-in</strong></td><td>R$ @_model.BuyIn.ToString("N2")</td></tr>
+                                <tr><td><strong>Stack Inicial</strong></td><td>@_model.StartingStack.ToString("N0")</td></tr>
+                                <tr><td><strong>Rebuy</strong></td><td>@GetRebuyDescription()</td></tr>
+                                <tr><td><strong>Add-on</strong></td><td>@(_allowAddon ? $"R$ {_model.AddonValue:N2} ({_model.AddonStack} fichas)" : "Nao")</td></tr>
+                                <tr><td><strong>Check-in Tardio</strong></td><td>@(_allowEarlyCheckIn ? $"Ate nivel {_model.AllowCheckInUntilLevel}" : "Nao")</td></tr>
+                                <tr><td><strong>Niveis de Blind</strong></td><td>@_model.BlindLevels.Count niveis (@_model.BlindLevels.Count(bl => bl.IsBreak) intervalos)</td></tr>
+                                <tr><td><strong>Premiacao</strong></td><td>@string.Join(", ", _payoutStructure.Select((p, i) => $"{i+1}o: {p}%"))</td></tr>
+                            </tbody>
+                        </MudSimpleTable>
+                    </MudCard>
+                    break;
+            }
+        </MudPaper>
+
+        <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mt-4">
+            <MudButton Variant="Variant.Text"
+                      OnClick="@(() => Navigation.NavigateTo($"/torneios/{TournamentId}"))">
+                Cancelar
+            </MudButton>
+            <MudStack Row="true" Spacing="2">
+                @if (_currentStep > 0)
+                {
+                    <MudButton Variant="Variant.Outlined"
+                              OnClick="PreviousStep">
+                        Voltar
+                    </MudButton>
+                }
+                @if (_currentStep < 4)
+                {
+                    <MudButton Variant="Variant.Filled"
+                              Color="Color.Primary"
+                              OnClick="NextStep"
+                              Disabled="!CanProceed()">
+                        Proximo
+                    </MudButton>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Filled"
+                              Color="Color.Primary"
+                              OnClick="SaveTournament"
+                              Disabled="_saving">
+                        @if (_saving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        }
+                        Salvar Alteracoes
+                    </MudButton>
+                }
+            </MudStack>
+        </MudStack>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public Guid TournamentId { get; set; }
+
+    private readonly string[] _steps = { "Informacoes", "Valores", "Blinds", "Premiacao", "Confirmacao" };
+    private int _currentStep;
+    private bool _step1Valid;
+    private bool _step2Valid;
+    private bool _saving;
+    private bool _loading = true;
+    private MudForm _form1 = null!;
+    private MudForm _form2 = null!;
+    private DateTime? _date;
+    private TimeSpan? _time;
+    private bool _allowRebuy;
+    private bool _allowAddon;
+    private bool _allowEarlyCheckIn;
+    private string _selectedTemplate = "custom";
+    private List<BreadcrumbItem> _breadcrumbs = new();
+    private TournamentDetailDto? _tournament;
+    private List<int> _payoutStructure = new() { 50, 30, 20 };
+
+    private TournamentModel _model = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tournament = await TournamentService.GetTournamentDetailAsync(TournamentId);
+
+        if (_tournament != null && _tournament.Status == TournamentStatus.Scheduled)
+        {
+            // Carregar dados existentes
+            _model = new TournamentModel
+            {
+                Name = _tournament.Name,
+                Location = _tournament.Location,
+                BuyIn = _tournament.BuyIn,
+                StartingStack = _tournament.StartingStack,
+                RebuyValue = _tournament.RebuyValue,
+                RebuyStack = _tournament.RebuyStack,
+                RebuyLimitType = _tournament.RebuyLimitType,
+                RebuyLimitLevel = _tournament.RebuyLimitLevel,
+                RebuyLimitMinutes = _tournament.RebuyLimitMinutes,
+                AddonValue = _tournament.AddonValue,
+                AddonStack = _tournament.AddonStack,
+                AllowCheckInUntilLevel = _tournament.AllowCheckInUntilLevel,
+                BlindLevels = _tournament.BlindLevels.Select(bl => new BlindLevelModel
+                {
+                    Order = bl.Order,
+                    SmallBlind = bl.SmallBlind,
+                    BigBlind = bl.BigBlind,
+                    Ante = bl.Ante,
+                    DurationMinutes = bl.DurationMinutes,
+                    IsBreak = bl.IsBreak,
+                    BreakDescription = bl.BreakDescription
+                }).ToList()
+            };
+
+            _date = _tournament.ScheduledDateTime.Date;
+            _time = _tournament.ScheduledDateTime.TimeOfDay;
+            _allowRebuy = _tournament.RebuyValue.HasValue;
+            _allowAddon = _tournament.AddonValue.HasValue;
+            _allowEarlyCheckIn = _tournament.AllowCheckInUntilLevel.HasValue;
+
+            // Carregar estrutura de premiacao
+            if (!string.IsNullOrEmpty(_tournament.PrizeStructure))
+            {
+                _payoutStructure = _tournament.PrizeStructure
+                    .Split(',')
+                    .Select(s => int.TryParse(s.Trim(), out var v) ? v : 0)
+                    .ToList();
+            }
+
+            _breadcrumbs = new List<BreadcrumbItem>
+            {
+                new("Ligas", "/ligas", false),
+                new(_tournament.LeagueName, $"/ligas/{_tournament.LeagueId}", false),
+                new(_tournament.Name, $"/torneios/{TournamentId}", false),
+                new("Editar", null, true)
+            };
+        }
+
+        _loading = false;
+    }
+
+    private void ApplyTemplate(string template)
+    {
+        _selectedTemplate = template;
+        _model.BlindLevels = template switch
+        {
+            "turbo" => TournamentService.GetTurboBlindTemplate().Select(bl => new BlindLevelModel
+            {
+                Order = bl.Order,
+                SmallBlind = bl.SmallBlind,
+                BigBlind = bl.BigBlind,
+                Ante = bl.Ante,
+                DurationMinutes = bl.DurationMinutes,
+                IsBreak = bl.IsBreak,
+                BreakDescription = bl.BreakDescription
+            }).ToList(),
+            "deepstack" => TournamentService.GetDeepStackBlindTemplate().Select(bl => new BlindLevelModel
+            {
+                Order = bl.Order,
+                SmallBlind = bl.SmallBlind,
+                BigBlind = bl.BigBlind,
+                Ante = bl.Ante,
+                DurationMinutes = bl.DurationMinutes,
+                IsBreak = bl.IsBreak,
+                BreakDescription = bl.BreakDescription
+            }).ToList(),
+            "custom" => _model.BlindLevels.Any() ? _model.BlindLevels : GetDefaultCustomLevels(),
+            _ => TournamentService.GetRegularBlindTemplate().Select(bl => new BlindLevelModel
+            {
+                Order = bl.Order,
+                SmallBlind = bl.SmallBlind,
+                BigBlind = bl.BigBlind,
+                Ante = bl.Ante,
+                DurationMinutes = bl.DurationMinutes,
+                IsBreak = bl.IsBreak,
+                BreakDescription = bl.BreakDescription
+            }).ToList()
+        };
+    }
+
+    private List<BlindLevelModel> GetDefaultCustomLevels()
+    {
+        return new List<BlindLevelModel>
+        {
+            new() { Order = 1, SmallBlind = 25, BigBlind = 50, Ante = 0, DurationMinutes = 15, IsBreak = false },
+            new() { Order = 2, SmallBlind = 50, BigBlind = 100, Ante = 0, DurationMinutes = 15, IsBreak = false },
+            new() { Order = 3, SmallBlind = 75, BigBlind = 150, Ante = 0, DurationMinutes = 15, IsBreak = false }
+        };
+    }
+
+    private void AddLevel()
+    {
+        var lastLevel = _model.BlindLevels.Where(bl => !bl.IsBreak).OrderByDescending(bl => bl.Order).FirstOrDefault();
+        var newOrder = _model.BlindLevels.Count + 1;
+
+        _model.BlindLevels.Add(new BlindLevelModel
+        {
+            Order = newOrder,
+            SmallBlind = (int)((lastLevel?.BigBlind ?? 50) * 1.5),
+            BigBlind = (lastLevel?.BigBlind ?? 50) * 2,
+            Ante = lastLevel?.Ante ?? 0,
+            DurationMinutes = lastLevel?.DurationMinutes ?? 15,
+            IsBreak = false
+        });
+        ReorderLevels();
+    }
+
+    private void AddBreak()
+    {
+        var newOrder = _model.BlindLevels.Count + 1;
+        _model.BlindLevels.Add(new BlindLevelModel
+        {
+            Order = newOrder,
+            SmallBlind = 0,
+            BigBlind = 0,
+            Ante = 0,
+            DurationMinutes = 10,
+            IsBreak = true,
+            BreakDescription = "Intervalo"
+        });
+        ReorderLevels();
+    }
+
+    private void RemoveLevel(BlindLevelModel level)
+    {
+        _model.BlindLevels.Remove(level);
+        ReorderLevels();
+    }
+
+    private void ReorderLevels()
+    {
+        var order = 1;
+        foreach (var level in _model.BlindLevels)
+        {
+            level.Order = order++;
+        }
+    }
+
+    private void AddPayoutPosition()
+    {
+        if (_payoutStructure.Count < 10)
+            _payoutStructure.Add(0);
+    }
+
+    private void RemovePayoutPosition()
+    {
+        if (_payoutStructure.Count > 1)
+            _payoutStructure.RemoveAt(_payoutStructure.Count - 1);
+    }
+
+    private bool CanProceed()
+    {
+        return _currentStep switch
+        {
+            0 => !string.IsNullOrWhiteSpace(_model.Name) && _date.HasValue && _time.HasValue,
+            1 => _model.BuyIn > 0 && _model.StartingStack > 0,
+            2 => _model.BlindLevels.Count > 0,
+            3 => Math.Abs(_payoutStructure.Sum() - 100) < 1,
+            _ => true
+        };
+    }
+
+    private void GoToStep(int step)
+    {
+        if (step <= _currentStep)
+            _currentStep = step;
+    }
+
+    private async Task NextStep()
+    {
+        if (_currentStep == 0) await _form1.Validate();
+        if (_currentStep == 1) await _form2.Validate();
+
+        if (CanProceed())
+            _currentStep++;
+    }
+
+    private void PreviousStep()
+    {
+        if (_currentStep > 0)
+            _currentStep--;
+    }
+
+    private string GetRebuyDescription()
+    {
+        if (!_allowRebuy) return "Nao";
+
+        var desc = $"R$ {_model.RebuyValue:N2} ({_model.RebuyStack} fichas)";
+        if (_model.RebuyLimitType == RebuyLimitType.Level)
+            desc += $" ate nivel {_model.RebuyLimitLevel}";
+        else if (_model.RebuyLimitType == RebuyLimitType.Time)
+            desc += $" ate {_model.RebuyLimitMinutes} min";
+        else
+            desc += $" ate nivel {_model.RebuyLimitLevel} ou {_model.RebuyLimitMinutes} min";
+
+        return desc;
+    }
+
+    private async Task SaveTournament()
+    {
+        _saving = true;
+        try
+        {
+            var scheduledDateTime = _date!.Value.Add(_time!.Value);
+            var prizeStructure = string.Join(",", _payoutStructure);
+
+            var dto = new CreateTournamentDto(
+                _model.Name!,
+                scheduledDateTime,
+                _model.Location,
+                _model.BuyIn,
+                _model.StartingStack,
+                _allowRebuy ? _model.RebuyValue : null,
+                _allowRebuy ? _model.RebuyStack : null,
+                _allowRebuy ? _model.RebuyLimitLevel : null,
+                _allowRebuy ? _model.RebuyLimitMinutes : null,
+                _allowRebuy ? _model.RebuyLimitType : RebuyLimitType.Level,
+                _allowAddon ? _model.AddonValue : null,
+                _allowAddon ? _model.AddonStack : null,
+                prizeStructure,
+                _allowEarlyCheckIn ? _model.AllowCheckInUntilLevel : null,
+                _model.BlindLevels.Select(bl => new CreateBlindLevelDto(
+                    bl.Order,
+                    bl.SmallBlind,
+                    bl.BigBlind,
+                    bl.Ante,
+                    bl.DurationMinutes,
+                    bl.IsBreak,
+                    bl.BreakDescription
+                )).ToList()
+            );
+
+            var success = await TournamentService.UpdateTournamentAsync(TournamentId, dto);
+            if (success)
+            {
+                Snackbar.Add("Torneio atualizado com sucesso!", Severity.Success);
+                Navigation.NavigateTo($"/torneios/{TournamentId}");
+            }
+            else
+            {
+                Snackbar.Add("Erro ao atualizar torneio", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro ao atualizar torneio: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private class TournamentModel
+    {
+        public string? Name { get; set; }
+        public string? Location { get; set; }
+        public decimal BuyIn { get; set; }
+        public int StartingStack { get; set; }
+        public decimal? RebuyValue { get; set; }
+        public int? RebuyStack { get; set; }
+        public RebuyLimitType RebuyLimitType { get; set; }
+        public int? RebuyLimitLevel { get; set; }
+        public int? RebuyLimitMinutes { get; set; }
+        public decimal? AddonValue { get; set; }
+        public int? AddonStack { get; set; }
+        public int? AllowCheckInUntilLevel { get; set; }
+        public List<BlindLevelModel> BlindLevels { get; set; } = new();
+    }
+
+    private class BlindLevelModel
+    {
+        public int Order { get; set; }
+        public int SmallBlind { get; set; }
+        public int BigBlind { get; set; }
+        public int Ante { get; set; }
+        public int DurationMinutes { get; set; }
+        public bool IsBreak { get; set; }
+        public string? BreakDescription { get; set; }
+    }
+}

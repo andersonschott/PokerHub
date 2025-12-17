@@ -7,8 +7,12 @@ public record PlayerRankingDto(
     string? Nickname,
     int TournamentsPlayed,
     int Wins,
+    int SecondPlaces,
+    int ThirdPlaces,
     int Top3Finishes,
     decimal TotalBuyIns,
     decimal TotalPrizes,
-    decimal Profit
+    decimal Profit,
+    decimal ROI,
+    decimal ITMRate
 );

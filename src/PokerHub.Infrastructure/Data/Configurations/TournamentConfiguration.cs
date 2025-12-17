@@ -30,6 +30,13 @@ public class TournamentConfiguration : IEntityTypeConfiguration<Tournament>
         builder.Property(t => t.PrizeStructure)
             .HasMaxLength(500);
 
+        builder.Property(t => t.InviteCode)
+            .HasMaxLength(8)
+            .IsRequired();
+
+        builder.HasIndex(t => t.InviteCode)
+            .IsUnique();
+
         builder.Property(t => t.CreatedAt)
             .IsRequired();
 

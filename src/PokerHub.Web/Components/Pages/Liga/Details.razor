@@ -181,6 +181,15 @@ else
                                         <MudButton Variant="Variant.Text" Color="Color.Default" Href="@($"/torneios/{tournament.Id}")" @onclick:stopPropagation="true">
                                             @(tournament.Status == TournamentStatus.Scheduled ? "Gerenciar" : "Detalhes")
                                         </MudButton>
+                                        @if (_isOrganizer)
+                                        {
+                                            <span @onclick:stopPropagation="true">
+                                                <MudIconButton Icon="@Icons.Material.Filled.ContentCopy"
+                                                              Size="Size.Small"
+                                                              Color="Color.Default"
+                                                              OnClick="@(() => DuplicateTournament(tournament.Id))" />
+                                            </span>
+                                        }
                                     </MudCardActions>
                                 </MudCard>
                             </MudItem>
@@ -202,12 +211,15 @@ else
                 {
                     <MudTable Items="@_league.Players.OrderByDescending(p => p.TotalProfit).ToList()" Hover="true" Dense="true">
                         <HeaderContent>
-                            <MudTh Style="width: 60px;">#</MudTh>
+                            <MudTh Style="width: 50px;">#</MudTh>
                             <MudTh>Jogador</MudTh>
-                            <MudTh>Torneios</MudTh>
-                            <MudTh>Vitorias</MudTh>
-                            <MudTh>ITM</MudTh>
-                            <MudTh>Lucro/Prejuizo</MudTh>
+                            <MudTh Style="text-align: center;">Torneios</MudTh>
+                            <MudTh Style="text-align: center;">1o</MudTh>
+                            <MudTh Style="text-align: center;">2o</MudTh>
+                            <MudTh Style="text-align: center;">3o</MudTh>
+                            <MudTh Style="text-align: right;">ROI</MudTh>
+                            <MudTh Style="text-align: right;">ITM</MudTh>
+                            <MudTh Style="text-align: right;">Lucro/Prejuizo</MudTh>
                         </HeaderContent>
                         <RowTemplate>
                             @{
@@ -243,29 +255,60 @@ else
                                     </div>
                                 </MudStack>
                             </MudTd>
-                            <MudTd>@context.TournamentsPlayed</MudTd>
-                            <MudTd>
+                            <MudTd Style="text-align: center;">@context.TournamentsPlayed</MudTd>
+                            <MudTd Style="text-align: center;">
                                 @if (context.Wins > 0)
                                 {
                                     <MudChip T="string" Color="Color.Warning" Size="Size.Small">@context.Wins</MudChip>
                                 }
                                 else
                                 {
-                                    <text>0</text>
+                                    <text>-</text>
                                 }
                             </MudTd>
-                            <MudTd>
-                                @if (context.TournamentsPlayed > 0)
+                            <MudTd Style="text-align: center;">
+                                @if (context.SecondPlaces > 0)
                                 {
-                                    var itmRate = context.Wins > 0 ? (context.Wins * 100.0 / context.TournamentsPlayed) : 0;
-                                    <text>@itmRate.ToString("N0")%</text>
+                                    <MudChip T="string" Color="Color.Default" Size="Size.Small">@context.SecondPlaces</MudChip>
                                 }
                                 else
                                 {
                                     <text>-</text>
                                 }
                             </MudTd>
-                            <MudTd>
+                            <MudTd Style="text-align: center;">
+                                @if (context.ThirdPlaces > 0)
+                                {
+                                    <MudChip T="string" Color="Color.Tertiary" Size="Size.Small">@context.ThirdPlaces</MudChip>
+                                }
+                                else
+                                {
+                                    <text>-</text>
+                                }
+                            </MudTd>
+                            <MudTd Style="text-align: right;">
+                                @if (context.TournamentsPlayed > 0)
+                                {
+                                    <MudText Typo="Typo.body2" Color="@(context.ROI >= 0 ? Color.Success : Color.Error)">
+                                        @(context.ROI >= 0 ? "+" : "")@context.ROI.ToString("N1")%
+                                    </MudText>
+                                }
+                                else
+                                {
+                                    <text>-</text>
+                                }
+                            </MudTd>
+                            <MudTd Style="text-align: right;">
+                                @if (context.TournamentsPlayed > 0)
+                                {
+                                    <MudText Typo="Typo.body2">@context.ITMRate.ToString("N1")%</MudText>
+                                }
+                                else
+                                {
+                                    <text>-</text>
+                                }
+                            </MudTd>
+                            <MudTd Style="text-align: right;">
                                 <MudText Typo="Typo.body2" Color="@(context.TotalProfit >= 0 ? Color.Success : Color.Error)" Style="font-weight: bold;">
                                     @(context.TotalProfit >= 0 ? "+" : "")R$ @context.TotalProfit.ToString("N2")
                                 </MudText>
@@ -432,6 +475,27 @@ else
             {
                 Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
             }
+        }
+    }
+
+    private async Task DuplicateTournament(Guid tournamentId)
+    {
+        try
+        {
+            var newTournament = await TournamentService.DuplicateTournamentAsync(tournamentId, LeagueId);
+            if (newTournament != null)
+            {
+                _tournaments = await TournamentService.GetTournamentsByLeagueAsync(LeagueId);
+                Snackbar.Add("Torneio copiado com sucesso!", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Erro ao copiar torneio", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
         }
     }
 }

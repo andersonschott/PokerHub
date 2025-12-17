@@ -5,6 +5,7 @@
 @inject ITournamentService TournamentService
 @inject IPlayerService PlayerService
 @inject ITournamentExpenseService ExpenseService
+@inject ILeagueService LeagueService
 @inject TournamentTimerService TimerService
 @inject NavigationManager Navigation
 @inject IDialogService DialogService
@@ -37,6 +38,18 @@
                     <MudStack Row="true" Spacing="2">
                         @if (_canManage && _tournament.Status == TournamentStatus.Scheduled)
                         {
+                            <MudButton Variant="Variant.Outlined"
+                                      Color="Color.Default"
+                                      StartIcon="@Icons.Material.Filled.Edit"
+                                      Href="@($"/torneios/{TournamentId}/editar")">
+                                Editar
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined"
+                                      Color="Color.Primary"
+                                      StartIcon="@Icons.Material.Filled.Share"
+                                      OnClick="ShowInviteDialog">
+                                Convidar
+                            </MudButton>
                             <MudButton Variant="Variant.Filled"
                                       Color="Color.Success"
                                       StartIcon="@Icons.Material.Filled.PlayArrow"
@@ -185,7 +198,13 @@
                             <MudText Typo="Typo.h6">Jogadores</MudText>
                         </CardHeaderContent>
                         <CardHeaderActions>
-                            @if (_canManage && _tournament.Status == TournamentStatus.Scheduled)
+                            @{
+                                var canAddPlayer = _canManage && (
+                                    _tournament.Status == TournamentStatus.Scheduled ||
+                                    ((_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused) &&
+                                     (_isOrganizer || _detail?.IsCheckInAllowed == true)));
+                            }
+                            @if (canAddPlayer)
                             {
                                 <MudButton Variant="Variant.Outlined"
                                           Color="Color.Primary"
@@ -275,7 +294,13 @@
                                     }
                                 </MudTd>
                                 <MudTd>
-                                    @if (_canManage && _tournament.Status == TournamentStatus.Scheduled)
+                                    @{
+                                        var canCheckIn = _canManage && (
+                                            _tournament.Status == TournamentStatus.Scheduled ||
+                                            ((_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused) &&
+                                             (_isOrganizer || _detail?.IsCheckInAllowed == true)));
+                                    }
+                                    @if (canCheckIn)
                                     {
                                         @if (!context.IsCheckedIn)
                                         {
@@ -286,7 +311,7 @@
                                                 Check-in
                                             </MudButton>
                                         }
-                                        else
+                                        else if (_tournament.Status == TournamentStatus.Scheduled)
                                         {
                                             <MudButton Variant="Variant.Text"
                                                       Color="Color.Warning"
@@ -295,12 +320,15 @@
                                                 Check-out
                                             </MudButton>
                                         }
-                                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                                      Color="Color.Error"
-                                                      Size="Size.Small"
-                                                      OnClick="@(() => RemovePlayer(context.PlayerId))" />
+                                        @if (_tournament.Status == TournamentStatus.Scheduled)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                          Color="Color.Error"
+                                                          Size="Size.Small"
+                                                          OnClick="@(() => RemovePlayer(context.PlayerId))" />
+                                        }
                                     }
-                                    else if (_canManage && (_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused) && IsPlayerPlaying(context))
+                                    @if (_canManage && (_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused) && IsPlayerPlaying(context))
                                     {
                                         <MudButton Variant="Variant.Text"
                                                   Color="Color.Error"
@@ -406,6 +434,31 @@
     }
 </MudContainer>
 
+<MudDialog @bind-Visible="_inviteDialogVisible">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Convidar Jogadores</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body1" Class="mb-4">
+            Compartilhe este link para que jogadores possam se inscrever no torneio:
+        </MudText>
+        <MudTextField Value="@GetInviteUrl()"
+                     Label="Link de Convite"
+                     Variant="Variant.Outlined"
+                     ReadOnly="true"
+                     Adornment="Adornment.End"
+                     AdornmentIcon="@Icons.Material.Filled.ContentCopy"
+                     OnAdornmentClick="CopyInviteLink"/>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+            Codigo: @_tournament?.InviteCode
+        </MudText>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _inviteDialogVisible = false)">Fechar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="CopyInviteLink">Copiar Link</MudButton>
+    </DialogActions>
+</MudDialog>
+
 @code {
     [Parameter] public Guid TournamentId { get; set; }
 
@@ -418,8 +471,10 @@
     private bool _processing;
     private bool _rebuyAllowed;
     private bool _canManage;
+    private bool _isOrganizer;
     private string? _currentUserId;
     private bool _rebuyAddonInProgress;
+    private bool _inviteDialogVisible;
 
     // Connection state
     private bool _isReconnecting;
@@ -517,9 +572,10 @@
         _expenses = await ExpenseService.GetExpensesByTournamentAsync(TournamentId);
 
         // Check if user can manage this tournament (organizer or checked-in player)
-        if (!string.IsNullOrEmpty(_currentUserId))
+        if (!string.IsNullOrEmpty(_currentUserId) && _tournament != null)
         {
             _canManage = await TournamentService.CanUserManageTournamentAsync(TournamentId, _currentUserId);
+            _isOrganizer = await LeagueService.IsUserOrganizerAsync(_tournament.LeagueId, _currentUserId);
         }
 
         _loading = false;
@@ -960,7 +1016,13 @@
             { x => x.CheckedInPlayers, checkedInPlayers }
         };
 
-        var dialog = await DialogService.ShowAsync<AddExpenseDialog>("Adicionar Despesa", parameters);
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<AddExpenseDialog>("Adicionar Despesa", parameters, options);
         var result = await dialog.Result;
 
         if (result != null && !result.Canceled)
@@ -1049,6 +1111,25 @@
         3 => Color.Tertiary,
         _ => Color.Default
     };
+
+    private void ShowInviteDialog()
+    {
+        _inviteDialogVisible = true;
+    }
+
+    private string GetInviteUrl()
+    {
+        if (_tournament == null) return string.Empty;
+        var baseUrl = Navigation.BaseUri.TrimEnd('/');
+        return $"{baseUrl}/torneios/entrar/{_tournament.InviteCode}";
+    }
+
+    private async Task CopyInviteLink()
+    {
+        var url = GetInviteUrl();
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", url);
+        Snackbar.Add("Link copiado!", Severity.Success);
+    }
 
     public async ValueTask DisposeAsync()
     {

@@ -14,8 +14,16 @@ public record TournamentDto(
     decimal? AddonValue,
     int StartingStack,
     TournamentStatus Status,
+    int CurrentLevel,
     int PlayerCount,
     int CheckedInCount,
     decimal PrizePool,
+    string InviteCode,
+    int? AllowCheckInUntilLevel,
     DateTime CreatedAt
-);
+)
+{
+    public bool IsCheckInAllowed => Status == TournamentStatus.Scheduled ||
+        (Status is TournamentStatus.InProgress or TournamentStatus.Paused &&
+         AllowCheckInUntilLevel.HasValue && CurrentLevel <= AllowCheckInUntilLevel.Value);
+}

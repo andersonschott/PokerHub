@@ -3,6 +3,7 @@ using PokerHub.Application.DTOs.League;
 using PokerHub.Application.DTOs.Player;
 using PokerHub.Application.Interfaces;
 using PokerHub.Domain.Entities;
+using PokerHub.Domain.Enums;
 using PokerHub.Infrastructure.Data;
 
 namespace PokerHub.Application.Services;
@@ -70,22 +71,36 @@ public class LeagueService : ILeagueService
 
         if (league == null) return null;
 
-        var players = league.Players.Select(p => new PlayerDto(
-            p.Id,
-            p.LeagueId,
-            p.Name,
-            p.Nickname,
-            p.Email,
-            p.Phone,
-            p.PixKey,
-            p.PixKeyType,
-            p.UserId,
-            p.CreatedAt,
-            p.IsActive,
-            p.Participations.Where(tp => tp.Tournament != null).Sum(tp => tp.Prize - tp.TotalInvestment(tp.Tournament!)),
-            p.Participations.Count,
-            p.Participations.Count(tp => tp.Position == 1)
-        )).ToList();
+        var players = league.Players.Select(p =>
+        {
+            var finishedParticipations = p.Participations
+                .Where(tp => tp.Tournament != null && tp.Tournament.Status == TournamentStatus.Finished)
+                .ToList();
+            var totalBuyIns = finishedParticipations.Sum(tp => tp.TotalInvestment(tp.Tournament!));
+            var totalPrizes = finishedParticipations.Sum(tp => tp.Prize);
+
+            return new PlayerDto(
+                p.Id,
+                p.LeagueId,
+                p.Name,
+                p.Nickname,
+                p.Email,
+                p.Phone,
+                p.PixKey,
+                p.PixKeyType,
+                p.UserId,
+                p.CreatedAt,
+                p.IsActive,
+                totalPrizes - totalBuyIns,
+                finishedParticipations.Count,
+                finishedParticipations.Count(tp => tp.Position == 1),
+                finishedParticipations.Count(tp => tp.Position == 2),
+                finishedParticipations.Count(tp => tp.Position == 3),
+                totalBuyIns,
+                totalPrizes,
+                finishedParticipations.Count(tp => tp.Prize > 0)
+            );
+        }).ToList();
 
         return new LeagueWithPlayersDto(
             league.Id,
