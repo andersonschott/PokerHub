@@ -2,7 +2,9 @@
 @rendermode InteractiveServer
 @attribute [Authorize]
 @implements IAsyncDisposable
+@implements IBrowserViewportObserver
 @inject ITournamentService TournamentService
+@inject IBrowserViewportService BrowserViewportService
 @inject IPlayerService PlayerService
 @inject ITournamentExpenseService ExpenseService
 @inject ILeagueService LeagueService
@@ -35,7 +37,7 @@
                             @GetStatusText(_tournament.Status)
                         </MudChip>
                     </div>
-                    <MudStack Row="true" Spacing="2">
+                    <div class="d-flex flex-wrap gap-2 justify-end">
                         @if (_canManage && _tournament.Status == TournamentStatus.Scheduled)
                         {
                             <MudButton Variant="Variant.Outlined"
@@ -97,54 +99,66 @@
                                 Ver Pagamentos
                             </MudButton>
                         }
-                    </MudStack>
+                    </div>
                 </MudStack>
             </MudItem>
 
             <!-- Info Cards -->
-            <MudItem xs="12" sm="6" md="3">
+            <MudItem xs="6" sm="6" md="3">
                 <MudCard Elevation="2">
-                    <MudCardContent>
+                    <MudCardContent Class="pa-2 pa-sm-4">
                         <MudStack AlignItems="AlignItems.Center">
-                            <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary" Size="Size.Large" />
-                            <MudText Typo="Typo.h4">@GetPlayersRemaining() / @(_detail?.Players.Count ?? 0)</MudText>
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">Jogadores</MudText>
+                            <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary" Size="Size.Medium" Class="d-sm-none"/>
+                            <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary" Size="Size.Large" Class="d-none d-sm-flex"/>
+                            <MudText Typo="Typo.h5" Class="d-sm-none">@GetPlayersRemaining()/@(_detail?.Players.Count ?? 0)</MudText>
+                            <MudText Typo="Typo.h4" Class="d-none d-sm-block">@GetPlayersRemaining() / @(_detail?.Players.Count ?? 0)</MudText>
+                            <MudText Typo="Typo.caption" Class="d-sm-none" Color="Color.Secondary">Jogadores</MudText>
+                            <MudText Typo="Typo.body2" Class="d-none d-sm-block" Color="Color.Secondary">Jogadores</MudText>
                         </MudStack>
                     </MudCardContent>
                 </MudCard>
             </MudItem>
 
-            <MudItem xs="12" sm="6" md="3">
+            <MudItem xs="6" sm="6" md="3">
                 <MudCard Elevation="2">
-                    <MudCardContent>
+                    <MudCardContent Class="pa-2 pa-sm-4">
                         <MudStack AlignItems="AlignItems.Center">
-                            <MudIcon Icon="@Icons.Material.Filled.Payments" Color="Color.Success" Size="Size.Large" />
-                            <MudText Typo="Typo.h4">R$ @(_detail?.PrizePool.ToString("N2") ?? "0,00")</MudText>
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">Prize Pool</MudText>
+                            <MudIcon Icon="@Icons.Material.Filled.Payments" Color="Color.Success" Size="Size.Medium" Class="d-sm-none"/>
+                            <MudIcon Icon="@Icons.Material.Filled.Payments" Color="Color.Success" Size="Size.Large" Class="d-none d-sm-flex"/>
+                            <MudText Typo="Typo.h6" Class="d-sm-none">R$ @(_detail?.PrizePool.ToString("N0") ?? "0")</MudText>
+                            <MudText Typo="Typo.h4" Class="d-none d-sm-block">R$ @(_detail?.PrizePool.ToString("N2") ?? "0,00")</MudText>
+                            <MudText Typo="Typo.caption" Class="d-sm-none" Color="Color.Secondary">Prize Pool</MudText>
+                            <MudText Typo="Typo.body2" Class="d-none d-sm-block" Color="Color.Secondary">Prize Pool</MudText>
                         </MudStack>
                     </MudCardContent>
                 </MudCard>
             </MudItem>
 
-            <MudItem xs="12" sm="6" md="3">
+            <MudItem xs="6" sm="6" md="3">
                 <MudCard Elevation="2">
-                    <MudCardContent>
+                    <MudCardContent Class="pa-2 pa-sm-4">
                         <MudStack AlignItems="AlignItems.Center">
-                            <MudIcon Icon="@Icons.Material.Filled.Refresh" Color="Color.Warning" Size="Size.Large" />
-                            <MudText Typo="Typo.h4">@GetTotalRebuys()</MudText>
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">Rebuys</MudText>
+                            <MudIcon Icon="@Icons.Material.Filled.Refresh" Color="Color.Warning" Size="Size.Medium" Class="d-sm-none"/>
+                            <MudIcon Icon="@Icons.Material.Filled.Refresh" Color="Color.Warning" Size="Size.Large" Class="d-none d-sm-flex"/>
+                            <MudText Typo="Typo.h5" Class="d-sm-none">@GetTotalRebuys()</MudText>
+                            <MudText Typo="Typo.h4" Class="d-none d-sm-block">@GetTotalRebuys()</MudText>
+                            <MudText Typo="Typo.caption" Class="d-sm-none" Color="Color.Secondary">Rebuys</MudText>
+                            <MudText Typo="Typo.body2" Class="d-none d-sm-block" Color="Color.Secondary">Rebuys</MudText>
                         </MudStack>
                     </MudCardContent>
                 </MudCard>
             </MudItem>
 
-            <MudItem xs="12" sm="6" md="3">
+            <MudItem xs="6" sm="6" md="3">
                 <MudCard Elevation="2">
-                    <MudCardContent>
+                    <MudCardContent Class="pa-2 pa-sm-4">
                         <MudStack AlignItems="AlignItems.Center">
-                            <MudIcon Icon="@Icons.Material.Filled.AddCircle" Color="Color.Info" Size="Size.Large" />
-                            <MudText Typo="Typo.h4">@GetTotalAddons()</MudText>
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">Add-ons</MudText>
+                            <MudIcon Icon="@Icons.Material.Filled.AddCircle" Color="Color.Info" Size="Size.Medium" Class="d-sm-none"/>
+                            <MudIcon Icon="@Icons.Material.Filled.AddCircle" Color="Color.Info" Size="Size.Large" Class="d-none d-sm-flex"/>
+                            <MudText Typo="Typo.h5" Class="d-sm-none">@GetTotalAddons()</MudText>
+                            <MudText Typo="Typo.h4" Class="d-none d-sm-block">@GetTotalAddons()</MudText>
+                            <MudText Typo="Typo.caption" Class="d-sm-none" Color="Color.Secondary">Add-ons</MudText>
+                            <MudText Typo="Typo.body2" Class="d-none d-sm-block" Color="Color.Secondary">Add-ons</MudText>
                         </MudStack>
                     </MudCardContent>
                 </MudCard>
@@ -216,130 +230,208 @@
                         </CardHeaderActions>
                     </MudCardHeader>
                     <MudCardContent>
-                        <MudTable Items="_detail?.Players" Dense="true" Hover="true">
-                            <HeaderContent>
-                                <MudTh>Jogador</MudTh>
-                                <MudTh>Status</MudTh>
-                                <MudTh>Rebuys</MudTh>
-                                <MudTh>Add-on</MudTh>
-                                <MudTh>Posicao</MudTh>
-                                <MudTh Style="width: 200px;">Acoes</MudTh>
-                            </HeaderContent>
-                            <RowTemplate>
-                                <MudTd>
-                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                                        <MudAvatar Color="Color.Primary" Size="Size.Small">
-                                            @context.PlayerName[0]
-                                        </MudAvatar>
-                                        <div>
-                                            <MudText>@context.PlayerName</MudText>
-                                            @if (!string.IsNullOrEmpty(context.Nickname))
+                        @if (_isSmallScreen && (_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused))
+                        {
+                            <!-- Mobile Compact View for In-Progress Tournament -->
+                            <MudStack Spacing="2">
+                                @foreach (var player in _detail?.Players?.OrderBy(p => p.Position.HasValue ? 0 : 1).ThenBy(p => p.Position).ThenBy(p => p.PlayerName) ?? Enumerable.Empty<TournamentPlayerDto>())
+                                {
+                                    <MudPaper Elevation="1" Class="pa-2" Style="@(IsPlayerEliminated(player) ? "opacity: 0.6;" : "")">
+                                        <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                                            <!-- Player Info -->
+                                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Style="flex: 1; min-width: 0;">
+                                                <MudAvatar Color="@GetPlayerStatusColor(player)" Size="Size.Small">
+                                                    @player.PlayerName[0]
+                                                </MudAvatar>
+                                                <div style="overflow: hidden;">
+                                                    <MudText Typo="Typo.body2" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                        @(!string.IsNullOrEmpty(player.Nickname) ? player.Nickname : player.PlayerName)
+                                                    </MudText>
+                                                    @if (player.Position.HasValue)
+                                                    {
+                                                        <MudChip T="string" Color="@GetPositionColor(player.Position.Value)" Size="Size.Small" Class="pa-0 ma-0">
+                                                            @player.Position.Value o
+                                                        </MudChip>
+                                                    }
+                                                </div>
+                                            </MudStack>
+
+                                            <!-- Actions for playing players -->
+                                            @if (IsPlayerPlaying(player))
                                             {
-                                                <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Nickname</MudText>
+                                                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center">
+                                                    @if (_canManage && _rebuyAllowed)
+                                                    {
+                                                        <!-- Rebuy Controls -->
+                                                        <MudButtonGroup Color="Color.Warning" Variant="Variant.Outlined" Size="Size.Small">
+                                                            <MudIconButton Icon="@Icons.Material.Filled.Remove"
+                                                                          Size="Size.Small"
+                                                                          Disabled="@(player.RebuyCount <= 0 || _rebuyAddonInProgress)"
+                                                                          OnClick="@(() => RemoveRebuy(player.PlayerId))" />
+                                                            <MudButton Disabled="true" Style="min-width: 32px; padding: 0;">@player.RebuyCount</MudButton>
+                                                            <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                                                          Size="Size.Small"
+                                                                          Disabled="_rebuyAddonInProgress"
+                                                                          OnClick="@(() => AddRebuy(player.PlayerId))" />
+                                                        </MudButtonGroup>
+                                                    }
+                                                    @if (_canManage && _detail?.AddonValue != null)
+                                                    {
+                                                        <!-- Addon Toggle -->
+                                                        <MudToggleIconButton Toggled="@player.HasAddon"
+                                                                            ToggledChanged="@((bool val) => SetAddon(player.PlayerId, val))"
+                                                                            Icon="@Icons.Material.Outlined.AddCircleOutline"
+                                                                            ToggledIcon="@Icons.Material.Filled.AddCircle"
+                                                                            Color="Color.Default"
+                                                                            ToggledColor="Color.Info"
+                                                                            Size="Size.Small"
+                                                                            Disabled="_rebuyAddonInProgress" />
+                                                    }
+                                                    @if (_canManage)
+                                                    {
+                                                        <!-- Eliminate -->
+                                                        <MudIconButton Icon="@Icons.Material.Filled.PersonOff"
+                                                                      Color="Color.Error"
+                                                                      Size="Size.Small"
+                                                                      OnClick="@(() => EliminatePlayer(player))" />
+                                                    }
+                                                </MudStack>
                                             }
-                                        </div>
-                                    </MudStack>
-                                </MudTd>
-                                <MudTd>
-                                    <MudChip T="string" Color="@GetPlayerStatusColor(context)" Size="Size.Small">
-                                        @GetPlayerStatusText(context)
-                                    </MudChip>
-                                </MudTd>
-                                <MudTd>
-                                    @if (_canManage && _tournament.Status != TournamentStatus.Finished && IsPlayerPlaying(context) && _rebuyAllowed)
-                                    {
-                                        <MudStack Row="true" Spacing="1">
-                                            <MudIconButton Icon="@Icons.Material.Filled.Remove"
-                                                          Size="Size.Small"
-                                                          Color="Color.Error"
-                                                          Disabled="@(context.RebuyCount <= 0 || _rebuyAddonInProgress)"
-                                                          OnClick="@(() => RemoveRebuy(context.PlayerId))" />
-                                            <MudText>@context.RebuyCount</MudText>
-                                            <MudIconButton Icon="@Icons.Material.Filled.Add"
-                                                          Size="Size.Small"
-                                                          Color="Color.Success"
-                                                          Disabled="_rebuyAddonInProgress"
-                                                          OnClick="@(() => AddRebuy(context.PlayerId))" />
                                         </MudStack>
-                                    }
-                                    else
-                                    {
-                                        @context.RebuyCount
-                                    }
-                                </MudTd>
-                                <MudTd>
-                                    @if (_canManage && _tournament.Status != TournamentStatus.Finished && IsPlayerPlaying(context) && _detail?.AddonValue != null)
-                                    {
-                                        <MudSwitch T="bool"
-                                                  Value="@context.HasAddon"
-                                                  ValueChanged="@((bool val) => SetAddon(context.PlayerId, val))"
-                                                  Color="Color.Primary"
-                                                  Disabled="_rebuyAddonInProgress" />
-                                    }
-                                    else
-                                    {
-                                        @(context.HasAddon ? "Sim" : "Nao")
-                                    }
-                                </MudTd>
-                                <MudTd>
-                                    @if (context.Position.HasValue)
-                                    {
-                                        <MudChip T="string" Color="@GetPositionColor(context.Position.Value)" Size="Size.Small">
-                                            @context.Position.Value o
-                                        </MudChip>
-                                    }
-                                    else
-                                    {
-                                        <text>-</text>
-                                    }
-                                </MudTd>
-                                <MudTd>
-                                    @{
-                                        var canCheckIn = _canManage && (
-                                            _tournament.Status == TournamentStatus.Scheduled ||
-                                            ((_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused) &&
-                                             (_isOrganizer || _detail?.IsCheckInAllowed == true)));
-                                    }
-                                    @if (canCheckIn)
-                                    {
-                                        @if (!context.IsCheckedIn)
-                                        {
-                                            <MudButton Variant="Variant.Text"
-                                                      Color="Color.Success"
-                                                      Size="Size.Small"
-                                                      OnClick="@(() => CheckIn(context.PlayerId))">
-                                                Check-in
-                                            </MudButton>
-                                        }
-                                        else if (_tournament.Status == TournamentStatus.Scheduled)
-                                        {
-                                            <MudButton Variant="Variant.Text"
-                                                      Color="Color.Warning"
-                                                      Size="Size.Small"
-                                                      OnClick="@(() => CheckOut(context.PlayerId))">
-                                                Check-out
-                                            </MudButton>
-                                        }
-                                        @if (_tournament.Status == TournamentStatus.Scheduled)
-                                        {
-                                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                    </MudPaper>
+                                }
+                            </MudStack>
+                        }
+                        else
+                        {
+                            <!-- Desktop Table View -->
+                            <div style="overflow-x: auto;">
+                                <MudTable Items="_detail?.Players" Dense="true" Hover="true" Breakpoint="Breakpoint.None">
+                                    <HeaderContent>
+                                        <MudTh>Jogador</MudTh>
+                                        <MudTh>Status</MudTh>
+                                        <MudTh>Rebuys</MudTh>
+                                        <MudTh>Add-on</MudTh>
+                                        <MudTh>Posicao</MudTh>
+                                        <MudTh Style="min-width: 150px;">Acoes</MudTh>
+                                    </HeaderContent>
+                                    <RowTemplate>
+                                        <MudTd>
+                                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                                <MudAvatar Color="Color.Primary" Size="Size.Small">
+                                                    @context.PlayerName[0]
+                                                </MudAvatar>
+                                                <div>
+                                                    <MudText>@context.PlayerName</MudText>
+                                                    @if (!string.IsNullOrEmpty(context.Nickname))
+                                                    {
+                                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Nickname</MudText>
+                                                    }
+                                                </div>
+                                            </MudStack>
+                                        </MudTd>
+                                        <MudTd>
+                                            <MudChip T="string" Color="@GetPlayerStatusColor(context)" Size="Size.Small">
+                                                @GetPlayerStatusText(context)
+                                            </MudChip>
+                                        </MudTd>
+                                        <MudTd>
+                                            @if (_canManage && _tournament.Status != TournamentStatus.Finished && IsPlayerPlaying(context) && _rebuyAllowed)
+                                            {
+                                                <MudStack Row="true" Spacing="1">
+                                                    <MudIconButton Icon="@Icons.Material.Filled.Remove"
+                                                                  Size="Size.Small"
+                                                                  Color="Color.Error"
+                                                                  Disabled="@(context.RebuyCount <= 0 || _rebuyAddonInProgress)"
+                                                                  OnClick="@(() => RemoveRebuy(context.PlayerId))" />
+                                                    <MudText>@context.RebuyCount</MudText>
+                                                    <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                                                  Size="Size.Small"
+                                                                  Color="Color.Success"
+                                                                  Disabled="_rebuyAddonInProgress"
+                                                                  OnClick="@(() => AddRebuy(context.PlayerId))" />
+                                                </MudStack>
+                                            }
+                                            else
+                                            {
+                                                @context.RebuyCount
+                                            }
+                                        </MudTd>
+                                        <MudTd>
+                                            @if (_canManage && _tournament.Status != TournamentStatus.Finished && IsPlayerPlaying(context) && _detail?.AddonValue != null)
+                                            {
+                                                <MudSwitch T="bool"
+                                                          Value="@context.HasAddon"
+                                                          ValueChanged="@((bool val) => SetAddon(context.PlayerId, val))"
+                                                          Color="Color.Primary"
+                                                          Disabled="_rebuyAddonInProgress" />
+                                            }
+                                            else
+                                            {
+                                                @(context.HasAddon ? "Sim" : "Nao")
+                                            }
+                                        </MudTd>
+                                        <MudTd>
+                                            @if (context.Position.HasValue)
+                                            {
+                                                <MudChip T="string" Color="@GetPositionColor(context.Position.Value)" Size="Size.Small">
+                                                    @context.Position.Value o
+                                                </MudChip>
+                                            }
+                                            else
+                                            {
+                                                <text>-</text>
+                                            }
+                                        </MudTd>
+                                        <MudTd>
+                                            @{
+                                                var canCheckIn = _canManage && (
+                                                    _tournament.Status == TournamentStatus.Scheduled ||
+                                                    ((_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused) &&
+                                                     (_isOrganizer || _detail?.IsCheckInAllowed == true)));
+                                            }
+                                            @if (canCheckIn)
+                                            {
+                                                @if (!context.IsCheckedIn)
+                                                {
+                                                    <MudButton Variant="Variant.Text"
+                                                              Color="Color.Success"
+                                                              Size="Size.Small"
+                                                              OnClick="@(() => CheckIn(context.PlayerId))">
+                                                        Check-in
+                                                    </MudButton>
+                                                }
+                                                else if (_tournament.Status == TournamentStatus.Scheduled)
+                                                {
+                                                    <MudButton Variant="Variant.Text"
+                                                              Color="Color.Warning"
+                                                              Size="Size.Small"
+                                                              OnClick="@(() => CheckOut(context.PlayerId))">
+                                                        Check-out
+                                                    </MudButton>
+                                                }
+                                                @if (_tournament.Status == TournamentStatus.Scheduled)
+                                                {
+                                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                                  Color="Color.Error"
+                                                                  Size="Size.Small"
+                                                                  OnClick="@(() => RemovePlayer(context.PlayerId))" />
+                                                }
+                                            }
+                                            @if (_canManage && (_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused) && IsPlayerPlaying(context))
+                                            {
+                                                <MudButton Variant="Variant.Text"
                                                           Color="Color.Error"
                                                           Size="Size.Small"
-                                                          OnClick="@(() => RemovePlayer(context.PlayerId))" />
-                                        }
-                                    }
-                                    @if (_canManage && (_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused) && IsPlayerPlaying(context))
-                                    {
-                                        <MudButton Variant="Variant.Text"
-                                                  Color="Color.Error"
-                                                  Size="Size.Small"
-                                                  OnClick="@(() => EliminatePlayer(context))">
-                                            Eliminar
-                                        </MudButton>
-                                    }
-                                </MudTd>
-                            </RowTemplate>
-                        </MudTable>
+                                                          OnClick="@(() => EliminatePlayer(context))">
+                                                    Eliminar
+                                                </MudButton>
+                                            }
+                                        </MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+                            </div>
+                        }
                     </MudCardContent>
                 </MudCard>
             </MudItem>
@@ -365,14 +457,14 @@
                                 }
                             </CardHeaderActions>
                         </MudCardHeader>
-                        <MudCardContent>
+                        <MudCardContent Style="overflow-x: auto;">
                             @if (_expenses == null || !_expenses.Any())
                             {
                                 <MudText Color="Color.Secondary">Nenhuma despesa registrada</MudText>
                             }
                             else
                             {
-                                <MudTable Items="_expenses" Dense="true" Hover="true">
+                                <MudTable Items="_expenses" Dense="true" Hover="true" Breakpoint="Breakpoint.None">
                                     <HeaderContent>
                                         <MudTh>Descricao</MudTh>
                                         <MudTh>Pago por</MudTh>
@@ -415,7 +507,7 @@
             @if (_canManage && (_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused))
             {
                 <MudItem xs="12">
-                    <MudStack Row="true" Justify="Justify.FlexEnd" Spacing="2">
+                    <div class="d-flex flex-wrap gap-2 justify-end">
                         <MudButton Variant="Variant.Outlined"
                                   Color="Color.Error"
                                   OnClick="CancelTournament">
@@ -427,7 +519,7 @@
                                   Disabled="@(GetPlayersRemaining() > 1)">
                             Finalizar Torneio
                         </MudButton>
-                    </MudStack>
+                    </div>
                 </MudItem>
             }
         </MudGrid>
@@ -480,6 +572,10 @@
     private bool _isReconnecting;
     private bool _isDisconnected;
 
+    // Mobile detection
+    private bool _isSmallScreen;
+    Guid IBrowserViewportObserver.Id { get; } = Guid.NewGuid();
+
     // Handler disposables (prevent memory leak)
     private IDisposable? _timerStateHandler;
     private IDisposable? _timerTickHandler;
@@ -494,6 +590,20 @@
 
         await LoadTournament();
         await SetupSignalR();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await BrowserViewportService.SubscribeAsync(this, fireImmediately: true);
+        }
+    }
+
+    Task IBrowserViewportObserver.NotifyBrowserViewportChangeAsync(BrowserViewportEventArgs browserViewportEventArgs)
+    {
+        _isSmallScreen = browserViewportEventArgs.Breakpoint <= Breakpoint.Sm;
+        return InvokeAsync(StateHasChanged);
     }
 
     private async Task SetupSignalR()
@@ -1139,6 +1249,8 @@
         _prizePoolHandler?.Dispose();
         _eliminatedHandler?.Dispose();
         _levelChangedHandler?.Dispose();
+
+        await BrowserViewportService.UnsubscribeAsync(this);
 
         if (_hubConnection != null)
         {

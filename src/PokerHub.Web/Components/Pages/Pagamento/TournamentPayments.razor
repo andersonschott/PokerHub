@@ -13,23 +13,25 @@
 
 <PageTitle>Pagamentos - PokerHub</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-4 mt-sm-6">
     <MudBreadcrumbs Items="_breadcrumbs" Class="mb-4" />
 
-    <div class="d-flex justify-space-between align-center mb-4">
-        <MudText Typo="Typo.h4">Pagamentos - @(_tournament?.Name ?? "Torneio")</MudText>
+    <div class="d-flex flex-wrap justify-space-between align-center gap-2 mb-4">
+        <MudText Typo="Typo.h5" Class="d-sm-none">Pagamentos</MudText>
+        <MudText Typo="Typo.h4" Class="d-none d-sm-block">Pagamentos - @(_tournament?.Name ?? "Torneio")</MudText>
         @if (_tournament?.Status == TournamentStatus.Finished && (_payments == null || !_payments.Any()))
         {
             <MudButton Variant="Variant.Filled"
                       Color="Color.Primary"
                       StartIcon="@Icons.Material.Filled.Calculate"
                       OnClick="CalculatePayments"
-                      Disabled="_processing">
+                      Disabled="_processing"
+                      Class="flex-grow-1 flex-sm-grow-0">
                 @if (_processing)
                 {
                     <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
                 }
-                Calcular Pagamentos
+                Calcular
             </MudButton>
         }
     </div>
@@ -56,7 +58,7 @@
                     </CardHeaderContent>
                 </MudCardHeader>
                 <MudCardContent>
-                    <MudTable Items="_balances" Dense="true" Hover="true">
+                    <MudTable Items="_balances" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
                         <HeaderContent>
                             <MudTh>Jogador</MudTh>
                             <MudTh Style="text-align: right;">Investimento</MudTh>
@@ -64,10 +66,10 @@
                             <MudTh Style="text-align: right;">Saldo</MudTh>
                         </HeaderContent>
                         <RowTemplate>
-                            <MudTd>@context.PlayerName</MudTd>
-                            <MudTd Style="text-align: right;">R$ @context.TotalInvestment.ToString("N2")</MudTd>
-                            <MudTd Style="text-align: right;">R$ @context.Prize.ToString("N2")</MudTd>
-                            <MudTd Style="text-align: right;">
+                            <MudTd DataLabel="Jogador">@context.PlayerName</MudTd>
+                            <MudTd DataLabel="Investimento" Style="text-align: right;">R$ @context.TotalInvestment.ToString("N2")</MudTd>
+                            <MudTd DataLabel="Premio" Style="text-align: right;">R$ @context.Prize.ToString("N2")</MudTd>
+                            <MudTd DataLabel="Saldo" Style="text-align: right;">
                                 <MudText Color="@(context.Balance > 0 ? Color.Success : (context.Balance < 0 ? Color.Error : Color.Default))">
                                     @(context.Balance > 0 ? "+" : "")R$ @context.Balance.ToString("N2")
                                 </MudText>
@@ -88,7 +90,7 @@
                     </CardHeaderContent>
                 </MudCardHeader>
                 <MudCardContent>
-                    <MudTable Items="_expenseSummary" Dense="true" Hover="true">
+                    <MudTable Items="_expenseSummary" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
                         <HeaderContent>
                             <MudTh>Jogador</MudTh>
                             <MudTh Style="text-align: right;">Pagou</MudTh>
@@ -96,8 +98,8 @@
                             <MudTh Style="text-align: right;">Saldo</MudTh>
                         </HeaderContent>
                         <RowTemplate>
-                            <MudTd>@context.PlayerName</MudTd>
-                            <MudTd Style="text-align: right;">
+                            <MudTd DataLabel="Jogador">@context.PlayerName</MudTd>
+                            <MudTd DataLabel="Pagou" Style="text-align: right;">
                                 @if (context.TotalPaid > 0)
                                 {
                                     <MudText Color="Color.Success">R$ @context.TotalPaid.ToString("N2")</MudText>
@@ -107,7 +109,7 @@
                                     <text>-</text>
                                 }
                             </MudTd>
-                            <MudTd Style="text-align: right;">
+                            <MudTd DataLabel="Deve" Style="text-align: right;">
                                 @if (context.TotalOwed > 0)
                                 {
                                     <MudText Color="Color.Warning">R$ @context.TotalOwed.ToString("N2")</MudText>
@@ -117,7 +119,7 @@
                                     <text>-</text>
                                 }
                             </MudTd>
-                            <MudTd Style="text-align: right;">
+                            <MudTd DataLabel="Saldo" Style="text-align: right;">
                                 <MudText Color="@(context.ExpenseBalance > 0 ? Color.Success : (context.ExpenseBalance < 0 ? Color.Error : Color.Default))">
                                     @(context.ExpenseBalance > 0 ? "+" : "")R$ @context.ExpenseBalance.ToString("N2")
                                 </MudText>
@@ -149,36 +151,34 @@
                     </CardHeaderContent>
                 </MudCardHeader>
                 <MudCardContent>
-                    <MudTable Items="_payments" Dense="true" Hover="true">
+                    <MudTable Items="_payments" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
                         <HeaderContent>
                             <MudTh>De</MudTh>
                             <MudTh>Para</MudTh>
                             <MudTh Style="text-align: right;">Valor</MudTh>
                             <MudTh>PIX</MudTh>
                             <MudTh>Status</MudTh>
-                            <MudTh>Dias</MudTh>
                             @if (_isOrganizer)
                             {
                                 <MudTh>Acoes</MudTh>
                             }
                         </HeaderContent>
                         <RowTemplate>
-                            <MudTd>@context.FromPlayerName</MudTd>
-                            <MudTd>@context.ToPlayerName</MudTd>
-                            <MudTd Style="text-align: right;">R$ @context.Amount.ToString("N2")</MudTd>
-                            <MudTd>
+                            <MudTd DataLabel="De">@context.FromPlayerName</MudTd>
+                            <MudTd DataLabel="Para">@context.ToPlayerName</MudTd>
+                            <MudTd DataLabel="Valor" Style="text-align: right;">
+                                <MudText Style="font-weight: 600;">R$ @context.Amount.ToString("N2")</MudText>
+                            </MudTd>
+                            <MudTd DataLabel="PIX">
                                 @if (!string.IsNullOrEmpty(context.ToPlayerPixKey))
                                 {
                                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                                        <MudTooltip Text="@context.ToPlayerPixKey">
-                                            <MudChip T="string" Size="Size.Small" Color="Color.Info">
-                                                @GetPixTypeText(context.ToPlayerPixKeyType)
-                                            </MudChip>
-                                        </MudTooltip>
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Info" OnClick="@(() => CopyToClipboard(context.ToPlayerPixKey))">
+                                            @GetPixTypeText(context.ToPlayerPixKeyType)
+                                        </MudChip>
                                         <MudIconButton Icon="@Icons.Material.Filled.ContentCopy"
                                                        Size="Size.Small"
                                                        Color="Color.Primary"
-                                                       Title="Copiar chave PIX"
                                                        OnClick="@(() => CopyToClipboard(context.ToPlayerPixKey))" />
                                     </MudStack>
                                 }
@@ -187,40 +187,36 @@
                                     <MudText Typo="Typo.caption" Color="Color.Secondary">Sem PIX</MudText>
                                 }
                             </MudTd>
-                            <MudTd>
-                                <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)">
-                                    @GetStatusText(context.Status)
-                                </MudChip>
-                            </MudTd>
-                            <MudTd>
-                                @if (context.Status == PaymentStatus.Pending)
-                                {
-                                    <MudText Color="@(context.DaysOpen > 7 ? Color.Error : (context.DaysOpen > 3 ? Color.Warning : Color.Default))">
-                                        @context.DaysOpen d
-                                    </MudText>
-                                }
-                                else
-                                {
-                                    <text>-</text>
-                                }
+                            <MudTd DataLabel="Status">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                    <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)">
+                                        @GetStatusText(context.Status)
+                                    </MudChip>
+                                    @if (context.Status == PaymentStatus.Pending && context.DaysOpen > 0)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="@(context.DaysOpen > 7 ? Color.Error : (context.DaysOpen > 3 ? Color.Warning : Color.Secondary))">
+                                            (@context.DaysOpen d)
+                                        </MudText>
+                                    }
+                                </MudStack>
                             </MudTd>
                             @if (_isOrganizer)
                             {
-                                <MudTd>
+                                <MudTd DataLabel="Acoes">
                                     @if (context.Status == PaymentStatus.Pending)
                                     {
                                         <MudButton Size="Size.Small"
-                                                   Variant="Variant.Text"
+                                                   Variant="Variant.Outlined"
                                                    Color="Color.Primary"
                                                    OnClick="@(() => AdminMarkPaid(context.Id))"
                                                    Disabled="_processingPayment == context.Id">
-                                            Marcar Pago
+                                            Pago
                                         </MudButton>
                                     }
                                     else if (context.Status == PaymentStatus.Paid)
                                     {
                                         <MudButton Size="Size.Small"
-                                                   Variant="Variant.Text"
+                                                   Variant="Variant.Outlined"
                                                    Color="Color.Success"
                                                    OnClick="@(() => AdminConfirm(context.Id))"
                                                    Disabled="_processingPayment == context.Id">

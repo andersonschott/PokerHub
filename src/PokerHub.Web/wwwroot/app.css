@@ -58,3 +58,51 @@ h1:focus {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+/* Responsive Utilities */
+
+/* Scroll horizontal para tabelas */
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Ocultar em mobile (< 600px) */
+.hide-mobile {
+    display: initial !important;
+}
+@media (max-width: 599px) {
+    .hide-mobile {
+        display: none !important;
+    }
+}
+
+/* Mostrar apenas em mobile (< 600px) */
+.show-mobile {
+    display: none !important;
+}
+@media (max-width: 599px) {
+    .show-mobile {
+        display: initial !important;
+    }
+}
+
+/* Botoes full width em mobile */
+@media (max-width: 599px) {
+    .btn-mobile-full {
+        width: 100% !important;
+    }
+}
+
+/* Ranking card styles */
+.ranking-gold {
+    border-left: 4px solid #FFD700;
+}
+
+.ranking-silver {
+    border-left: 4px solid #C0C0C0;
+}
+
+.ranking-bronze {
+    border-left: 4px solid #CD7F32;
+}

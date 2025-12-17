@@ -49,7 +49,8 @@ else
             </MudStack>
         </MudStack>
 
-        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-6">
+        <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-3 pa-sm-6"
+                 MinimumTabWidth="80px" Position="Position.Top">
             <MudTabPanel Text="Jogadores" Icon="@Icons.Material.Filled.People">
                 <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
                     <MudText Typo="Typo.h6">Jogadores (@_league.Players.Count)</MudText>
@@ -72,42 +73,70 @@ else
                 }
                 else
                 {
-                    <MudTable Items="_league.Players" Hover="true" Breakpoint="Breakpoint.Sm">
-                        <HeaderContent>
-                            <MudTh>Nome</MudTh>
-                            <MudTh>Apelido</MudTh>
-                            <MudTh>Torneios</MudTh>
-                            <MudTh>Vitorias</MudTh>
-                            <MudTh>Lucro</MudTh>
-                            @if (_isOrganizer)
-                            {
-                                <MudTh>Acoes</MudTh>
-                            }
-                        </HeaderContent>
-                        <RowTemplate>
-                            <MudTd DataLabel="Nome">@context.Name</MudTd>
-                            <MudTd DataLabel="Apelido">@(context.Nickname ?? "-")</MudTd>
-                            <MudTd DataLabel="Torneios">@context.TournamentsPlayed</MudTd>
-                            <MudTd DataLabel="Vitorias">@context.Wins</MudTd>
-                            <MudTd DataLabel="Lucro">
-                                <MudText Color="@(context.TotalProfit >= 0 ? Color.Success : Color.Error)">
-                                    R$ @context.TotalProfit.ToString("N2")
-                                </MudText>
-                            </MudTd>
-                            @if (_isOrganizer)
-                            {
-                                <MudTd DataLabel="Acoes">
-                                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                                                  Size="Size.Small"
-                                                  OnClick="@(() => EditPlayer(context.Id))" />
-                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                                  Size="Size.Small"
-                                                  Color="Color.Error"
-                                                  OnClick="@(() => DeletePlayer(context))" />
-                                </MudTd>
-                            }
-                        </RowTemplate>
-                    </MudTable>
+                    <MudGrid>
+                        @foreach (var player in _league.Players.OrderBy(p => p.Name))
+                        {
+                            <MudItem xs="12" sm="6" md="4">
+                                <MudCard Elevation="2">
+                                    <MudCardHeader>
+                                        <CardHeaderContent>
+                                            <MudText Typo="Typo.h6">@player.Name</MudText>
+                                            @if (!string.IsNullOrEmpty(player.Nickname))
+                                            {
+                                                <MudText Typo="Typo.body2" Color="Color.Secondary">@player.Nickname</MudText>
+                                            }
+                                        </CardHeaderContent>
+                                        <CardHeaderActions>
+                                            @if (player.Wins > 0)
+                                            {
+                                                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Icon="@Icons.Material.Filled.EmojiEvents">
+                                                    @player.Wins
+                                                </MudChip>
+                                            }
+                                        </CardHeaderActions>
+                                    </MudCardHeader>
+                                    <MudCardContent>
+                                        <MudStack Spacing="2">
+                                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                                <MudIcon Icon="@Icons.Material.Filled.Casino" Size="Size.Small" Color="Color.Secondary"/>
+                                                <MudText Typo="Typo.body2">@player.TournamentsPlayed torneios jogados</MudText>
+                                            </MudStack>
+                                            @if (player.TournamentsPlayed > 0)
+                                            {
+                                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                                    <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Small" Color="Color.Secondary"/>
+                                                    <MudText Typo="Typo.body2">ROI: @player.ROI.ToString("N1")% | ITM: @player.ITMRate.ToString("N1")%</MudText>
+                                                </MudStack>
+                                            }
+                                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                                <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Small"
+                                                         Color="@(player.TotalProfit >= 0 ? Color.Success : Color.Error)"/>
+                                                <MudText Typo="Typo.body2" Color="@(player.TotalProfit >= 0 ? Color.Success : Color.Error)" Style="font-weight: 600;">
+                                                    @(player.TotalProfit >= 0 ? "+" : "")R$ @player.TotalProfit.ToString("N2")
+                                                </MudText>
+                                            </MudStack>
+                                        </MudStack>
+                                    </MudCardContent>
+                                    <MudCardActions>
+                                        <MudButton Variant="Variant.Text" Color="Color.Primary"
+                                                   Href="@($"/jogador/{player.Id}/stats")" Size="Size.Small">
+                                            Estatisticas
+                                        </MudButton>
+                                        @if (_isOrganizer)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                          Size="Size.Small"
+                                                          OnClick="@(() => EditPlayer(player.Id))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                          Size="Size.Small"
+                                                          Color="Color.Error"
+                                                          OnClick="@(() => DeletePlayer(player))" />
+                                        }
+                                    </MudCardActions>
+                                </MudCard>
+                            </MudItem>
+                        }
+                    </MudGrid>
                 }
             </MudTabPanel>
 
@@ -209,7 +238,7 @@ else
                 }
                 else
                 {
-                    <MudTable Items="@_league.Players.OrderByDescending(p => p.TotalProfit).ToList()" Hover="true" Dense="true">
+                    <MudTable Items="@_league.Players.OrderByDescending(p => p.TotalProfit).ToList()" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm">
                         <HeaderContent>
                             <MudTh Style="width: 50px;">#</MudTh>
                             <MudTh>Jogador</MudTh>
@@ -225,7 +254,7 @@ else
                             @{
                                 var position = _league.Players.OrderByDescending(p => p.TotalProfit).ToList().IndexOf(context) + 1;
                             }
-                            <MudTd>
+                            <MudTd DataLabel="#">
                                 @if (position == 1)
                                 {
                                     <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Color="Color.Warning" Size="Size.Small"/>
@@ -243,7 +272,7 @@ else
                                     <MudText>@position</MudText>
                                 }
                             </MudTd>
-                            <MudTd>
+                            <MudTd DataLabel="Jogador">
                                 <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                                     <MudAvatar Color="Color.Primary" Size="Size.Small">@context.Name[0]</MudAvatar>
                                     <div>
@@ -255,8 +284,8 @@ else
                                     </div>
                                 </MudStack>
                             </MudTd>
-                            <MudTd Style="text-align: center;">@context.TournamentsPlayed</MudTd>
-                            <MudTd Style="text-align: center;">
+                            <MudTd DataLabel="Torneios" Style="text-align: center;">@context.TournamentsPlayed</MudTd>
+                            <MudTd DataLabel="1o" Style="text-align: center;">
                                 @if (context.Wins > 0)
                                 {
                                     <MudChip T="string" Color="Color.Warning" Size="Size.Small">@context.Wins</MudChip>
@@ -266,7 +295,7 @@ else
                                     <text>-</text>
                                 }
                             </MudTd>
-                            <MudTd Style="text-align: center;">
+                            <MudTd DataLabel="2o" Style="text-align: center;">
                                 @if (context.SecondPlaces > 0)
                                 {
                                     <MudChip T="string" Color="Color.Default" Size="Size.Small">@context.SecondPlaces</MudChip>
@@ -276,7 +305,7 @@ else
                                     <text>-</text>
                                 }
                             </MudTd>
-                            <MudTd Style="text-align: center;">
+                            <MudTd DataLabel="3o" Style="text-align: center;">
                                 @if (context.ThirdPlaces > 0)
                                 {
                                     <MudChip T="string" Color="Color.Tertiary" Size="Size.Small">@context.ThirdPlaces</MudChip>
@@ -286,7 +315,7 @@ else
                                     <text>-</text>
                                 }
                             </MudTd>
-                            <MudTd Style="text-align: right;">
+                            <MudTd DataLabel="ROI" Style="text-align: right;">
                                 @if (context.TournamentsPlayed > 0)
                                 {
                                     <MudText Typo="Typo.body2" Color="@(context.ROI >= 0 ? Color.Success : Color.Error)">
@@ -298,7 +327,7 @@ else
                                     <text>-</text>
                                 }
                             </MudTd>
-                            <MudTd Style="text-align: right;">
+                            <MudTd DataLabel="ITM" Style="text-align: right;">
                                 @if (context.TournamentsPlayed > 0)
                                 {
                                     <MudText Typo="Typo.body2">@context.ITMRate.ToString("N1")%</MudText>
@@ -308,7 +337,7 @@ else
                                     <text>-</text>
                                 }
                             </MudTd>
-                            <MudTd Style="text-align: right;">
+                            <MudTd DataLabel="Lucro/Prejuizo" Style="text-align: right;">
                                 <MudText Typo="Typo.body2" Color="@(context.TotalProfit >= 0 ? Color.Success : Color.Error)" Style="font-weight: bold;">
                                     @(context.TotalProfit >= 0 ? "+" : "")R$ @context.TotalProfit.ToString("N2")
                                 </MudText>

@@ -90,26 +90,22 @@
                 </CardHeaderContent>
             </MudCardHeader>
             <MudCardContent>
-                <MudTable Items="_ranking" Dense="true" Hover="true" Striped="true">
+                <MudTable Items="_ranking" Dense="true" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm">
                     <HeaderContent>
                         <MudTh Style="width: 50px;">#</MudTh>
                         <MudTh>Jogador</MudTh>
-                        <MudTh Style="text-align: center;">Torneios</MudTh>
+                        <MudTh Style="text-align: center;">Torn.</MudTh>
                         <MudTh Style="text-align: center;">1o</MudTh>
-                        <MudTh Style="text-align: center;">2o</MudTh>
-                        <MudTh Style="text-align: center;">3o</MudTh>
                         <MudTh Style="text-align: center;">ROI</MudTh>
-                        <MudTh Style="text-align: center;">ITM</MudTh>
-                        <MudTh Style="text-align: right;">Lucro/Prej.</MudTh>
-                        <MudTh Style="width: 80px;"></MudTh>
+                        <MudTh Style="text-align: right;">Lucro</MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd>
-                            <MudAvatar Size="Size.Small" Color="@GetPositionColor(context.Position)">
+                        <MudTd DataLabel="#">
+                            <MudText Style="font-weight: 600;" Color="@GetPositionColor(context.Position)">
                                 @context.Position
-                            </MudAvatar>
+                            </MudText>
                         </MudTd>
-                        <MudTd>
+                        <MudTd DataLabel="Jogador">
                             <div>
                                 <MudText>@context.PlayerName</MudText>
                                 @if (!string.IsNullOrEmpty(context.Nickname))
@@ -118,8 +114,8 @@
                                 }
                             </div>
                         </MudTd>
-                        <MudTd Style="text-align: center;">@context.TournamentsPlayed</MudTd>
-                        <MudTd Style="text-align: center;">
+                        <MudTd DataLabel="Torneios" Style="text-align: center;">@context.TournamentsPlayed</MudTd>
+                        <MudTd DataLabel="Vitorias" Style="text-align: center;">
                             @if (context.Wins > 0)
                             {
                                 <MudChip T="string" Size="Size.Small" Color="Color.Warning">@context.Wins</MudChip>
@@ -129,43 +125,15 @@
                                 <text>-</text>
                             }
                         </MudTd>
-                        <MudTd Style="text-align: center;">
-                            @if (context.SecondPlaces > 0)
-                            {
-                                <MudChip T="string" Size="Size.Small" Color="Color.Default">@context.SecondPlaces</MudChip>
-                            }
-                            else
-                            {
-                                <text>-</text>
-                            }
-                        </MudTd>
-                        <MudTd Style="text-align: center;">
-                            @if (context.ThirdPlaces > 0)
-                            {
-                                <MudChip T="string" Size="Size.Small" Color="Color.Tertiary">@context.ThirdPlaces</MudChip>
-                            }
-                            else
-                            {
-                                <text>-</text>
-                            }
-                        </MudTd>
-                        <MudTd Style="text-align: center;">
+                        <MudTd DataLabel="ROI" Style="text-align: center;">
                             <MudText Color="@(context.ROI >= 0 ? Color.Success : Color.Error)">
                                 @context.ROI.ToString("N1")%
                             </MudText>
                         </MudTd>
-                        <MudTd Style="text-align: center;">@context.ITMRate.ToString("N1")%</MudTd>
-                        <MudTd Style="text-align: right;">
-                            <MudText Color="@(context.Profit >= 0 ? Color.Success : Color.Error)">
+                        <MudTd DataLabel="Lucro" Style="text-align: right;">
+                            <MudText Color="@(context.Profit >= 0 ? Color.Success : Color.Error)" Style="font-weight: 600;">
                                 @(context.Profit >= 0 ? "+" : "")R$ @context.Profit.ToString("N2")
                             </MudText>
-                        </MudTd>
-                        <MudTd>
-                            <MudButton Variant="Variant.Text"
-                                      Size="Size.Small"
-                                      Href="@($"/jogador/{context.PlayerId}/stats")">
-                                Stats
-                            </MudButton>
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
