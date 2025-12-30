@@ -44,6 +44,12 @@ public record CreateTournamentDto(
 
     string? PrizeStructure,
 
+    PrizeDistributionType PrizeDistributionType,
+
+    bool UsePrizeTable,
+
+    Guid? PrizeTableId,
+
     [Range(0, 50, ErrorMessage = "O nivel maximo para check-in deve ser entre 0 e 50")]
     int? AllowCheckInUntilLevel,
 

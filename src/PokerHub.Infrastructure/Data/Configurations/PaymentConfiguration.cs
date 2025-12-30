@@ -30,9 +30,15 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
             .OnDelete(DeleteBehavior.Restrict);
 
         // Configure ToPlayer relationship - restrict to avoid cascade cycles
+        // ToPlayerId is nullable for jackpot payments where there's no specific recipient
         builder.HasOne(p => p.ToPlayer)
             .WithMany(pl => pl.PaymentsReceived)
             .HasForeignKey(p => p.ToPlayerId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Description field for special payments (e.g., "Caixinha")
+        builder.Property(p => p.Description)
+            .HasMaxLength(200);
     }
 }

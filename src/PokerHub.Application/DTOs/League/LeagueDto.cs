@@ -10,6 +10,8 @@ public record LeagueDto(
     bool BlockCheckInWithDebt,
     int PlayerCount,
     int TournamentCount,
+    decimal JackpotPercentage,
+    decimal AccumulatedPrizePool,
     DateTime CreatedAt,
     bool IsActive
 );

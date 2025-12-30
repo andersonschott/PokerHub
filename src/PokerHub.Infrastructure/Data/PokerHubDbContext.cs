@@ -18,6 +18,11 @@ public class PokerHubDbContext : IdentityDbContext<User>
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<TournamentExpense> TournamentExpenses => Set<TournamentExpense>();
     public DbSet<TournamentExpenseShare> TournamentExpenseShares => Set<TournamentExpenseShare>();
+    public DbSet<Season> Seasons => Set<Season>();
+    public DbSet<JackpotContribution> JackpotContributions => Set<JackpotContribution>();
+    public DbSet<JackpotUsage> JackpotUsages => Set<JackpotUsage>();
+    public DbSet<LeaguePrizeTable> LeaguePrizeTables => Set<LeaguePrizeTable>();
+    public DbSet<LeaguePrizeTableEntry> LeaguePrizeTableEntries => Set<LeaguePrizeTableEntry>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

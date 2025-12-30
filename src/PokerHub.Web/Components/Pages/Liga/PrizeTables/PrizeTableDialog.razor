@@ -1,0 +1,242 @@
+@inject IPrizeTableService PrizeTableService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_isEdit ? "Editar" : "Nova") Tabela de Premiacao</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudNumericField @bind-Value="_model.PrizePoolTotal"
+                            Label="Prize Pool Total (R$)"
+                            Variant="Variant.Outlined"
+                            Min="0.01m"
+                            Format="N2"
+                            Required="true"
+                            Immediate="true" />
+
+            <MudDivider />
+
+            <MudText Typo="Typo.subtitle2">Distribuicao de Premios</MudText>
+
+            <MudSimpleTable Dense="true" Hover="true" Style="max-height: 300px; overflow-y: auto;">
+                <thead>
+                    <tr>
+                        <th style="width: 70px;">Pos.</th>
+                        <th>Premio (R$)</th>
+                        <th style="width: 50px;"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < _model.Entries.Count; i++)
+                    {
+                        var index = i;
+                        <tr>
+                            <td>@(_model.Entries[index].Position)o</td>
+                            <td>
+                                <MudNumericField @bind-Value="_model.Entries[index].PrizeAmount"
+                                                Variant="Variant.Outlined"
+                                                Margin="Margin.Dense"
+                                                Min="0"
+                                                Format="N2"
+                                                HideSpinButtons="true"
+                                                Immediate="true" />
+                            </td>
+                            <td>
+                                @if (_model.Entries.Count > 1)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                  Size="Size.Small"
+                                                  Color="Color.Error"
+                                                  OnClick="@(() => RemoveEntry(index))" />
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+
+            <MudButton Variant="Variant.Text"
+                      Color="Color.Primary"
+                      StartIcon="@Icons.Material.Filled.Add"
+                      OnClick="AddEntry"
+                      Size="Size.Small">
+                Adicionar Posicao
+            </MudButton>
+
+            <MudDivider />
+
+            <MudNumericField @bind-Value="_model.JackpotAmount"
+                            Label="Caixinha (R$)"
+                            Variant="Variant.Outlined"
+                            Min="0"
+                            Format="N2"
+                            HelperText="Valor reservado para pote acumulado"
+                            Immediate="true" />
+
+            @if (_validationError != null)
+            {
+                <MudAlert Severity="Severity.Error" Dense="true">@_validationError</MudAlert>
+            }
+
+            <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Total: @GetTotal().ToString("C")
+                </MudText>
+                @if (Math.Abs(GetTotal() - _model.PrizePoolTotal) > 0.01m)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Warning">
+                        Diferenca: @((_model.PrizePoolTotal - GetTotal()).ToString("C"))
+                    </MudText>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success">OK</MudChip>
+                }
+            </MudStack>
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Cancelar</MudButton>
+        <MudButton OnClick="Submit"
+                   Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   Disabled="_saving">
+            @if (_saving)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            @(_isEdit ? "Salvar" : "Criar")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public Guid LeagueId { get; set; }
+    [Parameter] public LeaguePrizeTableDto? ExistingTable { get; set; }
+
+    private PrizeTableModel _model = new();
+    private bool _isEdit;
+    private bool _saving;
+    private string? _validationError;
+
+    protected override void OnInitialized()
+    {
+        _isEdit = ExistingTable != null;
+
+        if (ExistingTable != null)
+        {
+            _model.PrizePoolTotal = ExistingTable.PrizePoolTotal;
+            _model.JackpotAmount = ExistingTable.JackpotAmount;
+            _model.Entries = ExistingTable.Entries
+                .Select(e => new PrizeEntryModel { Position = e.Position, PrizeAmount = e.PrizeAmount })
+                .ToList();
+        }
+        else
+        {
+            // Initialize with 3 default positions
+            _model.Entries = new List<PrizeEntryModel>
+            {
+                new() { Position = 1, PrizeAmount = 0 },
+                new() { Position = 2, PrizeAmount = 0 },
+                new() { Position = 3, PrizeAmount = 0 }
+            };
+        }
+    }
+
+    private void AddEntry()
+    {
+        var nextPosition = _model.Entries.Count + 1;
+        _model.Entries.Add(new PrizeEntryModel { Position = nextPosition, PrizeAmount = 0 });
+    }
+
+    private void RemoveEntry(int index)
+    {
+        _model.Entries.RemoveAt(index);
+        for (var i = 0; i < _model.Entries.Count; i++)
+        {
+            _model.Entries[i].Position = i + 1;
+        }
+    }
+
+    private decimal GetTotal()
+    {
+        return _model.Entries.Sum(e => e.PrizeAmount) + _model.JackpotAmount;
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Submit()
+    {
+        _validationError = null;
+
+        if (_model.PrizePoolTotal <= 0)
+        {
+            _validationError = "O prize pool deve ser maior que zero.";
+            return;
+        }
+
+        if (!_model.Entries.Any(e => e.PrizeAmount > 0))
+        {
+            _validationError = "Defina pelo menos um premio com valor maior que zero.";
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var entries = _model.Entries
+                .Where(e => e.PrizeAmount > 0)
+                .Select(e => new CreatePrizeTableEntryDto(e.Position, e.PrizeAmount))
+                .ToList();
+
+            if (_isEdit && ExistingTable != null)
+            {
+                var updateDto = new UpdatePrizeTableDto(
+                    "", // Name will be auto-generated by backend
+                    _model.PrizePoolTotal,
+                    _model.JackpotAmount,
+                    entries);
+
+                await PrizeTableService.UpdatePrizeTableAsync(ExistingTable.Id, updateDto);
+                Snackbar.Add("Tabela atualizada com sucesso!", Severity.Success);
+            }
+            else
+            {
+                var createDto = new CreatePrizeTableDto(
+                    "", // Name will be auto-generated by backend
+                    _model.PrizePoolTotal,
+                    _model.JackpotAmount,
+                    entries);
+
+                await PrizeTableService.CreatePrizeTableAsync(LeagueId, createDto);
+                Snackbar.Add("Tabela criada com sucesso!", Severity.Success);
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (Exception ex)
+        {
+            _validationError = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private class PrizeTableModel
+    {
+        public decimal PrizePoolTotal { get; set; }
+        public decimal JackpotAmount { get; set; }
+        public List<PrizeEntryModel> Entries { get; set; } = new();
+    }
+
+    private class PrizeEntryModel
+    {
+        public int Position { get; set; }
+        public decimal PrizeAmount { get; set; }
+    }
+}

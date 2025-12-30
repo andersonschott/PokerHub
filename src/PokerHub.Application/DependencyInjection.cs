@@ -14,6 +14,9 @@ public static class DependencyInjection
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IRankingService, RankingService>();
         services.AddScoped<ITournamentExpenseService, TournamentExpenseService>();
+        services.AddScoped<ISeasonService, SeasonService>();
+        services.AddScoped<IJackpotService, JackpotService>();
+        services.AddScoped<IPrizeTableService, PrizeTableService>();
 
         return services;
     }

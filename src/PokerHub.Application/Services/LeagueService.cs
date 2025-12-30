@@ -32,6 +32,8 @@ public class LeagueService : ILeagueService
                 l.BlockCheckInWithDebt,
                 l.Players.Count(p => p.IsActive),
                 l.Tournaments.Count,
+                l.JackpotPercentage,
+                l.AccumulatedPrizePool,
                 l.CreatedAt,
                 l.IsActive
             ))
@@ -53,6 +55,8 @@ public class LeagueService : ILeagueService
                 l.BlockCheckInWithDebt,
                 l.Players.Count(p => p.IsActive),
                 l.Tournaments.Count,
+                l.JackpotPercentage,
+                l.AccumulatedPrizePool,
                 l.CreatedAt,
                 l.IsActive
             ))
@@ -131,6 +135,8 @@ public class LeagueService : ILeagueService
                 l.BlockCheckInWithDebt,
                 l.Players.Count(p => p.IsActive),
                 l.Tournaments.Count,
+                l.JackpotPercentage,
+                l.AccumulatedPrizePool,
                 l.CreatedAt,
                 l.IsActive
             ))
@@ -168,6 +174,8 @@ public class LeagueService : ILeagueService
             league.BlockCheckInWithDebt,
             0,
             0,
+            league.JackpotPercentage,
+            league.AccumulatedPrizePool,
             league.CreatedAt,
             league.IsActive
         );
@@ -184,6 +192,7 @@ public class LeagueService : ILeagueService
         league.Name = dto.Name;
         league.Description = dto.Description;
         league.BlockCheckInWithDebt = dto.BlockCheckInWithDebt;
+        league.JackpotPercentage = dto.JackpotPercentage;
 
         await _context.SaveChangesAsync();
 
@@ -200,6 +209,8 @@ public class LeagueService : ILeagueService
             league.BlockCheckInWithDebt,
             playerCount,
             tournamentCount,
+            league.JackpotPercentage,
+            league.AccumulatedPrizePool,
             league.CreatedAt,
             league.IsActive
         );
@@ -256,6 +267,8 @@ public class LeagueService : ILeagueService
                 l.BlockCheckInWithDebt,
                 l.Players.Count(p => p.IsActive),
                 l.Tournaments.Count,
+                l.JackpotPercentage,
+                l.AccumulatedPrizePool,
                 l.CreatedAt,
                 l.IsActive
             ))

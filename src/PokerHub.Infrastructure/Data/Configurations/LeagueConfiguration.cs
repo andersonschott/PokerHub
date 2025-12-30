@@ -34,6 +34,14 @@ public class LeagueConfiguration : IEntityTypeConfiguration<League>
             .IsRequired()
             .HasDefaultValue(true);
 
+        builder.Property(l => l.JackpotPercentage)
+            .HasPrecision(5, 2)
+            .HasDefaultValue(0);
+
+        builder.Property(l => l.AccumulatedPrizePool)
+            .HasPrecision(18, 2)
+            .HasDefaultValue(0);
+
         builder.HasMany(l => l.Players)
             .WithOne(p => p.League)
             .HasForeignKey(p => p.LeagueId)

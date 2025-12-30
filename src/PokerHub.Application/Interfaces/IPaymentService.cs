@@ -31,6 +31,11 @@ public interface IPaymentService
     Task<IReadOnlyList<PlayerBalanceDto>> GetTournamentPlayerBalancesAsync(Guid tournamentId);
 
     /// <summary>
+    /// Get jackpot contribution amount for a tournament.
+    /// </summary>
+    Task<decimal> GetJackpotContributionAsync(Guid tournamentId);
+
+    /// <summary>
     /// Admin (league organizer) marks payment as paid.
     /// </summary>
     Task<bool> AdminMarkAsPaidAsync(Guid paymentId, string organizerUserId);

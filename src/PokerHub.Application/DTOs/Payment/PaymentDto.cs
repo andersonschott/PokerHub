@@ -8,8 +8,8 @@ public record PaymentDto(
     string TournamentName,
     Guid FromPlayerId,
     string FromPlayerName,
-    Guid ToPlayerId,
-    string ToPlayerName,
+    Guid? ToPlayerId,
+    string ToPlayerName, // Can be "Caixinha" for jackpot payments
     string? ToPlayerPixKey,
     PixKeyType? ToPlayerPixKeyType,
     decimal Amount,
@@ -17,5 +17,7 @@ public record PaymentDto(
     DateTime CreatedAt,
     DateTime? PaidAt,
     DateTime? ConfirmedAt,
-    int DaysOpen
+    int DaysOpen,
+    string? Description = null,
+    bool IsJackpotContribution = false
 );

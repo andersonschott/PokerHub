@@ -25,8 +25,19 @@ public class Tournament
     public decimal? AddonValue { get; set; }
     public int? AddonStack { get; set; }
 
-    // Prize structure (JSON array of percentages, e.g., "50,30,20")
+    // Prize structure (comma-separated values, e.g., "50,30,20")
+    // Interpreted as percentages or fixed values based on PrizeDistributionType
     public string? PrizeStructure { get; set; }
+
+    // How to interpret PrizeStructure values
+    public PrizeDistributionType PrizeDistributionType { get; set; } = PrizeDistributionType.Percentage;
+
+    // Whether to use a prize table when the prize pool matches (overrides PrizeStructure)
+    public bool UsePrizeTable { get; set; }
+
+    // Reference to a specific pre-defined prize table (optional)
+    public Guid? PrizeTableId { get; set; }
+    public LeaguePrizeTable? PrizeTable { get; set; }
 
     // Invite code for self-registration
     public string InviteCode { get; set; } = GenerateInviteCode();

@@ -173,8 +173,24 @@
             <RowTemplate>
                 <MudTd>@context.TournamentName</MudTd>
                 <MudTd>@context.FromPlayerName</MudTd>
-                <MudTd>@context.ToPlayerName</MudTd>
-                <MudTd Style="text-align: right;">R$ @context.Amount.ToString("N2")</MudTd>
+                <MudTd>
+                    @if (context.IsJackpotContribution)
+                    {
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                            <MudIcon Icon="@Icons.Material.Filled.Savings" Color="Color.Warning" Size="Size.Small" />
+                            <MudText Color="Color.Warning" Style="font-weight: 600;">@context.ToPlayerName</MudText>
+                        </MudStack>
+                    }
+                    else
+                    {
+                        @context.ToPlayerName
+                    }
+                </MudTd>
+                <MudTd Style="text-align: right;">
+                    <MudText Style="font-weight: 600;" Color="@(context.IsJackpotContribution ? Color.Warning : Color.Default)">
+                        R$ @context.Amount.ToString("N0")
+                    </MudText>
+                </MudTd>
                 <MudTd>
                     <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)">
                         @GetStatusText(context.Status)

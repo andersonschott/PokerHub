@@ -10,10 +10,12 @@ namespace PokerHub.Application.Services;
 public class TournamentService : ITournamentService
 {
     private readonly PokerHubDbContext _context;
+    private readonly IJackpotService _jackpotService;
 
-    public TournamentService(PokerHubDbContext context)
+    public TournamentService(PokerHubDbContext context, IJackpotService jackpotService)
     {
         _context = context;
+        _jackpotService = jackpotService;
     }
 
     public async Task<IReadOnlyList<TournamentDto>> GetTournamentsByLeagueAsync(Guid leagueId)
@@ -151,6 +153,9 @@ public class TournamentService : ITournamentService
             AddonValue = dto.AddonValue,
             AddonStack = dto.AddonStack,
             PrizeStructure = dto.PrizeStructure,
+            PrizeDistributionType = dto.PrizeDistributionType,
+            UsePrizeTable = dto.UsePrizeTable,
+            PrizeTableId = dto.PrizeTableId,
             AllowCheckInUntilLevel = dto.AllowCheckInUntilLevel,
             Status = TournamentStatus.Scheduled,
             CurrentLevel = 1,
@@ -204,6 +209,9 @@ public class TournamentService : ITournamentService
         tournament.AddonValue = dto.AddonValue;
         tournament.AddonStack = dto.AddonStack;
         tournament.PrizeStructure = dto.PrizeStructure;
+        tournament.PrizeDistributionType = dto.PrizeDistributionType;
+        tournament.UsePrizeTable = dto.UsePrizeTable;
+        tournament.PrizeTableId = dto.PrizeTableId;
         tournament.AllowCheckInUntilLevel = dto.AllowCheckInUntilLevel;
 
         // Remove existing blind levels directly from database
@@ -291,26 +299,94 @@ public class TournamentService : ITournamentService
     {
         var tournament = await _context.Tournaments
             .Include(t => t.Players)
+            .Include(t => t.League)
+            .Include(t => t.PrizeTable)
+                .ThenInclude(pt => pt!.Entries)
             .FirstOrDefaultAsync(t => t.Id == tournamentId);
 
         if (tournament == null ||
             (tournament.Status != TournamentStatus.InProgress && tournament.Status != TournamentStatus.Paused))
             return false;
 
-        // Parse prize structure
-        var prizePercentages = ParsePrizeStructure(tournament.PrizeStructure);
         var prizePool = CalculatePrizePool(tournament);
+        decimal jackpotContribution = 0;
+        bool usedPrizeTable = false;
 
-        // Update positions and prizes
-        foreach (var (playerId, position) in positions)
+        // Try to use prize table if enabled
+        if (tournament.UsePrizeTable)
         {
-            var tp = tournament.Players.FirstOrDefault(p => p.PlayerId == playerId);
-            if (tp != null)
+            LeaguePrizeTable? prizeTable = null;
+
+            // First, try to use the specific prize table if set
+            if (tournament.PrizeTableId.HasValue && tournament.PrizeTable != null)
             {
-                tp.Position = position;
-                if (position <= prizePercentages.Count)
+                prizeTable = tournament.PrizeTable;
+            }
+            else
+            {
+                // Try to find a matching prize table by prize pool total
+                prizeTable = await _context.LeaguePrizeTables
+                    .Include(pt => pt.Entries)
+                    .FirstOrDefaultAsync(pt => pt.LeagueId == tournament.LeagueId &&
+                                               pt.PrizePoolTotal == prizePool);
+            }
+
+            if (prizeTable != null)
+            {
+                // Use fixed values from prize table
+                var prizeEntries = prizeTable.Entries.ToDictionary(e => e.Position, e => e.PrizeAmount);
+                jackpotContribution = prizeTable.JackpotAmount;
+                usedPrizeTable = true;
+
+                foreach (var (playerId, position) in positions)
                 {
-                    tp.Prize = prizePool * prizePercentages[position - 1] / 100;
+                    var tp = tournament.Players.FirstOrDefault(p => p.PlayerId == playerId);
+                    if (tp != null)
+                    {
+                        tp.Position = position;
+                        if (prizeEntries.TryGetValue(position, out var prizeAmount))
+                        {
+                            tp.Prize = prizeAmount;
+                        }
+                    }
+                }
+            }
+        }
+
+        // If not using prize table or no matching table found, use tournament's prize structure
+        if (!usedPrizeTable)
+        {
+            var prizeValues = ParsePrizeStructure(tournament.PrizeStructure);
+
+            // Calculate jackpot from league percentage if configured
+            if (tournament.League.JackpotPercentage > 0)
+            {
+                jackpotContribution = prizePool * tournament.League.JackpotPercentage / 100;
+                if (tournament.PrizeDistributionType == PrizeDistributionType.Percentage)
+                {
+                    prizePool -= jackpotContribution; // Only reduce prize pool for percentage-based
+                }
+            }
+
+            foreach (var (playerId, position) in positions)
+            {
+                var tp = tournament.Players.FirstOrDefault(p => p.PlayerId == playerId);
+                if (tp != null)
+                {
+                    tp.Position = position;
+                    if (position <= prizeValues.Count)
+                    {
+                        if (tournament.PrizeDistributionType == PrizeDistributionType.Percentage)
+                        {
+                            // Calculate prize as percentage of prize pool
+                            tp.Prize = prizePool * prizeValues[position - 1] / 100;
+                        }
+                        else
+                        {
+                            // Use fixed value directly
+                            tp.Prize = prizeValues[position - 1];
+                        }
+                    }
                 }
             }
         }
@@ -319,6 +395,13 @@ public class TournamentService : ITournamentService
         tournament.FinishedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
+
+        // Record jackpot contribution if any
+        if (jackpotContribution > 0)
+        {
+            await _jackpotService.RecordContributionAsync(tournamentId, jackpotContribution);
+        }
+
         return true;
     }
 
@@ -673,6 +756,9 @@ public class TournamentService : ITournamentService
             AddonValue = source.AddonValue,
             AddonStack = source.AddonStack,
             PrizeStructure = source.PrizeStructure,
+            PrizeDistributionType = source.PrizeDistributionType,
+            UsePrizeTable = source.UsePrizeTable,
+            PrizeTableId = source.PrizeTableId,
             AllowCheckInUntilLevel = source.AllowCheckInUntilLevel,
             Status = TournamentStatus.Scheduled,
             CurrentLevel = 1,

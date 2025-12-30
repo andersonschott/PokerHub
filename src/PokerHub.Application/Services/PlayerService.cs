@@ -172,8 +172,9 @@ public class PlayerService : IPlayerService
 
     public async Task<IReadOnlyList<PendingDebtDto>> GetPendingDebtsAsync(Guid playerId)
     {
+        // Filter out jackpot payments (ToPlayerId == null) - those are not player-to-player debts
         var debts = await _context.Payments
-            .Where(p => p.FromPlayerId == playerId && p.Status == PaymentStatus.Pending)
+            .Where(p => p.FromPlayerId == playerId && p.Status == PaymentStatus.Pending && p.ToPlayerId != null)
             .Include(p => p.Tournament)
             .Include(p => p.ToPlayer)
             .OrderBy(p => p.CreatedAt)
@@ -182,9 +183,9 @@ public class PlayerService : IPlayerService
                 p.TournamentId,
                 p.Tournament.Name,
                 p.Tournament.ScheduledDateTime,
-                p.ToPlayerId,
-                p.ToPlayer.Name,
-                p.ToPlayer.PixKey,
+                p.ToPlayerId!.Value,
+                p.ToPlayer!.Name,
+                p.ToPlayer!.PixKey,
                 p.Amount,
                 (DateTime.UtcNow - p.CreatedAt).Days
             ))

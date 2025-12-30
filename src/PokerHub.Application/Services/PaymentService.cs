@@ -41,8 +41,9 @@ public class PaymentService : IPaymentService
 
     public async Task<IReadOnlyList<PendingDebtDto>> GetPendingDebtsByPlayerAsync(Guid playerId)
     {
+        // Filter out jackpot payments (ToPlayerId == null) - those are not player-to-player debts
         return await _context.Payments
-            .Where(p => p.FromPlayerId == playerId && p.Status == PaymentStatus.Pending)
+            .Where(p => p.FromPlayerId == playerId && p.Status == PaymentStatus.Pending && p.ToPlayerId != null)
             .Include(p => p.Tournament)
             .Include(p => p.ToPlayer)
             .OrderBy(p => p.CreatedAt)
@@ -51,9 +52,9 @@ public class PaymentService : IPaymentService
                 p.TournamentId,
                 p.Tournament.Name,
                 p.Tournament.ScheduledDateTime,
-                p.ToPlayerId,
-                p.ToPlayer.Name,
-                p.ToPlayer.PixKey,
+                p.ToPlayerId!.Value,
+                p.ToPlayer!.Name,
+                p.ToPlayer!.PixKey,
                 p.Amount,
                 (DateTime.UtcNow - p.CreatedAt).Days
             ))
@@ -75,18 +76,22 @@ public class PaymentService : IPaymentService
     /// <summary>
     /// Calculates and creates optimized payment records for a finished tournament.
     ///
-    /// Algorithm:
+    /// Optimized Algorithm:
     /// 1. Calculate balance for each player: Prize - TotalInvestment
-    /// 2. Separate into debtors (balance < 0) and creditors (balance > 0)
-    /// 3. Sort both by absolute value (largest first)
-    /// 4. Match debtors to creditors to minimize number of transactions
-    /// 5. Create payment records
+    /// 2. Round to integers (no cents)
+    /// 3. Separate into debtors (balance &lt; 0) and creditors (balance &gt; 0)
+    /// 4. Add jackpot as a "virtual creditor" (Caixinha)
+    /// 5. Prioritize single-transaction payments:
+    ///    a. Find perfect matches (debt == credit)
+    ///    b. Find creditor that can absorb entire debt
+    ///    c. Traditional matching for remainders
     /// </summary>
     public async Task<IReadOnlyList<PaymentDto>> CalculateAndCreatePaymentsAsync(Guid tournamentId)
     {
         var tournament = await _context.Tournaments
             .Include(t => t.Players)
                 .ThenInclude(tp => tp.Player)
+            .Include(t => t.League)
             .FirstOrDefaultAsync(t => t.Id == tournamentId);
 
         if (tournament == null || tournament.Status != TournamentStatus.Finished)
@@ -98,7 +103,12 @@ public class PaymentService : IPaymentService
             .ToListAsync();
         _context.Payments.RemoveRange(existingPayments);
 
-        // Calculate balances
+        // Get jackpot contribution for this tournament
+        var jackpotContribution = await _context.JackpotContributions
+            .FirstOrDefaultAsync(j => j.TournamentId == tournamentId);
+        var jackpotAmount = (int)Math.Round(jackpotContribution?.Amount ?? 0, MidpointRounding.AwayFromZero);
+
+        // Calculate balances and round to integers
         var balances = tournament.Players
             .Where(tp => tp.IsCheckedIn)
             .Select(tp => new
@@ -106,55 +116,118 @@ public class PaymentService : IPaymentService
                 tp.PlayerId,
                 tp.Player.Name,
                 tp.Player.PixKey,
-                Balance = tp.Prize - tp.TotalInvestment(tournament)
+                Balance = (int)Math.Round(tp.Prize - tp.TotalInvestment(tournament), MidpointRounding.AwayFromZero)
             })
             .ToList();
 
         // Separate into debtors (negative balance) and creditors (positive balance)
-        var debtors = balances
+        var debtorList = balances
             .Where(b => b.Balance < 0)
-            .OrderByDescending(b => Math.Abs(b.Balance))
-            .Select(b => new { b.PlayerId, b.Name, Amount = Math.Abs(b.Balance) })
+            .Select(b => new Debtor(b.PlayerId, b.Name, Math.Abs(b.Balance)))
             .ToList();
 
-        var creditors = balances
+        var creditorList = balances
             .Where(b => b.Balance > 0)
-            .OrderByDescending(b => b.Balance)
-            .Select(b => new { b.PlayerId, b.Name, b.PixKey, Amount = b.Balance })
+            .Select(b => new Creditor(b.PlayerId, b.Name, b.Balance, false))
             .ToList();
 
-        // Create optimized payment records
-        var payments = new List<Payment>();
-        var debtorAmounts = debtors.ToDictionary(d => d.PlayerId, d => d.Amount);
-        var creditorAmounts = creditors.ToDictionary(c => c.PlayerId, c => c.Amount);
-
-        foreach (var debtor in debtors)
+        // Add jackpot as a "virtual creditor" (Caixinha)
+        if (jackpotAmount > 0)
         {
-            var remainingDebt = debtorAmounts[debtor.PlayerId];
+            creditorList.Add(new Creditor(null, "Caixinha", jackpotAmount, true));
+        }
 
-            foreach (var creditor in creditors)
+        // Working dictionaries for amounts (use index for creditors since PlayerId can be null)
+        var debtorAmounts = debtorList.ToDictionary(d => d.PlayerId, d => d.Amount);
+        var creditorAmounts = creditorList.Select((c, i) => new { Index = i, c.Amount }).ToDictionary(x => x.Index, x => x.Amount);
+
+        // Adjust for rounding differences
+        var totalDebt = debtorAmounts.Values.Sum();
+        var totalCredit = creditorAmounts.Values.Sum();
+        var roundingDiff = totalCredit - totalDebt;
+
+        if (roundingDiff > 0 && debtorList.Any())
+        {
+            // Credit is larger - add difference to largest debtor
+            var largestDebtor = debtorList.OrderByDescending(d => d.Amount).First();
+            debtorAmounts[largestDebtor.PlayerId] += roundingDiff;
+        }
+        else if (roundingDiff < 0 && creditorList.Any())
+        {
+            // Debt is larger - add difference to largest creditor (prefer non-jackpot)
+            var largestCreditorIdx = creditorList
+                .Select((c, i) => new { Creditor = c, Index = i })
+                .Where(x => !x.Creditor.IsJackpot)
+                .OrderByDescending(x => x.Creditor.Amount)
+                .FirstOrDefault()?.Index ?? 0;
+            creditorAmounts[largestCreditorIdx] += Math.Abs(roundingDiff);
+        }
+
+        var payments = new List<Payment>();
+
+        // Phase 1: Find perfect matches (debt == credit)
+        foreach (var debtor in debtorList.OrderBy(d => d.Amount))
+        {
+            if (debtorAmounts[debtor.PlayerId] <= 0) continue;
+
+            var perfectMatchIdx = creditorList
+                .Select((c, i) => new { Creditor = c, Index = i })
+                .FirstOrDefault(x => creditorAmounts[x.Index] == debtorAmounts[debtor.PlayerId] && creditorAmounts[x.Index] > 0);
+
+            if (perfectMatchIdx != null)
             {
-                if (remainingDebt <= 0) break;
+                var amount = debtorAmounts[debtor.PlayerId];
+                var creditor = perfectMatchIdx.Creditor;
+                payments.Add(CreatePayment(tournamentId, debtor.PlayerId, creditor.PlayerId, amount, creditor.IsJackpot ? "Caixinha" : null));
+                debtorAmounts[debtor.PlayerId] = 0;
+                creditorAmounts[perfectMatchIdx.Index] = 0;
+            }
+        }
 
-                var remainingCredit = creditorAmounts[creditor.PlayerId];
-                if (remainingCredit <= 0) continue;
+        // Phase 2: For remaining debtors, find a single creditor that can absorb the entire debt
+        foreach (var debtor in debtorList.OrderByDescending(d => debtorAmounts[d.PlayerId]))
+        {
+            var debt = debtorAmounts[debtor.PlayerId];
+            if (debt <= 0) continue;
 
-                var paymentAmount = Math.Min(remainingDebt, remainingCredit);
+            // Find smallest creditor that can absorb the entire debt
+            var bestCreditorMatch = creditorList
+                .Select((c, i) => new { Creditor = c, Index = i })
+                .Where(x => creditorAmounts[x.Index] >= debt)
+                .OrderBy(x => creditorAmounts[x.Index])
+                .FirstOrDefault();
 
-                payments.Add(new Payment
+            if (bestCreditorMatch != null)
+            {
+                var creditor = bestCreditorMatch.Creditor;
+                payments.Add(CreatePayment(tournamentId, debtor.PlayerId, creditor.PlayerId, debt, creditor.IsJackpot ? "Caixinha" : null));
+                debtorAmounts[debtor.PlayerId] = 0;
+                creditorAmounts[bestCreditorMatch.Index] -= debt;
+            }
+        }
+
+        // Phase 3: Traditional matching for remaining debts (greedy)
+        foreach (var debtor in debtorList.OrderByDescending(d => debtorAmounts[d.PlayerId]))
+        {
+            var remaining = debtorAmounts[debtor.PlayerId];
+            if (remaining <= 0) continue;
+
+            foreach (var creditorMatch in creditorList.Select((c, i) => new { Creditor = c, Index = i }).OrderByDescending(x => creditorAmounts[x.Index]))
+            {
+                if (remaining <= 0) break;
+
+                var credit = creditorAmounts[creditorMatch.Index];
+                if (credit <= 0) continue;
+
+                var paymentAmount = Math.Min(remaining, credit);
+                if (paymentAmount > 0)
                 {
-                    Id = Guid.NewGuid(),
-                    TournamentId = tournamentId,
-                    FromPlayerId = debtor.PlayerId,
-                    ToPlayerId = creditor.PlayerId,
-                    Amount = paymentAmount,
-                    Status = PaymentStatus.Pending,
-                    CreatedAt = DateTime.UtcNow
-                });
-
-                remainingDebt -= paymentAmount;
-                debtorAmounts[debtor.PlayerId] = remainingDebt;
-                creditorAmounts[creditor.PlayerId] = remainingCredit - paymentAmount;
+                    var creditor = creditorMatch.Creditor;
+                    payments.Add(CreatePayment(tournamentId, debtor.PlayerId, creditor.PlayerId, paymentAmount, creditor.IsJackpot ? "Caixinha" : null));
+                    remaining -= paymentAmount;
+                    debtorAmounts[debtor.PlayerId] = remaining;
+                    creditorAmounts[creditorMatch.Index] = credit - paymentAmount;
+                }
             }
         }
 
@@ -171,6 +244,24 @@ public class PaymentService : IPaymentService
 
         return createdPayments.Select(p => MapToDto(p)).ToList();
     }
+
+    private static Payment CreatePayment(Guid tournamentId, Guid fromPlayerId, Guid? toPlayerId, int amount, string? description)
+    {
+        return new Payment
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournamentId,
+            FromPlayerId = fromPlayerId,
+            ToPlayerId = toPlayerId,
+            Amount = amount,
+            Status = PaymentStatus.Pending,
+            Description = description,
+            CreatedAt = DateTime.UtcNow
+        };
+    }
+
+    private record Debtor(Guid PlayerId, string Name, int Amount);
+    private record Creditor(Guid? PlayerId, string Name, int Amount, bool IsJackpot);
 
     public async Task<bool> MarkAsPaidAsync(Guid paymentId, Guid fromPlayerId)
     {
@@ -254,7 +345,7 @@ public class PaymentService : IPaymentService
         if (tournament == null)
             return new List<PlayerBalanceDto>();
 
-        return tournament.Players
+        var balances = tournament.Players
             .Where(tp => tp.IsCheckedIn)
             .Select(tp => new PlayerBalanceDto(
                 tp.PlayerId,
@@ -265,6 +356,15 @@ public class PaymentService : IPaymentService
             ))
             .OrderByDescending(b => b.Balance)
             .ToList();
+
+        return balances;
+    }
+
+    public async Task<decimal> GetJackpotContributionAsync(Guid tournamentId)
+    {
+        var jackpot = await _context.JackpotContributions
+            .FirstOrDefaultAsync(j => j.TournamentId == tournamentId);
+        return jackpot?.Amount ?? 0;
     }
 
     public async Task<IReadOnlyList<PaymentDto>> GetPaymentsForOrganizerAsync(string organizerUserId)
@@ -282,6 +382,7 @@ public class PaymentService : IPaymentService
 
     private static PaymentDto MapToDto(Payment p)
     {
+        var isJackpot = p.ToPlayerId == null;
         return new PaymentDto(
             p.Id,
             p.TournamentId,
@@ -289,15 +390,17 @@ public class PaymentService : IPaymentService
             p.FromPlayerId,
             p.FromPlayer.Name,
             p.ToPlayerId,
-            p.ToPlayer.Name,
-            p.ToPlayer.PixKey,
-            p.ToPlayer.PixKeyType,
+            isJackpot ? (p.Description ?? "Caixinha") : p.ToPlayer!.Name,
+            isJackpot ? null : p.ToPlayer!.PixKey,
+            isJackpot ? null : p.ToPlayer!.PixKeyType,
             p.Amount,
             p.Status,
             p.CreatedAt,
             p.PaidAt,
             p.ConfirmedAt,
-            (DateTime.UtcNow - p.CreatedAt).Days
+            (DateTime.UtcNow - p.CreatedAt).Days,
+            p.Description,
+            isJackpot
         );
     }
 }

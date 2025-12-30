@@ -45,6 +45,12 @@ public class TournamentConfiguration : IEntityTypeConfiguration<Tournament>
             .HasForeignKey(bl => bl.TournamentId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Prize Table relationship (optional)
+        builder.HasOne(t => t.PrizeTable)
+            .WithMany()
+            .HasForeignKey(t => t.PrizeTableId)
+            .OnDelete(DeleteBehavior.NoAction);
+
         // Note: Tournament -> Players relationship is configured in TournamentPlayerConfiguration
 
         // Note: Tournament -> Payments relationship is configured in PaymentConfiguration

@@ -4,6 +4,8 @@
 @inject ILeagueService LeagueService
 @inject IPlayerService PlayerService
 @inject ITournamentService TournamentService
+@inject ISeasonService SeasonService
+@inject IRankingService RankingService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
@@ -31,6 +33,12 @@ else
                 }
             </MudStack>
             <MudStack Row Spacing="2">
+                <MudButton Variant="Variant.Outlined"
+                          Color="Color.Warning"
+                          StartIcon="@Icons.Material.Filled.Savings"
+                          Href="@($"/ligas/{LeagueId}/jackpot")">
+                    Caixinha
+                </MudButton>
                 @if (_isOrganizer)
                 {
                     <MudButton Variant="Variant.Outlined"
@@ -39,12 +47,22 @@ else
                               OnClick="ShowInviteCode">
                         Convidar
                     </MudButton>
-                    <MudButton Variant="Variant.Outlined"
-                              Color="Color.Default"
-                              StartIcon="@Icons.Material.Filled.Settings"
-                              Href="@($"/ligas/{LeagueId}/editar")">
-                        Editar
-                    </MudButton>
+                    <MudMenu Icon="@Icons.Material.Filled.Settings"
+                            Variant="Variant.Outlined"
+                            Color="Color.Default"
+                            Label="Configurar"
+                            EndIcon="@Icons.Material.Filled.KeyboardArrowDown">
+                        <MudMenuItem Href="@($"/ligas/{LeagueId}/editar")" Icon="@Icons.Material.Filled.Edit">
+                            Editar Liga
+                        </MudMenuItem>
+                        <MudDivider />
+                        <MudMenuItem Href="@($"/ligas/{LeagueId}/temporadas")" Icon="@Icons.Material.Filled.CalendarMonth">
+                            Temporadas
+                        </MudMenuItem>
+                        <MudMenuItem Href="@($"/ligas/{LeagueId}/tabelas-premiacao")" Icon="@Icons.Material.Filled.TableChart">
+                            Tabelas de Premiacao
+                        </MudMenuItem>
+                    </MudMenu>
                 }
             </MudStack>
         </MudStack>
@@ -228,17 +246,52 @@ else
             </MudTabPanel>
 
             <MudTabPanel Text="Ranking" Icon="@Icons.Material.Filled.Leaderboard">
-                <MudText Typo="Typo.h6" Class="mb-4">Ranking por Lucro/Prejuizo</MudText>
+                <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+                    <MudText Typo="Typo.h6">Ranking por Lucro/Prejuizo</MudText>
+                    @if (_seasons.Any())
+                    {
+                        <MudSelect T="Guid?" Value="_selectedSeasonId" ValueChanged="OnSeasonChanged"
+                                  Label="Temporada" Variant="Variant.Outlined" Dense="true"
+                                  Style="max-width: 250px;">
+                            <MudSelectItem T="Guid?" Value="@((Guid?)null)">Ranking Geral (Acumulado)</MudSelectItem>
+                            @foreach (var season in _seasons.OrderByDescending(s => s.StartDate))
+                            {
+                                <MudSelectItem T="Guid?" Value="@season.Id">@season.Name</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                </MudStack>
 
-                @if (!_league.Players.Any())
+                @if (_selectedSeasonId.HasValue)
+                {
+                    var selectedSeason = _seasons.FirstOrDefault(s => s.Id == _selectedSeasonId.Value);
+                    if (selectedSeason != null)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">
+                            <MudText Typo="Typo.body2">
+                                Periodo: @selectedSeason.StartDate.ToString("dd/MM/yyyy") - @selectedSeason.EndDate.ToString("dd/MM/yyyy")
+                                (@selectedSeason.TournamentCount torneio(s))
+                            </MudText>
+                        </MudAlert>
+                    }
+                }
+
+                @if (!_rankingData.Any())
                 {
                     <MudAlert Severity="Severity.Info">
-                        Nenhum jogador cadastrado. Adicione jogadores e realize torneios para ver o ranking.
+                        @if (_selectedSeasonId.HasValue)
+                        {
+                            <text>Nenhum torneio finalizado nesta temporada.</text>
+                        }
+                        else
+                        {
+                            <text>Nenhum jogador cadastrado. Adicione jogadores e realize torneios para ver o ranking.</text>
+                        }
                     </MudAlert>
                 }
                 else
                 {
-                    <MudTable Items="@_league.Players.OrderByDescending(p => p.TotalProfit).ToList()" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm">
+                    <MudTable Items="@_rankingData" Hover="true" Dense="true" Breakpoint="Breakpoint.Sm">
                         <HeaderContent>
                             <MudTh Style="width: 50px;">#</MudTh>
                             <MudTh>Jogador</MudTh>
@@ -251,32 +304,29 @@ else
                             <MudTh Style="text-align: right;">Lucro/Prejuizo</MudTh>
                         </HeaderContent>
                         <RowTemplate>
-                            @{
-                                var position = _league.Players.OrderByDescending(p => p.TotalProfit).ToList().IndexOf(context) + 1;
-                            }
                             <MudTd DataLabel="#">
-                                @if (position == 1)
+                                @if (context.Position == 1)
                                 {
                                     <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Color="Color.Warning" Size="Size.Small"/>
                                 }
-                                else if (position == 2)
+                                else if (context.Position == 2)
                                 {
                                     <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Color="Color.Default" Size="Size.Small"/>
                                 }
-                                else if (position == 3)
+                                else if (context.Position == 3)
                                 {
                                     <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Color="Color.Tertiary" Size="Size.Small"/>
                                 }
                                 else
                                 {
-                                    <MudText>@position</MudText>
+                                    <MudText>@context.Position</MudText>
                                 }
                             </MudTd>
                             <MudTd DataLabel="Jogador">
                                 <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-                                    <MudAvatar Color="Color.Primary" Size="Size.Small">@context.Name[0]</MudAvatar>
+                                    <MudAvatar Color="Color.Primary" Size="Size.Small">@context.PlayerName[0]</MudAvatar>
                                     <div>
-                                        <MudText>@context.Name</MudText>
+                                        <MudText>@context.PlayerName</MudText>
                                         @if (!string.IsNullOrEmpty(context.Nickname))
                                         {
                                             <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Nickname</MudText>
@@ -338,12 +388,29 @@ else
                                 }
                             </MudTd>
                             <MudTd DataLabel="Lucro/Prejuizo" Style="text-align: right;">
-                                <MudText Typo="Typo.body2" Color="@(context.TotalProfit >= 0 ? Color.Success : Color.Error)" Style="font-weight: bold;">
-                                    @(context.TotalProfit >= 0 ? "+" : "")R$ @context.TotalProfit.ToString("N2")
+                                <MudText Typo="Typo.body2" Color="@(context.Profit >= 0 ? Color.Success : Color.Error)" Style="font-weight: bold;">
+                                    @(context.Profit >= 0 ? "+" : "")R$ @context.Profit.ToString("N2")
                                 </MudText>
                             </MudTd>
                         </RowTemplate>
                     </MudTable>
+                }
+
+                @if (_isOrganizer && !_seasons.Any())
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mt-4">
+                        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                            <MudText Typo="Typo.body2">
+                                Crie temporadas para organizar rankings por periodo.
+                            </MudText>
+                            <MudButton Variant="Variant.Text"
+                                      Color="Color.Primary"
+                                      Size="Size.Small"
+                                      Href="@($"/ligas/{LeagueId}/temporadas")">
+                                Gerenciar Temporadas
+                            </MudButton>
+                        </MudStack>
+                    </MudAlert>
                 }
             </MudTabPanel>
         </MudTabs>
@@ -378,6 +445,9 @@ else
 
     private LeagueWithPlayersDto? _league;
     private IReadOnlyList<TournamentDto>? _tournaments;
+    private List<SeasonSummaryDto> _seasons = new();
+    private List<PlayerRankingDto> _rankingData = new();
+    private Guid? _selectedSeasonId;
     private bool _loading = true;
     private bool _inviteDialogVisible;
     private bool _isOrganizer;
@@ -411,11 +481,31 @@ else
         {
             _league = await LeagueService.GetLeagueWithPlayersAsync(LeagueId);
             _tournaments = await TournamentService.GetTournamentsByLeagueAsync(LeagueId);
+            _seasons = (await SeasonService.GetSeasonSummariesAsync(LeagueId)).ToList();
+            await LoadRankingData();
         }
         finally
         {
             _loading = false;
         }
+    }
+
+    private async Task LoadRankingData()
+    {
+        if (_selectedSeasonId.HasValue)
+        {
+            _rankingData = (await SeasonService.GetSeasonRankingAsync(_selectedSeasonId.Value)).ToList();
+        }
+        else
+        {
+            _rankingData = (await RankingService.GetLeagueRankingAsync(LeagueId)).ToList();
+        }
+    }
+
+    private async Task OnSeasonChanged(Guid? seasonId)
+    {
+        _selectedSeasonId = seasonId;
+        await LoadRankingData();
     }
 
     private async Task LoadLeague()

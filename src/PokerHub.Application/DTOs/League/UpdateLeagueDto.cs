@@ -10,5 +10,8 @@ public record UpdateLeagueDto(
     [StringLength(1000, ErrorMessage = "A descricao deve ter no maximo 1000 caracteres")]
     string? Description,
 
-    bool BlockCheckInWithDebt
+    bool BlockCheckInWithDebt,
+
+    [Range(0, 100, ErrorMessage = "O percentual do jackpot deve estar entre 0 e 100")]
+    decimal JackpotPercentage
 );

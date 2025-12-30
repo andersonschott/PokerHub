@@ -45,6 +45,20 @@ else
 
                 <MudDivider Class="my-4" />
 
+                <MudText Typo="Typo.h6" Class="mb-2">Configuracao do Jackpot</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                    Percentual do prize pool de cada torneio que sera reservado para um pote acumulado.
+                </MudText>
+
+                <MudSlider @bind-Value="_model.JackpotPercentage"
+                          Min="0" Max="20" Step="1"
+                          Color="Color.Primary"
+                          Class="mb-2">
+                    Percentual do Jackpot: @_model.JackpotPercentage%
+                </MudSlider>
+
+                <MudDivider Class="my-4" />
+
                 <MudAlert Severity="Severity.Warning" Class="mb-4">
                     <MudText Typo="Typo.body2">
                         Excluir a liga ira remover todos os jogadores e torneios associados.
@@ -104,6 +118,7 @@ else
                 _model.Name = _league.Name;
                 _model.Description = _league.Description;
                 _model.BlockCheckInWithDebt = _league.BlockCheckInWithDebt;
+                _model.JackpotPercentage = _league.JackpotPercentage;
             }
         }
         finally
@@ -117,7 +132,7 @@ else
         _saving = true;
         try
         {
-            var dto = new UpdateLeagueDto(_model.Name!, _model.Description, _model.BlockCheckInWithDebt);
+            var dto = new UpdateLeagueDto(_model.Name!, _model.Description, _model.BlockCheckInWithDebt, _model.JackpotPercentage);
             await LeagueService.UpdateLeagueAsync(LeagueId, dto);
 
             Snackbar.Add("Liga atualizada com sucesso!", Severity.Success);
@@ -161,5 +176,6 @@ else
         public string? Name { get; set; }
         public string? Description { get; set; }
         public bool BlockCheckInWithDebt { get; set; }
+        public decimal JackpotPercentage { get; set; }
     }
 }

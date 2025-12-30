@@ -1,0 +1,171 @@
+@page "/ligas/{LeagueId:guid}/temporadas/criar"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject ISeasonService SeasonService
+@inject ILeagueService LeagueService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Nova Temporada - PokerHub</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+}
+else if (_league == null)
+{
+    <MudAlert Severity="Severity.Error">Liga nao encontrada</MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Small">
+        <MudPaper Elevation="2" Class="pa-6">
+            <MudText Typo="Typo.h5" Class="mb-2">Nova Temporada</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">@_league.Name</MudText>
+
+            <EditForm Model="_model" OnValidSubmit="HandleSubmit">
+                <DataAnnotationsValidator />
+
+                <MudTextField @bind-Value="_model.Name"
+                             Label="Nome da Temporada"
+                             Placeholder="Ex: Temporada 2025.1"
+                             Variant="Variant.Outlined"
+                             Required="true"
+                             RequiredError="O nome e obrigatorio"
+                             Class="mb-4" />
+
+                <MudDatePicker @bind-Date="_model.StartDate"
+                              Label="Data de Inicio"
+                              Variant="Variant.Outlined"
+                              Required="true"
+                              RequiredError="A data de inicio e obrigatoria"
+                              DateFormat="dd/MM/yyyy"
+                              Class="mb-4" />
+
+                <MudDatePicker @bind-Date="_model.EndDate"
+                              Label="Data de Fim"
+                              Variant="Variant.Outlined"
+                              Required="true"
+                              RequiredError="A data de fim e obrigatoria"
+                              DateFormat="dd/MM/yyyy"
+                              MinDate="_model.StartDate"
+                              Class="mb-4" />
+
+                @if (_validationError != null)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mb-4">@_validationError</MudAlert>
+                }
+
+                <MudAlert Severity="Severity.Info" Class="mb-4" Dense="true">
+                    <MudText Typo="Typo.body2">
+                        Torneios realizados dentro do periodo serao automaticamente incluidos no ranking desta temporada.
+                    </MudText>
+                </MudAlert>
+
+                <MudStack Row Justify="Justify.FlexEnd" Spacing="2" Class="mt-4">
+                    <MudButton Variant="Variant.Text"
+                              Color="Color.Default"
+                              Href="@($"/ligas/{LeagueId}/temporadas")">
+                        Cancelar
+                    </MudButton>
+                    <MudButton Variant="Variant.Filled"
+                              Color="Color.Primary"
+                              ButtonType="ButtonType.Submit"
+                              Disabled="_saving">
+                        @if (_saving)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        }
+                        Criar Temporada
+                    </MudButton>
+                </MudStack>
+            </EditForm>
+        </MudPaper>
+    </MudContainer>
+}
+
+@code {
+    [Parameter] public Guid LeagueId { get; set; }
+
+    private LeagueDto? _league;
+    private CreateSeasonModel _model = new();
+    private bool _loading = true;
+    private bool _saving;
+    private string? _validationError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        try
+        {
+            _league = await LeagueService.GetLeagueByIdAsync(LeagueId);
+
+            // Default dates: first and last day of current month
+            var today = DateTime.Today;
+            _model.StartDate = new DateTime(today.Year, today.Month, 1);
+            _model.EndDate = _model.StartDate.Value.AddMonths(3).AddDays(-1);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _validationError = null;
+
+        if (_model.StartDate == null || _model.EndDate == null)
+        {
+            _validationError = "Preencha as datas de inicio e fim.";
+            return;
+        }
+
+        if (_model.EndDate < _model.StartDate)
+        {
+            _validationError = "A data de fim deve ser posterior a data de inicio.";
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var isValid = await SeasonService.ValidateSeasonDatesAsync(
+                LeagueId,
+                _model.StartDate.Value,
+                _model.EndDate.Value);
+
+            if (!isValid)
+            {
+                _validationError = "Ja existe uma temporada que sobrepoe as datas informadas.";
+                _saving = false;
+                return;
+            }
+
+            var dto = new CreateSeasonDto(
+                _model.Name!,
+                _model.StartDate.Value,
+                _model.EndDate.Value);
+
+            await SeasonService.CreateSeasonAsync(LeagueId, dto);
+
+            Snackbar.Add("Temporada criada com sucesso!", Severity.Success);
+            Navigation.NavigateTo($"/ligas/{LeagueId}/temporadas");
+        }
+        catch (Exception ex)
+        {
+            _validationError = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private class CreateSeasonModel
+    {
+        public string? Name { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+    }
+}

@@ -1,0 +1,242 @@
+@page "/ligas/{LeagueId:guid}/tabelas-premiacao"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject IPrizeTableService PrizeTableService
+@inject ILeagueService LeagueService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Tabelas de Premiacao - PokerHub</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+}
+else if (_league == null)
+{
+    <MudAlert Severity="Severity.Error">Liga nao encontrada</MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Large">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.h5">Tabelas de Premiacao</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@_league.Name</MudText>
+            </MudStack>
+            <MudStack Row Spacing="2">
+                <MudButton Variant="Variant.Text"
+                          Color="Color.Default"
+                          StartIcon="@Icons.Material.Filled.ArrowBack"
+                          Href="@($"/ligas/{LeagueId}")">
+                    Voltar
+                </MudButton>
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          StartIcon="@Icons.Material.Filled.Add"
+                          OnClick="OpenCreateDialog">
+                    Nova Tabela
+                </MudButton>
+            </MudStack>
+        </MudStack>
+
+        <MudAlert Severity="Severity.Info" Class="mb-4" Dense="true">
+            <MudText Typo="Typo.body2">
+                Defina tabelas de premiacao com valores fixos para prize pools especificos.
+                Quando o prize pool de um torneio coincidir exatamente, os valores da tabela serao usados automaticamente.
+            </MudText>
+        </MudAlert>
+
+        @if (_prizeTables.Count == 0)
+        {
+            <MudPaper Elevation="0" Class="pa-8 d-flex flex-column align-center justify-center" Style="min-height: 300px;">
+                <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
+                <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mb-2">Nenhuma tabela cadastrada</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                    Crie tabelas de premiacao para valores de prize pool frequentes na sua liga.
+                </MudText>
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          StartIcon="@Icons.Material.Filled.Add"
+                          OnClick="OpenCreateDialog">
+                    Criar Primeira Tabela
+                </MudButton>
+            </MudPaper>
+        }
+        else
+        {
+            <MudPaper Elevation="2">
+                <MudTable Items="_prizeTables" Hover="true" Dense="true" Breakpoint="Breakpoint.None">
+                    <HeaderContent>
+                        <MudTh>Prize Pool</MudTh>
+                        <MudTh Style="text-align: right;">1o</MudTh>
+                        <MudTh Style="text-align: right;">2o</MudTh>
+                        <MudTh Style="text-align: right;">3o</MudTh>
+                        <MudTh Style="text-align: right;">4o</MudTh>
+                        <MudTh Style="text-align: right;">Caixinha</MudTh>
+                        <MudTh Style="width: 100px; text-align: center;">Acoes</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Prize Pool">
+                            <MudText Typo="Typo.body2" Style="font-weight: 600;">
+                                @context.PrizePoolTotal.ToString("C")
+                            </MudText>
+                            @if (context.Entries.Count > 4)
+                            {
+                                <MudTooltip Text="@GetAllPositionsText(context)">
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Text">
+                                        +@(context.Entries.Count - 4)
+                                    </MudChip>
+                                </MudTooltip>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="1o" Style="text-align: right;">@GetPrize(context, 1)</MudTd>
+                        <MudTd DataLabel="2o" Style="text-align: right;">@GetPrize(context, 2)</MudTd>
+                        <MudTd DataLabel="3o" Style="text-align: right;">@GetPrize(context, 3)</MudTd>
+                        <MudTd DataLabel="4o" Style="text-align: right;">@GetPrize(context, 4)</MudTd>
+                        <MudTd DataLabel="Caixinha" Style="text-align: right;">
+                            @if (context.JackpotAmount > 0)
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Warning">
+                                    @context.JackpotAmount.ToString("C")
+                                </MudText>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">-</MudText>
+                            }
+                        </MudTd>
+                        <MudTd Style="text-align: center;">
+                            <MudStack Row Spacing="0" Justify="Justify.Center">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                              Size="Size.Small"
+                                              Color="Color.Primary"
+                                              OnClick="@(() => OpenEditDialog(context))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                              Size="Size.Small"
+                                              Color="Color.Error"
+                                              OnClick="@(() => ConfirmDelete(context))" />
+                            </MudStack>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+        }
+    </MudContainer>
+}
+
+@code {
+    [Parameter] public Guid LeagueId { get; set; }
+
+    private LeagueDto? _league;
+    private List<LeaguePrizeTableDto> _prizeTables = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            _league = await LeagueService.GetLeagueByIdAsync(LeagueId);
+            if (_league != null)
+            {
+                _prizeTables = (await PrizeTableService.GetPrizeTablesByLeagueAsync(LeagueId)).ToList();
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string GetPrize(LeaguePrizeTableDto table, int position)
+    {
+        var entry = table.Entries.FirstOrDefault(e => e.Position == position);
+        return entry != null ? entry.PrizeAmount.ToString("C") : "-";
+    }
+
+    private string GetAllPositionsText(LeaguePrizeTableDto table)
+    {
+        var positions = table.Entries
+            .Where(e => e.Position > 4)
+            .OrderBy(e => e.Position)
+            .Select(e => $"{e.Position}o: {e.PrizeAmount:C}");
+        return string.Join("\n", positions);
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var parameters = new DialogParameters<PrizeTableDialog>
+        {
+            { x => x.LeagueId, LeagueId }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseOnEscapeKey = true
+        };
+
+        var dialog = await DialogService.ShowAsync<PrizeTableDialog>("Nova Tabela", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadData();
+        }
+    }
+
+    private async Task OpenEditDialog(LeaguePrizeTableDto table)
+    {
+        var parameters = new DialogParameters<PrizeTableDialog>
+        {
+            { x => x.LeagueId, LeagueId },
+            { x => x.ExistingTable, table }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseOnEscapeKey = true
+        };
+
+        var dialog = await DialogService.ShowAsync<PrizeTableDialog>("Editar Tabela", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            await LoadData();
+        }
+    }
+
+    private async Task ConfirmDelete(LeaguePrizeTableDto table)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirmar Exclusao",
+            $"Tem certeza que deseja excluir a tabela de {table.PrizePoolTotal:C}?",
+            yesText: "Excluir",
+            cancelText: "Cancelar");
+
+        if (result == true)
+        {
+            try
+            {
+                await PrizeTableService.DeletePrizeTableAsync(table.Id);
+                Snackbar.Add("Tabela excluida com sucesso!", Severity.Success);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Erro ao excluir tabela: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

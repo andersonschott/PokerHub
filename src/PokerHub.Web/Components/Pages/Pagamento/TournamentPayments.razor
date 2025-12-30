@@ -67,15 +67,33 @@
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd DataLabel="Jogador">@context.PlayerName</MudTd>
-                            <MudTd DataLabel="Investimento" Style="text-align: right;">R$ @context.TotalInvestment.ToString("N2")</MudTd>
-                            <MudTd DataLabel="Premio" Style="text-align: right;">R$ @context.Prize.ToString("N2")</MudTd>
+                            <MudTd DataLabel="Investimento" Style="text-align: right;">R$ @context.TotalInvestment.ToString("N0")</MudTd>
+                            <MudTd DataLabel="Premio" Style="text-align: right;">R$ @context.Prize.ToString("N0")</MudTd>
                             <MudTd DataLabel="Saldo" Style="text-align: right;">
                                 <MudText Color="@(context.Balance > 0 ? Color.Success : (context.Balance < 0 ? Color.Error : Color.Default))">
-                                    @(context.Balance > 0 ? "+" : "")R$ @context.Balance.ToString("N2")
+                                    @(context.Balance > 0 ? "+" : "")R$ @context.Balance.ToString("N0")
                                 </MudText>
                             </MudTd>
                         </RowTemplate>
                     </MudTable>
+
+                    @if (_jackpotContribution > 0)
+                    {
+                        <MudDivider Class="my-3" />
+                        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudIcon Icon="@Icons.Material.Filled.Savings" Color="Color.Warning" />
+                                <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">Contribuicao para Caixinha</MudText>
+                            </MudStack>
+                            <MudText Typo="Typo.h6" Color="Color.Warning">R$ @_jackpotContribution.ToString("N0")</MudText>
+                        </MudStack>
+                    }
+
+                    <MudDivider Class="my-3" />
+                    <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">Total Prize Pool</MudText>
+                        <MudText Typo="Typo.h6">R$ @(_balances.Sum(b => b.TotalInvestment).ToString("N0"))</MudText>
+                    </MudStack>
                 </MudCardContent>
             </MudCard>
         }
@@ -165,12 +183,30 @@
                         </HeaderContent>
                         <RowTemplate>
                             <MudTd DataLabel="De">@context.FromPlayerName</MudTd>
-                            <MudTd DataLabel="Para">@context.ToPlayerName</MudTd>
+                            <MudTd DataLabel="Para">
+                                @if (context.IsJackpotContribution)
+                                {
+                                    <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
+                                        <MudIcon Icon="@Icons.Material.Filled.Savings" Color="Color.Warning" Size="Size.Small" />
+                                        <MudText Color="Color.Warning" Style="font-weight: 600;">@context.ToPlayerName</MudText>
+                                    </MudStack>
+                                }
+                                else
+                                {
+                                    @context.ToPlayerName
+                                }
+                            </MudTd>
                             <MudTd DataLabel="Valor" Style="text-align: right;">
-                                <MudText Style="font-weight: 600;">R$ @context.Amount.ToString("N2")</MudText>
+                                <MudText Style="font-weight: 600;" Color="@(context.IsJackpotContribution ? Color.Warning : Color.Default)">
+                                    R$ @context.Amount.ToString("N0")
+                                </MudText>
                             </MudTd>
                             <MudTd DataLabel="PIX">
-                                @if (!string.IsNullOrEmpty(context.ToPlayerPixKey))
+                                @if (context.IsJackpotContribution)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Pote Acumulado</MudText>
+                                }
+                                else if (!string.IsNullOrEmpty(context.ToPlayerPixKey))
                                 {
                                     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
                                         <MudChip T="string" Size="Size.Small" Color="Color.Info" OnClick="@(() => CopyToClipboard(context.ToPlayerPixKey))">
@@ -244,6 +280,7 @@
     private IReadOnlyList<PaymentDto>? _payments;
     private IReadOnlyList<PlayerBalanceDto>? _balances;
     private IReadOnlyList<ExpenseSummaryDto>? _expenseSummary;
+    private decimal _jackpotContribution;
     private bool _loading = true;
     private bool _processing;
     private Guid? _processingPayment;
@@ -284,6 +321,7 @@
                 _payments = await PaymentService.GetPaymentsByTournamentAsync(TournamentId);
                 _balances = await PaymentService.GetTournamentPlayerBalancesAsync(TournamentId);
                 _expenseSummary = await ExpenseService.GetExpenseSummaryByTournamentAsync(TournamentId);
+                _jackpotContribution = await PaymentService.GetJackpotContributionAsync(TournamentId);
             }
         }
         _loading = false;

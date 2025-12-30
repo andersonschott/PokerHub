@@ -83,8 +83,9 @@
                                 <MudNumericField @bind-Value="_model.BuyIn"
                                                 Label="Buy-in (R$)"
                                                 Variant="Variant.Outlined"
-                                                Min="0m"
-                                                Format="N2"
+                                                Min="1m"
+                                                Step="1m"
+                                                Format="N0"
                                                 Required="true" />
                             </MudItem>
                             <MudItem xs="12" sm="6">
@@ -107,8 +108,9 @@
                                     <MudNumericField @bind-Value="_model.RebuyValue"
                                                     Label="Valor do Rebuy (R$)"
                                                     Variant="Variant.Outlined"
-                                                    Min="0m"
-                                                    Format="N2" />
+                                                    Min="1m"
+                                                    Step="1m"
+                                                    Format="N0" />
                                 </MudItem>
                                 <MudItem xs="12" sm="6">
                                     <MudNumericField @bind-Value="_model.RebuyStack"
@@ -157,8 +159,9 @@
                                     <MudNumericField @bind-Value="_model.AddonValue"
                                                     Label="Valor do Add-on (R$)"
                                                     Variant="Variant.Outlined"
-                                                    Min="0m"
-                                                    Format="N2" />
+                                                    Min="1m"
+                                                    Step="1m"
+                                                    Format="N0" />
                                 </MudItem>
                                 <MudItem xs="12" sm="6">
                                     <MudNumericField @bind-Value="_model.AddonStack"
@@ -686,6 +689,9 @@
                 _allowAddon ? _model.AddonValue : null,
                 _allowAddon ? _model.AddonStack : null,
                 prizeStructure,
+                PrizeDistributionType.Percentage, // Default to percentage for now
+                false, // UsePrizeTable - TODO: add prize table selection to edit page
+                null, // PrizeTableId
                 _allowEarlyCheckIn ? _model.AllowCheckInUntilLevel : null,
                 _model.BlindLevels.Select(bl => new CreateBlindLevelDto(
                     bl.Order,

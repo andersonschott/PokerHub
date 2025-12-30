@@ -1,0 +1,79 @@
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.MonetizationOn" Color="Color.Warning" />
+            <MudText Typo="Typo.h6">Usar Caixinha</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Class="mb-4">
+            Informe o valor que deseja utilizar da caixinha. O valor sera deduzido do saldo acumulado.
+        </MudText>
+
+        <MudNumericField @bind-Value="_amount"
+                        Label="Valor (R$)"
+                        Variant="Variant.Outlined"
+                        Min="0"
+                        Max="@MaxAmount"
+                        Format="N2"
+                        Required="true"
+                        Adornment="Adornment.Start"
+                        AdornmentIcon="@Icons.Material.Filled.AttachMoney"
+                        Class="mb-4" />
+
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            Saldo disponivel: @MaxAmount.ToString("C")
+        </MudText>
+
+        <MudTextField @bind-Value="_description"
+                     Label="Descricao (opcional)"
+                     Placeholder="Ex: Torneio especial de Natal"
+                     Variant="Variant.Outlined"
+                     Lines="2" />
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-4">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Warning" Variant="Variant.Filled" OnClick="Submit" Disabled="_amount <= 0">
+            Confirmar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public decimal MaxAmount { get; set; }
+
+    private decimal _amount;
+    private string? _description;
+    private string? _error;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Submit()
+    {
+        _error = null;
+
+        if (_amount <= 0)
+        {
+            _error = "Informe um valor maior que zero.";
+            return;
+        }
+
+        if (_amount > MaxAmount)
+        {
+            _error = $"O valor nao pode ser maior que o saldo disponivel ({MaxAmount:C}).";
+            return;
+        }
+
+        var dto = new UseJackpotDto(_amount, _description);
+        MudDialog.Close(DialogResult.Ok(dto));
+    }
+}

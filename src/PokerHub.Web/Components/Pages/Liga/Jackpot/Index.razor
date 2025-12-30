@@ -1,0 +1,226 @@
+@page "/ligas/{LeagueId:guid}/jackpot"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject IJackpotService JackpotService
+@inject ILeagueService LeagueService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Caixinha - PokerHub</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+}
+else if (_league == null)
+{
+    <MudAlert Severity="Severity.Error">Liga nao encontrada</MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Large">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.h5">Caixinha (Jackpot)</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@_league.Name</MudText>
+            </MudStack>
+            <MudButton Variant="Variant.Text"
+                      Color="Color.Default"
+                      StartIcon="@Icons.Material.Filled.ArrowBack"
+                      Href="@($"/ligas/{LeagueId}")">
+                Voltar
+            </MudButton>
+        </MudStack>
+
+        <MudGrid>
+            <MudItem xs="12" md="4">
+                <MudCard Elevation="3" Class="jackpot-card">
+                    <MudCardContent Class="text-center">
+                        <MudIcon Icon="@Icons.Material.Filled.Savings" Size="Size.Large" Color="Color.Warning" Class="mb-2" />
+                        <MudText Typo="Typo.h6" Color="Color.Secondary">Saldo Acumulado</MudText>
+                        <MudText Typo="Typo.h3" Color="Color.Warning" Class="my-2">
+                            @_jackpotStatus?.AccumulatedPrizePool.ToString("C")
+                        </MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Percentual configurado: @_jackpotStatus?.JackpotPercentage.ToString("F0")%
+                        </MudText>
+                    </MudCardContent>
+                    @if (_isOrganizer)
+                    {
+                        <MudCardActions Class="justify-center pb-4">
+                            <MudButton Variant="Variant.Filled"
+                                      Color="Color.Warning"
+                                      StartIcon="@Icons.Material.Filled.MonetizationOn"
+                                      OnClick="OpenUseJackpotDialog"
+                                      Disabled="@(_jackpotStatus?.AccumulatedPrizePool <= 0)">
+                                Usar Caixinha
+                            </MudButton>
+                        </MudCardActions>
+                    }
+                </MudCard>
+            </MudItem>
+
+            <MudItem xs="12" md="8">
+                <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
+                    <MudTabPanel Text="Entradas" Icon="@Icons.Material.Filled.TrendingUp" BadgeData="@_contributions.Count" BadgeColor="Color.Success">
+                        @if (_contributions.Count == 0)
+                        {
+                            <MudAlert Severity="Severity.Info" Dense="true">
+                                Nenhuma contribuicao registrada ainda. Quando torneios forem finalizados com jackpot configurado, as contribuicoes aparecerao aqui.
+                            </MudAlert>
+                        }
+                        else
+                        {
+                            <MudTable Items="_contributions" Dense="true" Hover="true">
+                                <HeaderContent>
+                                    <MudTh>Data</MudTh>
+                                    <MudTh>Torneio</MudTh>
+                                    <MudTh Style="text-align: right;">Prize Pool</MudTh>
+                                    <MudTh Style="text-align: center;">%</MudTh>
+                                    <MudTh Style="text-align: right;">Valor</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd DataLabel="Data">@context.TournamentDate.ToString("dd/MM/yyyy")</MudTd>
+                                    <MudTd DataLabel="Torneio">@context.TournamentName</MudTd>
+                                    <MudTd DataLabel="Prize Pool" Style="text-align: right;">@context.TournamentPrizePool.ToString("C")</MudTd>
+                                    <MudTd DataLabel="%" Style="text-align: center;">@context.PercentageApplied.ToString("F0")%</MudTd>
+                                    <MudTd DataLabel="Valor" Style="text-align: right;">
+                                        <MudText Color="Color.Success">+@context.Amount.ToString("C")</MudText>
+                                    </MudTd>
+                                </RowTemplate>
+                            </MudTable>
+                        }
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="Saidas" Icon="@Icons.Material.Filled.TrendingDown" BadgeData="@_usages.Count" BadgeColor="Color.Error">
+                        @if (_usages.Count == 0)
+                        {
+                            <MudAlert Severity="Severity.Info" Dense="true">
+                                Nenhum uso registrado ainda. Quando o organizador utilizar a caixinha, os registros aparecerao aqui.
+                            </MudAlert>
+                        }
+                        else
+                        {
+                            <MudTable Items="_usages" Dense="true" Hover="true">
+                                <HeaderContent>
+                                    <MudTh>Data</MudTh>
+                                    <MudTh>Descricao</MudTh>
+                                    <MudTh Style="text-align: right;">Valor</MudTh>
+                                    <MudTh Style="text-align: right;">Saldo Apos</MudTh>
+                                </HeaderContent>
+                                <RowTemplate>
+                                    <MudTd DataLabel="Data">@context.CreatedAt.ToString("dd/MM/yyyy HH:mm")</MudTd>
+                                    <MudTd DataLabel="Descricao">@context.Description</MudTd>
+                                    <MudTd DataLabel="Valor" Style="text-align: right;">
+                                        <MudText Color="Color.Error">-@context.Amount.ToString("C")</MudText>
+                                    </MudTd>
+                                    <MudTd DataLabel="Saldo Apos" Style="text-align: right;">
+                                        @context.BalanceAfter.ToString("C")
+                                    </MudTd>
+                                </RowTemplate>
+                            </MudTable>
+                        }
+                    </MudTabPanel>
+                </MudTabs>
+            </MudItem>
+        </MudGrid>
+
+        <MudPaper Elevation="2" Class="pa-4 mt-4">
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="4">
+                <MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Info" />
+                <MudStack Spacing="0">
+                    <MudText Typo="Typo.body2">
+                        <strong>Como funciona:</strong> A caixinha acumula um percentual de cada torneio finalizado.
+                        O organizador pode usar o saldo acumulado para criar torneios especiais ou distribui-lo como preferir.
+                    </MudText>
+                    @if (_isOrganizer)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Para alterar o percentual da caixinha, acesse as configuracoes da liga em
+                            <MudLink Href="@($"/ligas/{LeagueId}/editar")">Editar Liga</MudLink>.
+                        </MudText>
+                    }
+                </MudStack>
+            </MudStack>
+        </MudPaper>
+    </MudContainer>
+}
+
+@code {
+    [Parameter] public Guid LeagueId { get; set; }
+
+    private LeagueDto? _league;
+    private JackpotStatusDto? _jackpotStatus;
+    private List<JackpotContributionDto> _contributions = new();
+    private List<JackpotUsageDto> _usages = new();
+    private bool _loading = true;
+    private bool _isOrganizer;
+    private string? _currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            _league = await LeagueService.GetLeagueByIdAsync(LeagueId);
+            if (_league != null)
+            {
+                // Check if user is organizer
+                if (!string.IsNullOrEmpty(_currentUserId))
+                {
+                    _isOrganizer = await LeagueService.IsUserOrganizerAsync(LeagueId, _currentUserId);
+                }
+
+                _jackpotStatus = await JackpotService.GetJackpotStatusAsync(LeagueId);
+                _contributions = (await JackpotService.GetContributionHistoryAsync(LeagueId)).ToList();
+                _usages = (await JackpotService.GetUsageHistoryAsync(LeagueId)).ToList();
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenUseJackpotDialog()
+    {
+        var parameters = new DialogParameters<UseJackpotDialog>
+        {
+            { x => x.MaxAmount, _jackpotStatus?.AccumulatedPrizePool ?? 0 }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small };
+        var dialog = await DialogService.ShowAsync<UseJackpotDialog>("Usar Caixinha", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false, Data: UseJackpotDto dto })
+        {
+            try
+            {
+                await JackpotService.UseJackpotAsync(LeagueId, dto);
+                Snackbar.Add($"Caixinha utilizada: {dto.Amount:C}", Severity.Success);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}
+
+<style>
+    .jackpot-card {
+        border-top: 4px solid var(--mud-palette-warning);
+    }
+</style>

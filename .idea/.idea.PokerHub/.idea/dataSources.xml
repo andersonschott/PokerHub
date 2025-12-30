@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
+    <data-source source="LOCAL" name="pokerhub@pokerhub.database.windows.net" uuid="022664b7-5237-4e2d-bd2f-5936e1860f83">
+      <driver-ref>azure.ms</driver-ref>
+      <synchronize>true</synchronize>
+      <configured-by-url>true</configured-by-url>
+      <jdbc-driver>com.microsoft.sqlserver.jdbc.SQLServerDriver</jdbc-driver>
+      <jdbc-url>jdbc:sqlserver://pokerhub.database.windows.net:1433;connectRetryCount=5;connectRetryInterval=10;databaseName=pokerhub;encrypt=True;password=Senha@123;trustServerCertificate=True;userName=pokerhub;</jdbc-url>
+      <working-dir>$ProjectFileDir$</working-dir>
+    </data-source>
+  </component>
+</project>

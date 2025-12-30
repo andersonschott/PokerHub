@@ -1,0 +1,203 @@
+@page "/ligas/{LeagueId:guid}/temporadas"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject ISeasonService SeasonService
+@inject ILeagueService LeagueService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Temporadas - PokerHub</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+}
+else if (_league == null)
+{
+    <MudAlert Severity="Severity.Error">Liga nao encontrada</MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Large">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.h5">Temporadas</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@_league.Name</MudText>
+            </MudStack>
+            <MudStack Row Spacing="2">
+                <MudButton Variant="Variant.Text"
+                          Color="Color.Default"
+                          StartIcon="@Icons.Material.Filled.ArrowBack"
+                          Href="@($"/ligas/{LeagueId}")">
+                    Voltar
+                </MudButton>
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          StartIcon="@Icons.Material.Filled.Add"
+                          Href="@($"/ligas/{LeagueId}/temporadas/criar")">
+                    Nova Temporada
+                </MudButton>
+            </MudStack>
+        </MudStack>
+
+        @if (_seasons.Count == 0)
+        {
+            <MudPaper Elevation="0" Class="pa-8 d-flex flex-column align-center justify-center" Style="min-height: 300px;">
+                <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
+                <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mb-2">Nenhuma temporada cadastrada</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                    Crie temporadas para organizar seus torneios por periodo e acompanhar rankings separados.
+                </MudText>
+                <MudButton Variant="Variant.Filled"
+                          Color="Color.Primary"
+                          StartIcon="@Icons.Material.Filled.Add"
+                          Href="@($"/ligas/{LeagueId}/temporadas/criar")">
+                    Criar Primeira Temporada
+                </MudButton>
+            </MudPaper>
+        }
+        else
+        {
+            <MudGrid>
+                @foreach (var season in _seasons)
+                {
+                    <MudItem xs="12" sm="6" md="4">
+                        <MudCard Elevation="2" Class="@GetSeasonCardClass(season)">
+                            <MudCardHeader>
+                                <CardHeaderContent>
+                                    <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                        <MudText Typo="Typo.h6">@season.Name</MudText>
+                                        @if (IsCurrentSeason(season))
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Success">Atual</MudChip>
+                                        }
+                                        else if (!season.IsActive)
+                                        {
+                                            <MudChip T="string" Size="Size.Small" Color="Color.Default">Inativa</MudChip>
+                                        }
+                                    </MudStack>
+                                </CardHeaderContent>
+                                <CardHeaderActions>
+                                    <MudMenu Icon="@Icons.Material.Filled.MoreVert" Dense="true">
+                                        <MudMenuItem Href="@($"/ligas/{LeagueId}/temporadas/{season.Id}/editar")">
+                                            Editar
+                                        </MudMenuItem>
+                                        <MudMenuItem Href="@($"/ligas/{LeagueId}/temporadas/{season.Id}/ranking")">
+                                            Ver Ranking
+                                        </MudMenuItem>
+                                        <MudDivider />
+                                        <MudMenuItem OnClick="@(() => ConfirmDelete(season))" Style="color: var(--mud-palette-error);">
+                                            Excluir
+                                        </MudMenuItem>
+                                    </MudMenu>
+                                </CardHeaderActions>
+                            </MudCardHeader>
+                            <MudCardContent>
+                                <MudStack Spacing="2">
+                                    <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                        <MudIcon Icon="@Icons.Material.Filled.DateRange" Size="Size.Small" Color="Color.Secondary" />
+                                        <MudText Typo="Typo.body2">
+                                            @season.StartDate.ToString("dd/MM/yyyy") - @season.EndDate.ToString("dd/MM/yyyy")
+                                        </MudText>
+                                    </MudStack>
+                                    <MudStack Row Spacing="1" AlignItems="AlignItems.Center">
+                                        <MudIcon Icon="@Icons.Material.Filled.Casino" Size="Size.Small" Color="Color.Secondary" />
+                                        <MudText Typo="Typo.body2">
+                                            @season.TournamentCount torneio(s)
+                                        </MudText>
+                                    </MudStack>
+                                </MudStack>
+                            </MudCardContent>
+                            <MudCardActions>
+                                <MudButton Variant="Variant.Text"
+                                          Color="Color.Primary"
+                                          Size="Size.Small"
+                                          Href="@($"/ligas/{LeagueId}/temporadas/{season.Id}/ranking")">
+                                    Ver Ranking
+                                </MudButton>
+                            </MudCardActions>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    </MudContainer>
+}
+
+@code {
+    [Parameter] public Guid LeagueId { get; set; }
+
+    private LeagueDto? _league;
+    private List<SeasonDto> _seasons = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            _league = await LeagueService.GetLeagueByIdAsync(LeagueId);
+            if (_league != null)
+            {
+                _seasons = (await SeasonService.GetSeasonsByLeagueAsync(LeagueId)).ToList();
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private bool IsCurrentSeason(SeasonDto season)
+    {
+        var today = DateTime.UtcNow.Date;
+        return season.IsActive && season.StartDate.Date <= today && season.EndDate.Date >= today;
+    }
+
+    private string GetSeasonCardClass(SeasonDto season)
+    {
+        if (IsCurrentSeason(season))
+            return "season-card-current";
+        if (!season.IsActive)
+            return "season-card-inactive";
+        return "";
+    }
+
+    private async Task ConfirmDelete(SeasonDto season)
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Confirmar Exclusao",
+            $"Tem certeza que deseja excluir a temporada '{season.Name}'? Os torneios nao serao afetados.",
+            yesText: "Excluir",
+            cancelText: "Cancelar");
+
+        if (result == true)
+        {
+            try
+            {
+                await SeasonService.DeleteSeasonAsync(season.Id);
+                Snackbar.Add("Temporada excluida com sucesso!", Severity.Success);
+                await LoadData();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Erro ao excluir temporada: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}
+
+<style>
+    .season-card-current {
+        border-left: 4px solid var(--mud-palette-success);
+    }
+    .season-card-inactive {
+        opacity: 0.7;
+    }
+</style>

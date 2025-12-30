@@ -1,0 +1,197 @@
+@page "/ligas/{LeagueId:guid}/temporadas/{SeasonId:guid}/ranking"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject ISeasonService SeasonService
+@inject ILeagueService LeagueService
+@inject NavigationManager Navigation
+
+<PageTitle>Ranking da Temporada - PokerHub</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+}
+else if (_league == null || _season == null)
+{
+    <MudAlert Severity="Severity.Error">Temporada nao encontrada</MudAlert>
+}
+else
+{
+    <MudContainer MaxWidth="MaxWidth.Large">
+        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+            <MudStack Spacing="0">
+                <MudText Typo="Typo.h5">Ranking - @_season.Name</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    @_league.Name | @_season.StartDate.ToString("dd/MM/yyyy") - @_season.EndDate.ToString("dd/MM/yyyy")
+                </MudText>
+            </MudStack>
+            <MudStack Row Spacing="2">
+                <MudButton Variant="Variant.Text"
+                          Color="Color.Default"
+                          StartIcon="@Icons.Material.Filled.ArrowBack"
+                          Href="@($"/ligas/{LeagueId}/temporadas")">
+                    Voltar
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
+                          Color="Color.Primary"
+                          Href="@($"/ligas/{LeagueId}/ranking")">
+                    Ranking Geral
+                </MudButton>
+            </MudStack>
+        </MudStack>
+
+        @if (_rankings.Count == 0)
+        {
+            <MudPaper Elevation="0" Class="pa-8 d-flex flex-column align-center justify-center" Style="min-height: 300px;">
+                <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
+                <MudText Typo="Typo.h6" Color="Color.Secondary" Class="mb-2">Nenhum dado de ranking</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    Nao ha torneios finalizados nesta temporada ainda.
+                </MudText>
+            </MudPaper>
+        }
+        else
+        {
+            @* Top 3 Cards *@
+            <MudGrid Class="mb-4">
+                @foreach (var player in _rankings.Take(3))
+                {
+                    <MudItem xs="12" sm="4">
+                        <MudCard Elevation="2" Class="@GetTopCardClass(player.Position)">
+                            <MudCardContent>
+                                <MudStack AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudAvatar Color="@GetPositionColor(player.Position)" Size="Size.Large">
+                                        @player.Position
+                                    </MudAvatar>
+                                    <MudText Typo="Typo.h6">@player.PlayerName</MudText>
+                                    @if (!string.IsNullOrEmpty(player.Nickname))
+                                    {
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">@player.Nickname</MudText>
+                                    }
+                                    <MudText Typo="Typo.h5" Color="@(player.Profit >= 0 ? Color.Success : Color.Error)">
+                                        @player.Profit.ToString("C")
+                                    </MudText>
+                                    <MudStack Row Spacing="4" Class="mt-2">
+                                        <MudStack AlignItems="AlignItems.Center" Spacing="0">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">Torneios</MudText>
+                                            <MudText Typo="Typo.body1">@player.TournamentsPlayed</MudText>
+                                        </MudStack>
+                                        <MudStack AlignItems="AlignItems.Center" Spacing="0">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">Vitorias</MudText>
+                                            <MudText Typo="Typo.body1">@player.Wins</MudText>
+                                        </MudStack>
+                                        <MudStack AlignItems="AlignItems.Center" Spacing="0">
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">ROI</MudText>
+                                            <MudText Typo="Typo.body1">@player.ROI.ToString("F1")%</MudText>
+                                        </MudStack>
+                                    </MudStack>
+                                </MudStack>
+                            </MudCardContent>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+
+            @* Full Ranking Table *@
+            <MudPaper Elevation="2">
+                <MudTable Items="_rankings" Dense="true" Hover="true">
+                    <HeaderContent>
+                        <MudTh Style="width: 60px;">#</MudTh>
+                        <MudTh>Jogador</MudTh>
+                        <MudTh Style="text-align: center;">Torn.</MudTh>
+                        <MudTh Style="text-align: center;">1o</MudTh>
+                        <MudTh Style="text-align: center;">2o</MudTh>
+                        <MudTh Style="text-align: center;">3o</MudTh>
+                        <MudTh Style="text-align: center;">ITM</MudTh>
+                        <MudTh Style="text-align: center;">ROI</MudTh>
+                        <MudTh Style="text-align: right;">Lucro</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small" Color="@GetPositionColor(context.Position)">
+                                @context.Position
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>
+                            <MudStack Spacing="0">
+                                <MudText Typo="Typo.body2">@context.PlayerName</MudText>
+                                @if (!string.IsNullOrEmpty(context.Nickname))
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Nickname</MudText>
+                                }
+                            </MudStack>
+                        </MudTd>
+                        <MudTd Style="text-align: center;">@context.TournamentsPlayed</MudTd>
+                        <MudTd Style="text-align: center;">@context.Wins</MudTd>
+                        <MudTd Style="text-align: center;">@context.SecondPlaces</MudTd>
+                        <MudTd Style="text-align: center;">@context.ThirdPlaces</MudTd>
+                        <MudTd Style="text-align: center;">@context.ITMRate.ToString("F0")%</MudTd>
+                        <MudTd Style="text-align: center;">@context.ROI.ToString("F1")%</MudTd>
+                        <MudTd Style="text-align: right;">
+                            <MudText Color="@(context.Profit >= 0 ? Color.Success : Color.Error)">
+                                @context.Profit.ToString("C")
+                            </MudText>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+        }
+    </MudContainer>
+}
+
+@code {
+    [Parameter] public Guid LeagueId { get; set; }
+    [Parameter] public Guid SeasonId { get; set; }
+
+    private LeagueDto? _league;
+    private SeasonDto? _season;
+    private List<PlayerRankingDto> _rankings = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        try
+        {
+            _league = await LeagueService.GetLeagueByIdAsync(LeagueId);
+            _season = await SeasonService.GetSeasonByIdAsync(SeasonId);
+
+            if (_season != null)
+            {
+                _rankings = (await SeasonService.GetSeasonRankingAsync(SeasonId)).ToList();
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Color GetPositionColor(int position) => position switch
+    {
+        1 => Color.Warning,
+        2 => Color.Default,
+        3 => Color.Tertiary,
+        _ => Color.Default
+    };
+
+    private string GetTopCardClass(int position) => position switch
+    {
+        1 => "ranking-gold",
+        2 => "ranking-silver",
+        3 => "ranking-bronze",
+        _ => ""
+    };
+}
+
+<style>
+    .ranking-gold {
+        border-top: 4px solid gold;
+    }
+    .ranking-silver {
+        border-top: 4px solid silver;
+    }
+    .ranking-bronze {
+        border-top: 4px solid #cd7f32;
+    }
+</style>
