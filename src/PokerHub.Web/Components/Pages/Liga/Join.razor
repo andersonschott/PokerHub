@@ -1,0 +1,330 @@
+@page "/ligas/entrar"
+@page "/ligas/entrar/{InviteCode}"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using PokerHub.Domain.Entities
+@using PokerHub.Domain.Enums
+@inject ILeagueService LeagueService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<User> UserManager
+
+<PageTitle>@GetPageTitle()</PageTitle>
+
+<HeadContent>
+    <!-- Open Graph meta tags for WhatsApp preview -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="@Navigation.Uri" />
+    <meta property="og:title" content="@GetOgTitle()" />
+    <meta property="og:description" content="@GetOgDescription()" />
+    <meta property="og:site_name" content="PokerHub" />
+    <meta property="og:locale" content="pt_BR" />
+    <!-- Twitter Card meta tags -->
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="@GetOgTitle()" />
+    <meta name="twitter:description" content="@GetOgDescription()" />
+</HeadContent>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-6">
+    @if (_loading)
+    {
+        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+    }
+    else if (_league == null)
+    {
+        <MudAlert Severity="Severity.Error">
+            Liga nao encontrada. Verifique se o link esta correto.
+        </MudAlert>
+        <MudButton Href="/" Variant="Variant.Text" Color="Color.Primary" Class="mt-4">
+            Voltar ao Inicio
+        </MudButton>
+    }
+    else
+    {
+        <MudPaper Elevation="4" Class="pa-6">
+            <MudStack AlignItems="AlignItems.Center" Spacing="4">
+                <MudIcon Icon="@Icons.Material.Filled.Groups" Size="Size.Large" Color="Color.Primary"/>
+                <MudText Typo="Typo.h4">@_league.Name</MudText>
+                @if (!string.IsNullOrEmpty(_league.Description))
+                {
+                    <MudText Typo="Typo.body1" Color="Color.Secondary" Align="Align.Center">@_league.Description</MudText>
+                }
+            </MudStack>
+
+            <MudDivider Class="my-4"/>
+
+            <MudStack Spacing="2">
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Small" Color="Color.Secondary"/>
+                    <MudText>Organizador: @_league.OrganizerName</MudText>
+                </MudStack>
+
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Small" Color="Color.Secondary"/>
+                    <MudText>@_league.PlayerCount jogadores</MudText>
+                </MudStack>
+
+                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Small" Color="Color.Secondary"/>
+                    <MudText>@_league.TournamentCount torneios realizados</MudText>
+                </MudStack>
+            </MudStack>
+
+            <MudDivider Class="my-4"/>
+
+            <AuthorizeView>
+                <Authorized>
+                    @if (_alreadyMember)
+                    {
+                        <MudAlert Severity="Severity.Success" Class="mb-4">
+                            Voce ja e membro desta liga!
+                        </MudAlert>
+                        <MudButton Variant="Variant.Filled"
+                                  Color="Color.Primary"
+                                  FullWidth="true"
+                                  Href="@($"/ligas/{_league.Id}")">
+                            Ver Liga
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Class="mb-2">Complete seu cadastro como jogador:</MudText>
+                        <MudTextField @bind-Value="_playerName"
+                                     Label="Nome *"
+                                     Variant="Variant.Outlined"
+                                     Required="true"
+                                     RequiredError="Nome e obrigatorio"
+                                     Class="mb-2"/>
+                        <MudTextField @bind-Value="_playerNickname"
+                                     Label="Apelido"
+                                     Variant="Variant.Outlined"
+                                     HelperText="Como voce e conhecido nas mesas"
+                                     Class="mb-2"/>
+                        <MudTextField @bind-Value="_playerPhone"
+                                     Label="Telefone"
+                                     Variant="Variant.Outlined"
+                                     InputType="InputType.Telephone"
+                                     Class="mb-2"/>
+                        <MudSelect T="PixKeyType?" @bind-Value="_playerPixKeyType"
+                                  Label="Tipo de Chave PIX"
+                                  Variant="Variant.Outlined"
+                                  Class="mb-2">
+                            <MudSelectItem T="PixKeyType?" Value="@((PixKeyType?)null)">Nenhum</MudSelectItem>
+                            <MudSelectItem T="PixKeyType?" Value="@((PixKeyType?)PixKeyType.CPF)">CPF</MudSelectItem>
+                            <MudSelectItem T="PixKeyType?" Value="@((PixKeyType?)PixKeyType.Email)">E-mail</MudSelectItem>
+                            <MudSelectItem T="PixKeyType?" Value="@((PixKeyType?)PixKeyType.Phone)">Telefone</MudSelectItem>
+                            <MudSelectItem T="PixKeyType?" Value="@((PixKeyType?)PixKeyType.Random)">Chave Aleatoria</MudSelectItem>
+                        </MudSelect>
+                        @if (_playerPixKeyType.HasValue)
+                        {
+                            <MudTextField @bind-Value="_playerPixKey"
+                                         Label="Chave PIX"
+                                         Variant="Variant.Outlined"
+                                         HelperText="Para receber premiacoes"
+                                         Class="mb-4"/>
+                        }
+
+                        <MudButton Variant="Variant.Filled"
+                                  Color="Color.Primary"
+                                  FullWidth="true"
+                                  Size="Size.Large"
+                                  Disabled="@(_processing || string.IsNullOrWhiteSpace(_playerName))"
+                                  OnClick="JoinLeague"
+                                  Class="mt-2">
+                            @if (_processing)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2"/>
+                            }
+                            Entrar na Liga
+                        </MudButton>
+                    }
+                </Authorized>
+                <NotAuthorized>
+                    <MudAlert Severity="Severity.Info" Class="mb-4">
+                        Faca login para entrar nesta liga.
+                    </MudAlert>
+                    <MudButton Variant="Variant.Filled"
+                              Color="Color.Primary"
+                              FullWidth="true"
+                              Size="Size.Large"
+                              Href="@GetLoginUrl()">
+                        Entrar
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                              Color="Color.Primary"
+                              FullWidth="true"
+                              Class="mt-2"
+                              Href="@GetRegisterUrl()">
+                        Criar Conta
+                    </MudButton>
+                </NotAuthorized>
+            </AuthorizeView>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public string? InviteCode { get; set; }
+
+    [SupplyParameterFromQuery]
+    public Guid? LeagueId { get; set; }
+
+    private LeagueDto? _league;
+    private User? _currentUser;
+    private bool _loading = true;
+    private bool _processing;
+    private bool _alreadyMember;
+    private string? _currentUserId;
+
+    // Player form fields
+    private string _playerName = string.Empty;
+    private string _playerNickname = string.Empty;
+    private string _playerPhone = string.Empty;
+    private string _playerPixKey = string.Empty;
+    private PixKeyType? _playerPixKeyType;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            // Try to load by InviteCode first (route parameter), then by LeagueId (query param)
+            if (!string.IsNullOrEmpty(InviteCode))
+            {
+                _league = await LeagueService.GetLeagueByInviteCodeAsync(InviteCode.ToUpper());
+            }
+            else if (LeagueId.HasValue)
+            {
+                _league = await LeagueService.GetLeagueByIdAsync(LeagueId.Value);
+            }
+
+            if (_league != null)
+            {
+                var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+                _currentUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+                if (!string.IsNullOrEmpty(_currentUserId))
+                {
+                    _currentUser = await UserManager.FindByIdAsync(_currentUserId);
+                    _alreadyMember = await LeagueService.CanUserAccessLeagueAsync(_league.Id, _currentUserId);
+
+                    // Pre-fill form with user data if available
+                    if (_currentUser != null && !_alreadyMember)
+                    {
+                        if (!string.IsNullOrWhiteSpace(_currentUser.Name))
+                            _playerName = _currentUser.Name;
+                        if (!string.IsNullOrWhiteSpace(_currentUser.PhoneNumber))
+                            _playerPhone = _currentUser.PhoneNumber;
+                    }
+                }
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task JoinLeague()
+    {
+        if (string.IsNullOrEmpty(_currentUserId) || _league == null) return;
+
+        // Validate name
+        if (string.IsNullOrWhiteSpace(_playerName))
+        {
+            Snackbar.Add("Por favor, informe seu nome.", Severity.Warning);
+            return;
+        }
+
+        _processing = true;
+        try
+        {
+            var playerName = _playerName.Trim();
+            var userEmail = _currentUser?.Email;
+            var nickname = string.IsNullOrWhiteSpace(_playerNickname) ? null : _playerNickname.Trim();
+            var phone = string.IsNullOrWhiteSpace(_playerPhone) ? null : _playerPhone.Trim();
+            var pixKey = string.IsNullOrWhiteSpace(_playerPixKey) ? null : _playerPixKey.Trim();
+
+            // Update the User record if name was empty
+            if (_currentUser != null && string.IsNullOrWhiteSpace(_currentUser.Name))
+            {
+                _currentUser.Name = playerName;
+                await UserManager.UpdateAsync(_currentUser);
+            }
+
+            var (success, message) = await LeagueService.JoinLeagueAsync(
+                _league.Id,
+                _currentUserId,
+                playerName,
+                userEmail,
+                nickname,
+                phone,
+                pixKey,
+                _playerPixKeyType);
+
+            if (success)
+            {
+                Snackbar.Add(message, Severity.Success);
+                Navigation.NavigateTo($"/ligas/{_league.Id}");
+            }
+            else
+            {
+                Snackbar.Add(message, Severity.Warning);
+                await LoadData();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private string GetReturnUrl()
+    {
+        if (!string.IsNullOrEmpty(InviteCode))
+            return $"/ligas/entrar/{InviteCode}";
+        return $"/ligas/entrar?leagueId={LeagueId}";
+    }
+
+    private string GetLoginUrl()
+    {
+        var returnUrl = Uri.EscapeDataString(GetReturnUrl());
+        return $"/Account/Login?ReturnUrl={returnUrl}";
+    }
+
+    private string GetRegisterUrl()
+    {
+        var returnUrl = Uri.EscapeDataString(GetReturnUrl());
+        return $"/Account/Register?ReturnUrl={returnUrl}";
+    }
+
+    // Open Graph meta tag methods
+    private string GetPageTitle()
+    {
+        if (_league == null) return "Convite para Liga - PokerHub";
+        return $"{_league.Name} - PokerHub";
+    }
+
+    private string GetOgTitle()
+    {
+        if (_league == null) return "Convite para Liga de Poker";
+        return $"Entrar na liga {_league.Name}";
+    }
+
+    private string GetOgDescription()
+    {
+        if (_league == null) return "Voce foi convidado para uma liga de poker no PokerHub!";
+        return $"Liga organizada por {_league.OrganizerName} | {_league.PlayerCount} jogadores | {_league.TournamentCount} torneios realizados";
+    }
+}

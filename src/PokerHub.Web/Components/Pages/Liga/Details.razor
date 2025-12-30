@@ -10,6 +10,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JS
 
 <PageTitle>@(_league?.Name ?? "Liga") - PokerHub</PageTitle>
 
@@ -63,6 +64,15 @@ else
                             Tabelas de Premiacao
                         </MudMenuItem>
                     </MudMenu>
+                }
+                else
+                {
+                    <MudButton Variant="Variant.Outlined"
+                              Color="Color.Error"
+                              StartIcon="@Icons.Material.Filled.ExitToApp"
+                              OnClick="LeaveLeague">
+                        Sair da Liga
+                    </MudButton>
                 }
             </MudStack>
         </MudStack>
@@ -419,23 +429,29 @@ else
 
 <MudDialog @bind-Visible="_inviteDialogVisible">
     <TitleContent>
-        <MudText Typo="Typo.h6">Codigo de Convite</MudText>
+        <MudText Typo="Typo.h6">Convidar Jogadores</MudText>
     </TitleContent>
     <DialogContent>
-        <MudText Typo="Typo.body1" Class="mb-2">
-            Compartilhe este codigo para convidar jogadores:
+        <MudText Typo="Typo.body1" Class="mb-4">
+            Compartilhe este link para que jogadores possam entrar na liga:
         </MudText>
-        <MudPaper Elevation="0" Class="pa-4 d-flex justify-center" Style="background-color: var(--mud-palette-background-grey);">
-            <MudText Typo="Typo.h4" Style="font-family: monospace; letter-spacing: 0.3em;">
-                @_league?.InviteCode
-            </MudText>
-        </MudPaper>
+        <MudTextField Value="@GetInviteUrl()"
+                     Label="Link de Convite"
+                     Variant="Variant.Outlined"
+                     ReadOnly="true"
+                     Adornment="Adornment.End"
+                     AdornmentIcon="@Icons.Material.Filled.ContentCopy"
+                     OnAdornmentClick="CopyInviteLink"/>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+            Codigo: @_league?.InviteCode
+        </MudText>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@(() => _inviteDialogVisible = false)">Fechar</MudButton>
+        <MudButton Color="Color.Primary" OnClick="CopyInviteLink">Copiar Link</MudButton>
         @if (_isOrganizer)
         {
-            <MudButton Color="Color.Primary" OnClick="RegenerateInviteCode">Gerar Novo Codigo</MudButton>
+            <MudButton Color="Color.Warning" OnClick="RegenerateInviteCode">Gerar Novo Codigo</MudButton>
         }
     </DialogActions>
 </MudDialog>
@@ -538,6 +554,20 @@ else
         _inviteDialogVisible = true;
     }
 
+    private string GetInviteUrl()
+    {
+        if (_league == null) return string.Empty;
+        var baseUrl = Navigation.BaseUri.TrimEnd('/');
+        return $"{baseUrl}/ligas/entrar/{_league.InviteCode}";
+    }
+
+    private async Task CopyInviteLink()
+    {
+        var url = GetInviteUrl();
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", url);
+        Snackbar.Add("Link copiado!", Severity.Success);
+    }
+
     private async Task RegenerateInviteCode()
     {
         try
@@ -578,7 +608,7 @@ else
     {
         var result = await DialogService.ShowMessageBox(
             "Confirmar Exclusao",
-            $"Deseja realmente excluir o jogador {player.Name}?",
+            $"Deseja realmente excluir o jogador {player.Name}? O historico sera mantido nos rankings.",
             yesText: "Excluir",
             cancelText: "Cancelar");
 
@@ -586,9 +616,46 @@ else
         {
             try
             {
-                await PlayerService.DeletePlayerAsync(player.Id);
-                await LoadLeague();
-                Snackbar.Add("Jogador excluido!", Severity.Success);
+                var (success, message) = await PlayerService.DeletePlayerAsync(player.Id);
+                if (success)
+                {
+                    await LoadLeague();
+                    Snackbar.Add(message, Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add(message, Severity.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task LeaveLeague()
+    {
+        var result = await DialogService.ShowMessageBox(
+            "Sair da Liga",
+            "Deseja realmente sair desta liga? Seu historico permanecera nos rankings, mas voce nao tera mais acesso a liga.",
+            yesText: "Sair",
+            cancelText: "Cancelar");
+
+        if (result == true)
+        {
+            try
+            {
+                var (success, message) = await LeagueService.LeaveLeagueAsync(LeagueId, _currentUserId!);
+                if (success)
+                {
+                    Snackbar.Add(message, Severity.Success);
+                    Navigation.NavigateTo("/ligas");
+                }
+                else
+                {
+                    Snackbar.Add(message, Severity.Warning);
+                }
             }
             catch (Exception ex)
             {

@@ -291,4 +291,118 @@ public class LeagueService : ILeagueService
         // Linked player can access
         return league.Players.Any(p => p.UserId == userId && p.IsActive);
     }
+
+    public async Task<(bool Success, string Message)> JoinLeagueAsync(
+        Guid leagueId,
+        string userId,
+        string userName,
+        string? userEmail,
+        string? nickname = null,
+        string? phone = null,
+        string? pixKey = null,
+        PixKeyType? pixKeyType = null)
+    {
+        var league = await _context.Leagues
+            .Include(l => l.Players)
+            .FirstOrDefaultAsync(l => l.Id == leagueId && l.IsActive);
+
+        if (league == null)
+            return (false, "Liga não encontrada.");
+
+        // Check if user is already the organizer
+        if (league.OrganizerId == userId)
+            return (false, "Você é o organizador desta liga.");
+
+        // Check if user is already linked to a player in this league
+        var existingLinkedPlayer = league.Players.FirstOrDefault(p => p.UserId == userId && p.IsActive);
+        if (existingLinkedPlayer != null)
+            return (false, "Você já é membro desta liga.");
+
+        // Try to find an existing player by email (case-insensitive)
+        Player? playerToLink = null;
+        if (!string.IsNullOrEmpty(userEmail))
+        {
+            playerToLink = league.Players.FirstOrDefault(p =>
+                p.IsActive &&
+                p.UserId == null &&
+                !string.IsNullOrEmpty(p.Email) &&
+                p.Email.Equals(userEmail, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (playerToLink != null)
+        {
+            // Link existing player to user and update info if provided
+            playerToLink.UserId = userId;
+            if (!string.IsNullOrEmpty(nickname)) playerToLink.Nickname = nickname;
+            if (!string.IsNullOrEmpty(phone)) playerToLink.Phone = phone;
+            if (!string.IsNullOrEmpty(pixKey))
+            {
+                playerToLink.PixKey = pixKey;
+                playerToLink.PixKeyType = pixKeyType;
+            }
+            await _context.SaveChangesAsync();
+            return (true, $"Você foi vinculado ao jogador '{playerToLink.Name}' nesta liga.");
+        }
+
+        // Create a new player for the user
+        var newPlayer = new Player
+        {
+            Id = Guid.NewGuid(),
+            LeagueId = leagueId,
+            Name = userName,
+            Nickname = nickname,
+            Email = userEmail,
+            Phone = phone,
+            PixKey = pixKey,
+            PixKeyType = pixKeyType,
+            UserId = userId,
+            CreatedAt = DateTime.UtcNow,
+            IsActive = true
+        };
+
+        _context.Players.Add(newPlayer);
+        await _context.SaveChangesAsync();
+
+        return (true, "Você entrou na liga com sucesso!");
+    }
+
+    public async Task<(bool Success, string Message)> LeaveLeagueAsync(Guid leagueId, string userId)
+    {
+        var league = await _context.Leagues
+            .Include(l => l.Players)
+            .FirstOrDefaultAsync(l => l.Id == leagueId && l.IsActive);
+
+        if (league == null)
+            return (false, "Liga não encontrada.");
+
+        // Check if user is the organizer
+        if (league.OrganizerId == userId)
+            return (false, "O organizador não pode sair da liga.");
+
+        // Find the player linked to this user in this league
+        var player = league.Players.FirstOrDefault(p => p.UserId == userId && p.IsActive);
+        if (player == null)
+            return (false, "Você não é membro desta liga.");
+
+        // Check for pending debts (as debtor)
+        var hasPendingDebts = await _context.Payments
+            .AnyAsync(p => p.FromPlayerId == player.Id && p.Status == PaymentStatus.Pending);
+
+        if (hasPendingDebts)
+            return (false, "Não é possível sair da liga. Você possui débitos pendentes.");
+
+        // Check for pending credits (as creditor)
+        var hasPendingCredits = await _context.Payments
+            .AnyAsync(p => p.ToPlayerId == player.Id && p.Status == PaymentStatus.Pending);
+
+        if (hasPendingCredits)
+            return (false, "Não é possível sair da liga. Você possui créditos pendentes a receber.");
+
+        // Soft delete - keep the record for history/rankings
+        player.IsActive = false;
+        player.UserId = null; // Unlink from user account
+        await _context.SaveChangesAsync();
+
+        return (true, "Você saiu da liga com sucesso. Seu histórico permanece nos rankings.");
+    }
 }

@@ -202,8 +202,9 @@ public class SeasonService : ISeasonService
         var season = await _context.Seasons.FindAsync(seasonId);
         if (season == null) return [];
 
+        // Include inactive players to preserve history in rankings
         var players = await _context.Players
-            .Where(p => p.LeagueId == season.LeagueId && p.IsActive)
+            .Where(p => p.LeagueId == season.LeagueId)
             .Include(p => p.Participations)
                 .ThenInclude(tp => tp.Tournament)
             .ToListAsync();

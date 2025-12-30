@@ -150,14 +150,52 @@ public class PlayerService : IPlayerService
         return MapToDto(player);
     }
 
-    public async Task<bool> DeletePlayerAsync(Guid playerId)
+    public async Task<(bool Success, string Message)> DeletePlayerAsync(Guid playerId, bool checkDebts = true)
     {
-        var player = await _context.Players.FindAsync(playerId);
-        if (player == null) return false;
+        var player = await _context.Players
+            .Include(p => p.Participations)
+            .FirstOrDefaultAsync(p => p.Id == playerId);
 
-        player.IsActive = false;
-        await _context.SaveChangesAsync();
-        return true;
+        if (player == null)
+            return (false, "Jogador não encontrado.");
+
+        if (!player.IsActive)
+            return (false, "Jogador já foi removido.");
+
+        // Check for pending debts (both as debtor and creditor)
+        if (checkDebts)
+        {
+            var hasPendingDebts = await _context.Payments
+                .AnyAsync(p => p.FromPlayerId == playerId && p.Status == PaymentStatus.Pending);
+
+            if (hasPendingDebts)
+                return (false, "Não é possível remover o jogador. Existem débitos pendentes.");
+
+            var hasPendingCredits = await _context.Payments
+                .AnyAsync(p => p.ToPlayerId == playerId && p.Status == PaymentStatus.Pending);
+
+            if (hasPendingCredits)
+                return (false, "Não é possível remover o jogador. Existem créditos pendentes a receber.");
+        }
+
+        // Check if player has any tournament history
+        var hasHistory = player.Participations.Any();
+
+        if (hasHistory)
+        {
+            // Soft delete - keep the record for history/rankings
+            player.IsActive = false;
+            player.UserId = null; // Unlink from user account
+            await _context.SaveChangesAsync();
+            return (true, "Jogador removido. O histórico foi mantido nos rankings.");
+        }
+        else
+        {
+            // Hard delete - no history, remove completely
+            _context.Players.Remove(player);
+            await _context.SaveChangesAsync();
+            return (true, "Jogador excluído com sucesso.");
+        }
     }
 
     public async Task<bool> LinkPlayerToUserAsync(Guid playerId, string? userId)

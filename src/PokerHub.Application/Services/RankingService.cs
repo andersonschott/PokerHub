@@ -17,8 +17,9 @@ public class RankingService : IRankingService
 
     public async Task<IReadOnlyList<PlayerRankingDto>> GetLeagueRankingAsync(Guid leagueId)
     {
+        // Include inactive players to preserve history in rankings
         var players = await _context.Players
-            .Where(p => p.LeagueId == leagueId && p.IsActive)
+            .Where(p => p.LeagueId == leagueId)
             .Include(p => p.Participations)
                 .ThenInclude(tp => tp.Tournament)
             .ToListAsync();
