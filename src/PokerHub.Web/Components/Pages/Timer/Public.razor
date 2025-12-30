@@ -340,6 +340,7 @@
     private bool _loading = true;
     private string? _error;
     private bool _isFinished;
+    private bool _hasRendered;
 
     // Tournament info
     private string? _tournamentName;
@@ -359,6 +360,23 @@
     private bool _isBreak;
     private string? _breakDescription;
     private BlindLevelDto? _nextLevel;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_hasRendered)
+        {
+            _hasRendered = true;
+            // Request wake lock to prevent screen from sleeping (TV display mode)
+            try
+            {
+                await JS.InvokeVoidAsync("requestWakeLock");
+            }
+            catch
+            {
+                // Ignore errors - API might not be supported
+            }
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -599,6 +617,16 @@
 
     public async ValueTask DisposeAsync()
     {
+        // Release wake lock when leaving the page
+        try
+        {
+            await JS.InvokeVoidAsync("releaseWakeLock");
+        }
+        catch
+        {
+            // Ignore errors - JS might not be available
+        }
+
         if (_hubConnection != null)
         {
             try

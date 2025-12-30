@@ -479,10 +479,14 @@
         if (_isFullscreen)
         {
             await JS.InvokeVoidAsync("document.documentElement.requestFullscreen");
+            // Prevent screen from sleeping in fullscreen mode
+            await JS.InvokeVoidAsync("requestWakeLock");
         }
         else
         {
             await JS.InvokeVoidAsync("document.exitFullscreen");
+            // Release wake lock when exiting fullscreen
+            await JS.InvokeVoidAsync("releaseWakeLock");
         }
     }
 
@@ -524,6 +528,16 @@
 
     public async ValueTask DisposeAsync()
     {
+        // Release wake lock when leaving the page
+        try
+        {
+            await JS.InvokeVoidAsync("releaseWakeLock");
+        }
+        catch
+        {
+            // Ignore errors - JS might not be available
+        }
+
         // Dispose all handler subscriptions to prevent memory leaks
         _timerTickHandler?.Dispose();
         _levelChangedHandler?.Dispose();
