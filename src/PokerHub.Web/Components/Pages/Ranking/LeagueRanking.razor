@@ -2,163 +2,540 @@
 @page "/ranking"
 @rendermode InteractiveServer
 @attribute [Authorize]
+@implements IBrowserViewportObserver
+@implements IAsyncDisposable
 @inject IRankingService RankingService
 @inject ILeagueService LeagueService
 @inject ISeasonService SeasonService
 @inject NavigationManager Navigation
+@inject IBrowserViewportService BrowserViewportService
 
 <PageTitle>Ranking - PokerHub</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    @if (_league != null)
-    {
-        <MudBreadcrumbs Items="_breadcrumbs" Class="mb-4" />
-    }
-
-    <div class="d-flex justify-space-between align-center mb-4">
-        <MudText Typo="Typo.h4">Ranking @(_league != null ? $"- {_league.Name}" : "")</MudText>
-        @if (_seasons.Any())
-        {
-            <MudSelect T="Guid?" Value="_selectedSeasonId"
-                      Label="Temporada"
-                      Variant="Variant.Outlined"
-                      Dense="true"
-                      Style="max-width: 250px;"
-                      ValueChanged="OnSeasonChanged">
-                <MudSelectItem T="Guid?" Value="@((Guid?)null)">Ranking Geral</MudSelectItem>
-                @foreach (var season in _seasons)
-                {
-                    <MudSelectItem T="Guid?" Value="@season.Id">
-                        @season.Name @(season.IsCurrent ? "(Atual)" : "")
-                    </MudSelectItem>
-                }
-            </MudSelect>
-        }
-    </div>
-
-    @if (_loading)
-    {
+@if (_loading)
+{
+    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
         <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
-    }
-    else if (LeagueId == null)
-    {
+    </MudContainer>
+}
+else if (LeagueId == null)
+{
+    <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
         <MudAlert Severity="Severity.Info">
             Selecione uma liga para ver o ranking.
         </MudAlert>
-    }
-    else if (_ranking == null || !_ranking.Any())
-    {
-        <MudAlert Severity="Severity.Info">
-            Nenhum jogador com historico nesta liga. Complete torneios para gerar o ranking.
-        </MudAlert>
-    }
-    else
-    {
-        <!-- Top 3 Cards -->
-        <MudGrid Class="mb-4">
-            @foreach (var player in _ranking.Take(3))
-            {
-                <MudItem xs="12" sm="4">
-                    <MudCard Elevation="3" Class="@GetTopCardClass(player.Position)">
-                        <MudCardContent Class="text-center">
-                            <MudAvatar Size="Size.Large" Color="@GetPositionColor(player.Position)" Class="mx-auto mb-2">
-                                @player.Position
-                            </MudAvatar>
-                            <MudText Typo="Typo.h6">@player.PlayerName</MudText>
-                            @if (!string.IsNullOrEmpty(player.Nickname))
-                            {
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">@player.Nickname</MudText>
-                            }
-                            <MudText Typo="Typo.h4" Color="@(player.Profit >= 0 ? Color.Success : Color.Error)" Class="mt-2">
-                                @(player.Profit >= 0 ? "+" : "")R$ @player.Profit.ToString("N2")
-                            </MudText>
-                            <MudStack Row="true" Justify="Justify.Center" Class="mt-2">
-                                <MudChip T="string" Size="Size.Small" Color="Color.Primary">@player.TournamentsPlayed torneios</MudChip>
-                                <MudChip T="string" Size="Size.Small" Color="Color.Warning">@player.Wins vit</MudChip>
-                                @if (player.SecondPlaces > 0)
-                                {
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Default">@player.SecondPlaces x 2o</MudChip>
-                                }
-                                @if (player.ThirdPlaces > 0)
-                                {
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Tertiary">@player.ThirdPlaces x 3o</MudChip>
-                                }
-                            </MudStack>
-                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
-                                ROI: @player.ROI.ToString("N1")% | ITM: @player.ITMRate.ToString("N1")%
-                            </MudText>
-                        </MudCardContent>
-                        <MudCardActions Class="justify-center">
-                            <MudButton Variant="Variant.Text"
-                                      Color="Color.Primary"
-                                      Href="@($"/jogador/{player.PlayerId}/stats")">
-                                Ver Estatisticas
-                            </MudButton>
-                        </MudCardActions>
-                    </MudCard>
-                </MudItem>
-            }
-        </MudGrid>
+    </MudContainer>
+}
+else if (_isMobile)
+{
+    @* ========== VERSAO MOBILE ========== *@
+        <div class="ranking-mobile-container">
+            @* Header fixo *@
+            <MudAppBar Fixed="true" Dense="true" Elevation="0" Style="background: var(--mud-palette-surface);">
+                <div class="d-flex flex-column" style="line-height: 1.2;">
+                    <MudText Typo="Typo.h6" Class="font-weight-bold">@(_league?.Name ?? "Ranking")</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Warning">
+                        @(_selectedSeasonId.HasValue ? _seasons.FirstOrDefault(s => s.Id == _selectedSeasonId)?.Name : "Ranking Geral")
+                    </MudText>
+                </div>
+                <MudSpacer />
+                <MudIconButton Icon="@Icons.Material.Filled.Savings" Color="Color.Warning" Size="Size.Small"
+                    Href="@($"/ligas/{LeagueId}/caixinha")" />
+                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Color="Color.Default" Dense="true">
+                    <MudMenuItem Icon="@Icons.Material.Filled.PersonAdd" Href="@($"/ligas/{LeagueId}/jogadores")">Convidar</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Settings" Href="@($"/ligas/{LeagueId}/edit")">Configuracoes</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.Share">Compartilhar</MudMenuItem>
+                </MudMenu>
+            </MudAppBar>
 
-        <!-- Full Ranking Table -->
-        <MudCard Elevation="2">
-            <MudCardHeader>
-                <CardHeaderContent>
-                    <MudText Typo="Typo.h6">Ranking Completo</MudText>
-                </CardHeaderContent>
-            </MudCardHeader>
-            <MudCardContent>
-                <MudTable Items="_ranking" Dense="true" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm">
+            @* Conteudo com padding para header e bottom nav *@
+            <div class="ranking-content">
+                @* Tabs de navegacao (ChipSet) *@
+                <MudChipSet T="string" Class="pa-2 pb-0" Style="background: var(--mud-palette-surface);">
+                    <MudChip T="string" Color="Color.Default" Variant="Variant.Text" Size="Size.Small"
+                        Href="@($"/ligas/{LeagueId}/jogadores")">
+                        <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Small" Class="mr-1" /> Jogadores
+                    </MudChip>
+                    <MudChip T="string" Color="Color.Default" Variant="Variant.Text" Size="Size.Small"
+                        Href="@($"/ligas/{LeagueId}/torneios")">
+                        <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Small" Class="mr-1" /> Torneios
+                    </MudChip>
+                    <MudChip T="string" Color="Color.Warning" Variant="Variant.Filled" Size="Size.Small">
+                        <MudIcon Icon="@Icons.Material.Filled.Leaderboard" Size="Size.Small" Class="mr-1" /> Ranking
+                    </MudChip>
+                </MudChipSet>
+
+                @* Filtro compacto *@
+                <div class="pa-2 pt-1">
+                    <MudSelect T="string" @bind-Value="_sortBy" Variant="Variant.Outlined" Dense="true"
+                        Margin="Margin.Dense" FullWidth="true" Style="font-size: 0.875rem;">
+                        <MudSelectItem Value="@("lucro")">Ranking por Lucro/Prejuizo</MudSelectItem>
+                        <MudSelectItem Value="@("roi")">Ranking por ROI</MudSelectItem>
+                        <MudSelectItem Value="@("itm")">Ranking por ITM</MudSelectItem>
+                        <MudSelectItem Value="@("torneios")">Ranking por Torneios</MudSelectItem>
+                    </MudSelect>
+                </div>
+
+                @* Card do Lider destacado *@
+                @if (FilteredRanking.Any())
+                {
+                    var lider = FilteredRanking.First();
+                    <div class="px-2 pb-2">
+                        <MudPaper Class="pa-3" Elevation="2"
+                            Style="background: linear-gradient(135deg, rgba(255,193,7,0.15) 0%, rgba(76,175,80,0.1) 100%); border: 1px solid rgba(255,193,7,0.3); border-radius: 16px;">
+                            <div class="d-flex align-center gap-3">
+                                <MudBadge Content="@GetPositionEmoji(1)" Overlap="true" Bordered="true" Color="Color.Warning">
+                                    <MudAvatar Size="Size.Large" Color="Color.Success" Style="font-size: 1.25rem;">
+                                        @GetInitial(lider.PlayerName)
+                                    </MudAvatar>
+                                </MudBadge>
+                                <div class="flex-grow-1">
+                                    <MudText Typo="Typo.overline" Color="Color.Warning" Class="font-weight-bold">
+                                        LIDER DA TEMPORADA
+                                    </MudText>
+                                    <MudText Typo="Typo.subtitle1" Class="font-weight-bold">@lider.PlayerName</MudText>
+                                    <div class="d-flex gap-2 mt-1">
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@lider.ITMRate.ToString("N0")% ITM</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">-</MudText>
+                                        <MudText Typo="Typo.caption" Color="@(lider.ROI >= 0 ? Color.Success : Color.Error)">
+                                            @lider.ROI.ToString("+0.0;-0.0")% ROI
+                                        </MudText>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <MudText Typo="Typo.h6" Color="@(lider.Profit >= 0 ? Color.Success : Color.Error)" Class="font-weight-bold">
+                                        @FormatCurrencyShort(lider.Profit)
+                                    </MudText>
+                                </div>
+                            </div>
+                        </MudPaper>
+                    </div>
+
+                    @* Lista de cards dos jogadores *@
+                    <div class="px-2 pb-16">
+                        @foreach (var jogador in FilteredRanking.Skip(1))
+                        {
+                            <MudCard Class="mb-2 ranking-card" Elevation="1" Style="border-radius: 12px; overflow: hidden; position: relative;"
+                                @onclick="() => ToggleExpand(jogador.Position)">
+                                @* Badge de posicao para podio *@
+                                @if (jogador.Position <= 3)
+                                {
+                                    <div style="position: absolute; top: 0; right: 0; width: 0; height: 0;
+                                        border-top: 40px solid @GetPodiumColor(jogador.Position);
+                                        border-left: 40px solid transparent; z-index: 1;">
+                                        <span style="position: absolute; top: -35px; right: 5px; font-size: 0.75rem; font-weight: bold; color: rgba(0,0,0,0.7);">
+                                            @jogador.Position
+                                        </span>
+                                    </div>
+                                }
+
+                                <MudCardContent Class="pa-3" Style="position: relative;">
+                                    @* Linha principal *@
+                                    <div class="d-flex align-center gap-3">
+                                        <MudAvatar Size="Size.Medium" Color="@GetAvatarColor(jogador.Position)">
+                                            @GetInitial(jogador.PlayerName)
+                                        </MudAvatar>
+                                        <div class="flex-grow-1" style="min-width: 0;">
+                                            <div class="d-flex align-center gap-2">
+                                                <MudText Typo="Typo.body1" Class="font-weight-medium" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                    @jogador.PlayerName
+                                                </MudText>
+                                                @if (!string.IsNullOrEmpty(jogador.Nickname))
+                                                {
+                                                    <MudText Typo="Typo.caption" Color="Color.Warning" Style="flex-shrink: 0;">
+                                                        @@@jogador.Nickname
+                                                    </MudText>
+                                                }
+                                            </div>
+                                            <div class="d-flex align-center gap-2 mt-1">
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    @jogador.TournamentsPlayed torneios
+                                                </MudText>
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">-</MudText>
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                                    @jogador.ITMRate.ToString("N0")% ITM
+                                                </MudText>
+                                            </div>
+                                        </div>
+                                        <MudChip T="string" Size="Size.Small"
+                                            Color="@(jogador.Profit >= 0 ? Color.Success : Color.Error)"
+                                            Variant="Variant.Filled"
+                                            Style="font-weight: bold;">
+                                            @FormatCurrencyShort(jogador.Profit)
+                                        </MudChip>
+                                    </div>
+
+                                    @* Linha de podios (sempre visivel) *@
+                                    <div class="d-flex align-center justify-space-between mt-3 pt-2" style="border-top: 1px solid rgba(255,255,255,0.1);">
+                                        <div class="d-flex align-center gap-3">
+                                            <div class="d-flex align-center gap-1">
+                                                <span style="font-size: 1rem;">@GetPositionEmoji(1)</span>
+                                                <MudText Typo="Typo.body2" Class="font-weight-medium">@jogador.Wins</MudText>
+                                            </div>
+                                            <div class="d-flex align-center gap-1">
+                                                <span style="font-size: 1rem;">@GetPositionEmoji(2)</span>
+                                                <MudText Typo="Typo.body2" Class="font-weight-medium">@jogador.SecondPlaces</MudText>
+                                            </div>
+                                            <div class="d-flex align-center gap-1">
+                                                <span style="font-size: 1rem;">@GetPositionEmoji(3)</span>
+                                                <MudText Typo="Typo.body2" Class="font-weight-medium">@jogador.ThirdPlaces</MudText>
+                                            </div>
+                                        </div>
+                                        <MudText Typo="Typo.caption" Color="@(jogador.ROI >= 0 ? Color.Success : Color.Error)" Class="font-weight-medium">
+                                            @jogador.ROI.ToString("+0.0;-0.0")% ROI
+                                        </MudText>
+                                    </div>
+
+                                    @* Detalhes expandidos *@
+                                    @if (_expandedPlayer == jogador.Position)
+                                    {
+                                        <MudDivider Class="my-2" />
+                                        <MudGrid Spacing="2" Class="mt-2">
+                                            <MudItem xs="6">
+                                                <MudPaper Class="pa-2 text-center" Elevation="0" Style="background: rgba(255,255,255,0.05); border-radius: 8px;">
+                                                    <MudText Typo="Typo.h6" Class="font-weight-bold">@jogador.TournamentsPlayed</MudText>
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Torneios</MudText>
+                                                </MudPaper>
+                                            </MudItem>
+                                            <MudItem xs="6">
+                                                <MudPaper Class="pa-2 text-center" Elevation="0" Style="background: rgba(255,255,255,0.05); border-radius: 8px;">
+                                                    <MudText Typo="Typo.h6" Class="font-weight-bold">@jogador.ITMRate.ToString("N0")%</MudText>
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">ITM</MudText>
+                                                </MudPaper>
+                                            </MudItem>
+                                            <MudItem xs="6">
+                                                <MudPaper Class="pa-2 text-center" Elevation="0" Style="background: rgba(255,255,255,0.05); border-radius: 8px;">
+                                                    <MudText Typo="Typo.h6" Class="font-weight-bold" Color="@(jogador.ROI >= 0 ? Color.Success : Color.Error)">
+                                                        @jogador.ROI.ToString("+0.0;-0.0")%
+                                                    </MudText>
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">ROI</MudText>
+                                                </MudPaper>
+                                            </MudItem>
+                                            <MudItem xs="6">
+                                                <MudPaper Class="pa-2 text-center" Elevation="0" Style="background: rgba(255,255,255,0.05); border-radius: 8px;">
+                                                    <MudText Typo="Typo.h6" Class="font-weight-bold">@jogador.Top3Finishes</MudText>
+                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Total Podios</MudText>
+                                                </MudPaper>
+                                            </MudItem>
+                                        </MudGrid>
+                                        <div class="d-flex gap-2 mt-3">
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small" FullWidth="true"
+                                                StartIcon="@Icons.Material.Filled.History"
+                                                Href="@($"/jogador/{jogador.PlayerId}/stats")">
+                                                Historico
+                                            </MudButton>
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small" FullWidth="true"
+                                                StartIcon="@Icons.Material.Filled.TrendingUp"
+                                                Href="@($"/jogador/{jogador.PlayerId}/stats")">
+                                                Evolucao
+                                            </MudButton>
+                                        </div>
+                                    }
+
+                                    @* Indicador de expansao *@
+                                    <div class="text-center mt-2">
+                                        <div style="width: 32px; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; margin: 0 auto;
+                                            transition: transform 0.2s; transform: scaleX(@(_expandedPlayer == jogador.Position ? "1.5" : "1"));"></div>
+                                    </div>
+                                </MudCardContent>
+                            </MudCard>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info" Class="ma-2">
+                        Nenhum jogador com historico nesta liga. Complete torneios para gerar o ranking.
+                    </MudAlert>
+                }
+            </div>
+
+            @* Bottom Navigation fixo *@
+            <MudPaper Class="bottom-nav" Elevation="4" Style="position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+                background: var(--mud-palette-surface); border-top: 1px solid rgba(255,255,255,0.1);
+                padding-bottom: env(safe-area-inset-bottom);">
+                <MudNavMenu Dense="true" Class="d-flex justify-space-around pa-1">
+                    <MudNavLink Icon="@Icons.Material.Filled.People" IconColor="Color.Default"
+                        Href="@($"/ligas/{LeagueId}/jogadores")">
+                        <MudText Typo="Typo.caption">Jogadores</MudText>
+                    </MudNavLink>
+                    <MudNavLink Icon="@Icons.Material.Filled.EmojiEvents" IconColor="Color.Default"
+                        Href="@($"/ligas/{LeagueId}/torneios")">
+                        <MudText Typo="Typo.caption">Torneios</MudText>
+                    </MudNavLink>
+                    <MudNavLink Icon="@Icons.Material.Filled.Leaderboard" IconColor="Color.Warning" Class="active-nav">
+                        <MudText Typo="Typo.caption" Color="Color.Warning">Ranking</MudText>
+                    </MudNavLink>
+                    <MudNavLink Icon="@Icons.Material.Filled.Savings" IconColor="Color.Default"
+                        Href="@($"/ligas/{LeagueId}/caixinha")">
+                        <MudText Typo="Typo.caption">Caixinha</MudText>
+                    </MudNavLink>
+                </MudNavMenu>
+            </MudPaper>
+        </div>
+}
+else
+{
+    @* ========== VERSAO DESKTOP ========== *@
+    <MudContainer MaxWidth="MaxWidth.Large" Class="py-4">
+            @* Header com titulo e acoes *@
+            <MudPaper Class="pa-4 mb-4" Elevation="0" Style="background: transparent;">
+                <MudGrid>
+                    <MudItem xs="12" md="6">
+                        <MudText Typo="Typo.h4" Class="font-weight-bold">@(_league?.Name ?? "Ranking")</MudText>
+                        <MudText Typo="Typo.subtitle1" Color="Color.Warning">
+                            @(_selectedSeasonId.HasValue ? _seasons.FirstOrDefault(s => s.Id == _selectedSeasonId)?.Name : "Ranking Geral")
+                        </MudText>
+                    </MudItem>
+                    <MudItem xs="12" md="6" Class="d-flex justify-end align-center gap-2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.Savings"
+                            Href="@($"/ligas/{LeagueId}/caixinha")">
+                            Caixinha
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Default" StartIcon="@Icons.Material.Filled.PersonAdd"
+                            Href="@($"/ligas/{LeagueId}/jogadores")">
+                            Convidar
+                        </MudButton>
+                        <MudIconButton Icon="@Icons.Material.Filled.Settings" Color="Color.Default"
+                            Href="@($"/ligas/{LeagueId}/edit")" />
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+
+            @* Tabs de navegacao *@
+            <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" Class="mb-4" ActivePanelIndex="2">
+                <MudTabPanel Text="Jogadores" Icon="@Icons.Material.Filled.People"
+                    OnClick="@(() => Navigation.NavigateTo($"/ligas/{LeagueId}/jogadores"))" />
+                <MudTabPanel Text="Torneios" Icon="@Icons.Material.Filled.EmojiEvents"
+                    OnClick="@(() => Navigation.NavigateTo($"/ligas/{LeagueId}/torneios"))" />
+                <MudTabPanel Text="Ranking" Icon="@Icons.Material.Filled.Leaderboard" />
+            </MudTabs>
+
+            @* Filtros e controles *@
+            <MudPaper Class="pa-3 mb-4" Elevation="1">
+                <MudGrid>
+                    <MudItem xs="12" md="3">
+                        <MudSelect T="string" Label="Ranking por" @bind-Value="_sortBy" Variant="Variant.Outlined" Dense="true">
+                            <MudSelectItem Value="@("lucro")">Lucro/Prejuizo</MudSelectItem>
+                            <MudSelectItem Value="@("roi")">ROI</MudSelectItem>
+                            <MudSelectItem Value="@("itm")">ITM</MudSelectItem>
+                            <MudSelectItem Value="@("torneios")">Torneios Jogados</MudSelectItem>
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudSelect T="Guid?" Value="_selectedSeasonId"
+                            Label="Temporada"
+                            Variant="Variant.Outlined"
+                            Dense="true"
+                            ValueChanged="OnSeasonChanged">
+                            <MudSelectItem T="Guid?" Value="@((Guid?)null)">Ranking Geral</MudSelectItem>
+                            @foreach (var season in _seasons)
+                            {
+                                <MudSelectItem T="Guid?" Value="@season.Id">
+                                    @season.Name @(season.IsCurrent ? "(Atual)" : "")
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                    <MudItem xs="12" md="6" Class="d-flex align-center justify-end gap-2">
+                        <MudTextField @bind-Value="_searchText" Placeholder="Buscar jogador..."
+                            Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                            Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width: 250px;"
+                            Immediate="true" />
+                        <MudTooltip Text="Mostrar estatisticas">
+                            <MudToggleIconButton @bind-Toggled="_showStats"
+                                Icon="@Icons.Material.Filled.BarChart"
+                                ToggledIcon="@Icons.Material.Filled.BarChart"
+                                Color="Color.Default" ToggledColor="Color.Warning" />
+                        </MudTooltip>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+
+            @if (FilteredRanking.Any())
+            {
+                @* Card do Lider em destaque *@
+                var lider = FilteredRanking.First();
+                <MudPaper Class="pa-4 mb-4" Elevation="2"
+                    Style="background: linear-gradient(135deg, rgba(255,193,7,0.1) 0%, rgba(76,175,80,0.1) 100%); border: 1px solid rgba(255,193,7,0.3);">
+                    <MudGrid>
+                        <MudItem xs="12" md="8">
+                            <div class="d-flex align-center gap-4">
+                                <MudBadge Content="@GetPositionEmoji(1)" Overlap="true" Color="Color.Warning" Bordered="true">
+                                    <MudAvatar Size="Size.Large" Color="Color.Success" Class="elevation-4">
+                                        @GetInitial(lider.PlayerName)
+                                    </MudAvatar>
+                                </MudBadge>
+                                <div>
+                                    <MudText Typo="Typo.caption" Color="Color.Warning" Class="font-weight-bold text-uppercase" Style="letter-spacing: 1px;">
+                                        Lider da Temporada
+                                    </MudText>
+                                    <MudText Typo="Typo.h5" Class="font-weight-bold">@lider.PlayerName</MudText>
+                                    @if (!string.IsNullOrEmpty(lider.Nickname))
+                                    {
+                                        <MudText Typo="Typo.body2" Color="Color.Warning">@@@lider.Nickname</MudText>
+                                    }
+                                </div>
+                            </div>
+                        </MudItem>
+                        <MudItem xs="12" md="4" Class="d-flex align-center justify-end">
+                            <div class="text-right">
+                                <MudText Typo="Typo.h4" Color="@(lider.Profit >= 0 ? Color.Success : Color.Error)" Class="font-weight-bold">
+                                    @FormatCurrency(lider.Profit)
+                                </MudText>
+                                <div class="d-flex gap-4 justify-end mt-1">
+                                    <MudChip T="string" Size="Size.Small" Color="@(lider.ROI >= 0 ? Color.Success : Color.Error)" Variant="Variant.Text">
+                                        @lider.ROI.ToString("+0.0;-0.0")% ROI
+                                    </MudChip>
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Text">
+                                        @lider.ITMRate.ToString("N0")% ITM
+                                    </MudChip>
+                                </div>
+                            </div>
+                        </MudItem>
+                    </MudGrid>
+                </MudPaper>
+
+                @* Tabela principal *@
+                <MudTable Items="@FilteredRanking" Hover="true" Breakpoint="Breakpoint.None" Elevation="1"
+                    Dense="false" RowClass="ranking-row" RowClassFunc="@GetRowClass">
                     <HeaderContent>
-                        <MudTh Style="width: 50px;">#</MudTh>
+                        <MudTh Style="width: 60px; text-align: center;">#</MudTh>
                         <MudTh>Jogador</MudTh>
-                        <MudTh Style="text-align: center;">Torn.</MudTh>
-                        <MudTh Style="text-align: center;">1o</MudTh>
+                        <MudTh Style="text-align: center;">Torneios</MudTh>
+                        <MudTh Style="text-align: center;">
+                            <MudTooltip Text="1o Lugar">@GetPositionEmoji(1)</MudTooltip>
+                        </MudTh>
+                        <MudTh Style="text-align: center;">
+                            <MudTooltip Text="2o Lugar">@GetPositionEmoji(2)</MudTooltip>
+                        </MudTh>
+                        <MudTh Style="text-align: center;">
+                            <MudTooltip Text="3o Lugar">@GetPositionEmoji(3)</MudTooltip>
+                        </MudTh>
                         <MudTh Style="text-align: center;">ROI</MudTh>
-                        <MudTh Style="text-align: right;">Lucro</MudTh>
+                        <MudTh Style="text-align: center;">ITM</MudTh>
+                        <MudTh Style="text-align: right;">Lucro/Prejuizo</MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd DataLabel="#">
-                            <MudText Style="font-weight: 600;" Color="@GetPositionColor(context.Position)">
-                                @context.Position
-                            </MudText>
-                        </MudTd>
-                        <MudTd DataLabel="Jogador">
-                            <div>
-                                <MudText>@context.PlayerName</MudText>
-                                @if (!string.IsNullOrEmpty(context.Nickname))
-                                {
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@context.Nickname</MudText>
-                                }
-                            </div>
-                        </MudTd>
-                        <MudTd DataLabel="Torneios" Style="text-align: center;">@context.TournamentsPlayed</MudTd>
-                        <MudTd DataLabel="Vitorias" Style="text-align: center;">
-                            @if (context.Wins > 0)
+                        <MudTd DataLabel="#" Style="text-align: center;">
+                            @if (context.Position <= 3)
                             {
-                                <MudChip T="string" Size="Size.Small" Color="Color.Warning">@context.Wins</MudChip>
+                                <MudIcon Icon="@Icons.Material.Filled.EmojiEvents"
+                                    Color="@GetPositionColor(context.Position)" Size="Size.Small" />
                             }
                             else
                             {
-                                <text>-</text>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">@context.Position</MudText>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Jogador">
+                            <div class="d-flex align-center gap-3">
+                                <MudAvatar Size="Size.Medium" Color="@GetAvatarColor(context.Position)">
+                                    @GetInitial(context.PlayerName)
+                                </MudAvatar>
+                                <div>
+                                    <MudText Typo="Typo.body1" Class="font-weight-medium">@context.PlayerName</MudText>
+                                    @if (!string.IsNullOrEmpty(context.Nickname))
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Warning">@@@context.Nickname</MudText>
+                                    }
+                                </div>
+                            </div>
+                        </MudTd>
+                        <MudTd DataLabel="Torneios" Style="text-align: center;">
+                            <MudText Typo="Typo.body2">@context.TournamentsPlayed</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="1o" Style="text-align: center;">
+                            @if (context.Wins > 0)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled">@context.Wins</MudChip>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">-</MudText>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="2o" Style="text-align: center;">
+                            @if (context.SecondPlaces > 0)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Filled">@context.SecondPlaces</MudChip>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">-</MudText>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="3o" Style="text-align: center;">
+                            @if (context.ThirdPlaces > 0)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">@context.ThirdPlaces</MudChip>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">-</MudText>
                             }
                         </MudTd>
                         <MudTd DataLabel="ROI" Style="text-align: center;">
-                            <MudText Color="@(context.ROI >= 0 ? Color.Success : Color.Error)">
-                                @context.ROI.ToString("N1")%
+                            <MudText Typo="Typo.body2" Color="@(context.ROI >= 0 ? Color.Success : Color.Error)">
+                                @context.ROI.ToString("+0.0;-0.0")%
                             </MudText>
                         </MudTd>
+                        <MudTd DataLabel="ITM" Style="text-align: center;">
+                            <div class="d-flex align-center justify-center gap-2">
+                                <MudProgressLinear Color="Color.Success" Value="@((double)context.ITMRate)" Style="width: 60px;" />
+                                <MudText Typo="Typo.caption">@context.ITMRate.ToString("N0")%</MudText>
+                            </div>
+                        </MudTd>
                         <MudTd DataLabel="Lucro" Style="text-align: right;">
-                            <MudText Color="@(context.Profit >= 0 ? Color.Success : Color.Error)" Style="font-weight: 600;">
-                                @(context.Profit >= 0 ? "+" : "")R$ @context.Profit.ToString("N2")
+                            <MudText Typo="Typo.body1" Class="font-weight-bold" Color="@(context.Profit >= 0 ? Color.Success : Color.Error)">
+                                @FormatCurrency(context.Profit)
                             </MudText>
                         </MudTd>
                     </RowTemplate>
                 </MudTable>
-            </MudCardContent>
-        </MudCard>
-    }
-</MudContainer>
+
+                @* Estatisticas resumidas (opcional) *@
+                @if (_showStats && _ranking != null)
+                {
+                    <MudPaper Class="pa-4 mt-4" Elevation="1">
+                        <MudText Typo="Typo.h6" Class="mb-3">Estatisticas da Temporada</MudText>
+                        <MudGrid>
+                            <MudItem xs="6" md="3">
+                                <MudPaper Class="pa-3 text-center" Elevation="0" Style="background: rgba(76,175,80,0.1);">
+                                    <MudText Typo="Typo.h5" Color="Color.Success">@_ranking.Sum(j => j.TournamentsPlayed)</MudText>
+                                    <MudText Typo="Typo.caption">Total de Torneios</MudText>
+                                </MudPaper>
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <MudPaper Class="pa-3 text-center" Elevation="0" Style="background: rgba(255,193,7,0.1);">
+                                    <MudText Typo="Typo.h5" Color="Color.Warning">@_ranking.Count</MudText>
+                                    <MudText Typo="Typo.caption">Jogadores Ativos</MudText>
+                                </MudPaper>
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <MudPaper Class="pa-3 text-center" Elevation="0" Style="background: rgba(76,175,80,0.1);">
+                                    <MudText Typo="Typo.h5" Color="Color.Success">@FormatCurrency(_ranking.Where(j => j.Profit > 0).Sum(j => j.Profit))</MudText>
+                                    <MudText Typo="Typo.caption">Total em Lucros</MudText>
+                                </MudPaper>
+                            </MudItem>
+                            <MudItem xs="6" md="3">
+                                <MudPaper Class="pa-3 text-center" Elevation="0" Style="background: rgba(244,67,54,0.1);">
+                                    <MudText Typo="Typo.h5" Color="Color.Error">@FormatCurrency(_ranking.Where(j => j.Profit < 0).Sum(j => j.Profit))</MudText>
+                                    <MudText Typo="Typo.caption">Total em Prejuizos</MudText>
+                                </MudPaper>
+                            </MudItem>
+                        </MudGrid>
+                    </MudPaper>
+                }
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info">
+                    Nenhum jogador com historico nesta liga. Complete torneios para gerar o ranking.
+                </MudAlert>
+            }
+    </MudContainer>
+}
 
 @code {
     [Parameter] public Guid? LeagueId { get; set; }
@@ -168,7 +545,38 @@
     private List<SeasonSummaryDto> _seasons = new();
     private Guid? _selectedSeasonId;
     private bool _loading = true;
-    private List<BreadcrumbItem> _breadcrumbs = new();
+
+    // Novos estados para filtros e UI
+    private string _sortBy = "lucro";
+    private string _searchText = "";
+    private bool _showStats = false;
+    private int? _expandedPlayer = null;
+
+    // Responsividade
+    private bool _isMobile = false;
+
+    // Propriedade computada para filtrar e ordenar ranking
+    private IEnumerable<PlayerRankingDto> FilteredRanking
+    {
+        get
+        {
+            if (_ranking == null) return Enumerable.Empty<PlayerRankingDto>();
+
+            var filtered = _ranking.Where(p =>
+                string.IsNullOrEmpty(_searchText) ||
+                p.PlayerName.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+                (p.Nickname?.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ?? false)
+            );
+
+            return _sortBy switch
+            {
+                "roi" => filtered.OrderByDescending(p => p.ROI),
+                "itm" => filtered.OrderByDescending(p => p.ITMRate),
+                "torneios" => filtered.OrderByDescending(p => p.TournamentsPlayed),
+                _ => filtered.OrderByDescending(p => p.Profit)
+            };
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -177,13 +585,6 @@
             _league = await LeagueService.GetLeagueByIdAsync(LeagueId.Value);
             if (_league != null)
             {
-                _breadcrumbs = new List<BreadcrumbItem>
-                {
-                    new("Ligas", "/ligas", false),
-                    new(_league.Name, $"/ligas/{LeagueId}", false),
-                    new("Ranking", null, true)
-                };
-
                 // Load seasons
                 _seasons = (await SeasonService.GetSeasonSummariesAsync(LeagueId.Value)).ToList();
 
@@ -192,6 +593,27 @@
             }
         }
         _loading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await BrowserViewportService.SubscribeAsync(this, fireImmediately: true);
+        }
+    }
+
+    public Guid Id { get; } = Guid.NewGuid();
+
+    Task IBrowserViewportObserver.NotifyBrowserViewportChangeAsync(BrowserViewportEventArgs browserViewportEventArgs)
+    {
+        _isMobile = browserViewportEventArgs.Breakpoint <= Breakpoint.Sm;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await BrowserViewportService.UnsubscribeAsync(this);
     }
 
     private async Task OnSeasonChanged(Guid? seasonId)
@@ -217,11 +639,31 @@
         }
     }
 
-    private string GetTopCardClass(int position) => position switch
+    private void ToggleExpand(int position) =>
+        _expandedPlayer = _expandedPlayer == position ? null : position;
+
+    private string GetInitial(string name) =>
+        name.Length > 0 ? name[0].ToString().ToUpper() : "?";
+
+    private string FormatCurrency(decimal value)
     {
-        1 => "ranking-gold",
-        2 => "ranking-silver",
-        3 => "ranking-bronze",
+        var abs = Math.Abs(value);
+        var formatted = abs.ToString("N2");
+        return value >= 0 ? $"+R$ {formatted}" : $"-R$ {formatted}";
+    }
+
+    private string FormatCurrencyShort(decimal value)
+    {
+        var abs = Math.Abs(value);
+        var formatted = abs.ToString("N0");
+        return value >= 0 ? $"+R${formatted}" : $"-R${formatted}";
+    }
+
+    private string GetPositionEmoji(int position) => position switch
+    {
+        1 => "\U0001F947", // Gold medal
+        2 => "\U0001F948", // Silver medal
+        3 => "\U0001F949", // Bronze medal
         _ => ""
     };
 
@@ -232,4 +674,80 @@
         3 => Color.Tertiary,
         _ => Color.Default
     };
+
+    private Color GetAvatarColor(int position) => position switch
+    {
+        1 => Color.Success,
+        2 => Color.Warning,
+        3 => Color.Info,
+        _ => Color.Default
+    };
+
+    private string GetPodiumColor(int position) => position switch
+    {
+        1 => "#FFC107", // Ouro
+        2 => "#9E9E9E", // Prata
+        3 => "#FF9800", // Bronze
+        _ => "transparent"
+    };
+
+    private string GetRowClass(PlayerRankingDto player, int index)
+    {
+        if (player.Position == 1) return "leader-row";
+        if (player.Position <= 3) return "podium-row";
+        return "";
+    }
 }
+
+<style>
+    /* Leader and podium row highlights */
+    .leader-row {
+        background: linear-gradient(90deg, rgba(255,193,7,0.08) 0%, transparent 100%) !important;
+    }
+    .podium-row {
+        background: rgba(255,193,7,0.04) !important;
+    }
+    .ranking-row:hover {
+        background: rgba(255,255,255,0.05) !important;
+    }
+
+    /* Mobile container */
+    .ranking-mobile-container {
+        min-height: 100vh;
+        background: var(--mud-palette-background);
+    }
+
+    .ranking-content {
+        padding-top: 56px;
+        padding-bottom: 72px;
+    }
+
+    /* Bottom navigation */
+    .bottom-nav .mud-nav-link {
+        flex-direction: column;
+        min-width: 64px;
+        padding: 6px 12px;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .bottom-nav .mud-nav-link .mud-icon-root {
+        margin-right: 0 !important;
+        margin-bottom: 2px;
+    }
+
+    .active-nav {
+        background: rgba(255, 193, 7, 0.1);
+        border-radius: 8px;
+    }
+
+    /* Card animations */
+    .ranking-card {
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+
+    .ranking-card:active {
+        transform: scale(0.98);
+    }
+</style>

@@ -1,0 +1,29 @@
+@* Card horizontal com estatísticas rápidas *@
+
+<MudPaper Class="@($"pa-3 {Class}")" Elevation="@Elevation" Style="@Style">
+    <div class="d-flex justify-space-around">
+        @foreach (var (stat, index) in Stats.Select((s, i) => (s, i)))
+        {
+            @if (index > 0)
+            {
+                <MudDivider Vertical="true" FlexItem="true" Class="mx-2" />
+            }
+            <div class="text-center flex-1">
+                <MudText Typo="@ValueTypo" Color="@stat.Color" Class="font-weight-bold">
+                    @stat.Value
+                </MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@stat.Label</MudText>
+            </div>
+        }
+    </div>
+</MudPaper>
+
+@code {
+    [Parameter] public List<StatItem> Stats { get; set; } = new();
+    [Parameter] public string? Style { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public int Elevation { get; set; } = 1;
+    [Parameter] public Typo ValueTypo { get; set; } = Typo.h5;
+
+    public record StatItem(string Label, string Value, Color Color = Color.Default);
+}

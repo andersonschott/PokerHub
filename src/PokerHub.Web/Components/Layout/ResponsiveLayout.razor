@@ -1,0 +1,57 @@
+@implements IBrowserViewportObserver
+@implements IAsyncDisposable
+@inject IBrowserViewportService BrowserViewportService
+
+@if (_initialized)
+{
+    @if (_isMobile)
+    {
+        @Mobile
+    }
+    else
+    {
+        @Desktop
+    }
+}
+else if (Loading != null)
+{
+    @Loading
+}
+else
+{
+    <div class="d-flex justify-center align-center pa-4">
+        <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+    </div>
+}
+
+@code {
+    [Parameter] public RenderFragment Mobile { get; set; } = null!;
+    [Parameter] public RenderFragment Desktop { get; set; } = null!;
+    [Parameter] public Breakpoint MobileBreakpoint { get; set; } = Breakpoint.Sm;
+    [Parameter] public RenderFragment? Loading { get; set; }
+
+    private bool _isMobile;
+    private bool _initialized;
+
+    public Guid Id { get; } = Guid.NewGuid();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await BrowserViewportService.SubscribeAsync(this, fireImmediately: true);
+        }
+    }
+
+    Task IBrowserViewportObserver.NotifyBrowserViewportChangeAsync(BrowserViewportEventArgs args)
+    {
+        _isMobile = args.Breakpoint <= MobileBreakpoint;
+        _initialized = true;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await BrowserViewportService.UnsubscribeAsync(this);
+    }
+}
