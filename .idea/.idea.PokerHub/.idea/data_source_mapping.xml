@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="DataSourcePerFileMappings">
+    <file url="file://$APPLICATION_CONFIG_DIR$/consoles/db/022664b7-5237-4e2d-bd2f-5936e1860f83/console.sql" value="022664b7-5237-4e2d-bd2f-5936e1860f83" />
+    <file url="file://$PROJECT_DIR$/src/PokerHub.Infrastructure/Data/Scripts/00_run_all.sql" value="022664b7-5237-4e2d-bd2f-5936e1860f83" />
+    <file url="file://$PROJECT_DIR$/src/PokerHub.Infrastructure/Data/Scripts/01_create_league.sql" value="022664b7-5237-4e2d-bd2f-5936e1860f83" />
+    <file url="file://$PROJECT_DIR$/src/PokerHub.Infrastructure/Data/Scripts/02_create_players.sql" value="022664b7-5237-4e2d-bd2f-5936e1860f83" />
+    <file url="file://$PROJECT_DIR$/src/PokerHub.Infrastructure/Data/Scripts/03_create_prize_tables.sql" value="022664b7-5237-4e2d-bd2f-5936e1860f83" />
+    <file url="file://$PROJECT_DIR$/src/PokerHub.Infrastructure/Data/Scripts/04_create_seasons.sql" value="022664b7-5237-4e2d-bd2f-5936e1860f83" />
+    <file url="file://$PROJECT_DIR$/src/PokerHub.Infrastructure/Data/Scripts/05_create_tournaments.sql" value="022664b7-5237-4e2d-bd2f-5936e1860f83" />
+    <file url="file://$PROJECT_DIR$/src/PokerHub.Infrastructure/Data/Scripts/06_create_player_season_stats.sql" value="022664b7-5237-4e2d-bd2f-5936e1860f83" />
+  </component>
+</project>

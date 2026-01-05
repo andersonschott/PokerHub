@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="SqlDialectMappings">
+    <file url="file://$PROJECT_DIR$/src/PokerHub.Infrastructure/Data/Scripts/00_run_all.sql" dialect="AZURE" />
+    <file url="file://$PROJECT_DIR$/src/PokerHub.Infrastructure/Data/Scripts/01_create_league.sql" dialect="AZURE" />
+    <file url="file://$PROJECT_DIR$/src/PokerHub.Infrastructure/Data/Scripts/02_create_players.sql" dialect="AZURE" />
+    <file url="file://$PROJECT_DIR$/src/PokerHub.Infrastructure/Data/Scripts/03_create_prize_tables.sql" dialect="AZURE" />
+    <file url="file://$PROJECT_DIR$/src/PokerHub.Infrastructure/Data/Scripts/04_create_seasons.sql" dialect="AZURE" />
+    <file url="file://$PROJECT_DIR$/src/PokerHub.Infrastructure/Data/Scripts/05_create_tournaments.sql" dialect="AZURE" />
+    <file url="file://$PROJECT_DIR$/src/PokerHub.Infrastructure/Data/Scripts/06_create_player_season_stats.sql" dialect="AZURE" />
+  </component>
+</project>

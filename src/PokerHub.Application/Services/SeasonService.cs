@@ -202,7 +202,45 @@ public class SeasonService : ISeasonService
         var season = await _context.Seasons.FindAsync(seasonId);
         if (season == null) return [];
 
-        // Include inactive players to preserve history in rankings
+        // Verificar se existem dados legados (PlayerSeasonStats) para esta temporada
+        var legacyStats = await _context.PlayerSeasonStats
+            .Where(pss => pss.SeasonId == seasonId)
+            .Include(pss => pss.Player)
+            .OrderBy(pss => pss.FinalPosition)
+            .ToListAsync();
+
+        // Se houver dados legados, usar diretamente
+        if (legacyStats.Count > 0)
+        {
+            return legacyStats
+                .Select(pss =>
+                {
+                    // Para dados legados: ITM = soma de posicoes premiadas (1o+2o+3o)
+                    var itmCount = pss.FirstPlaces + pss.SecondPlaces + pss.ThirdPlaces;
+                    var itmRate = pss.GamesPlayed > 0 ? ((decimal)itmCount / pss.GamesPlayed) * 100 : 0;
+                    var roi = pss.TotalCost > 0 ? (pss.Balance / pss.TotalCost) * 100 : 0;
+
+                    return new PlayerRankingDto(
+                        pss.FinalPosition,
+                        pss.PlayerId,
+                        pss.Player.Name,
+                        pss.Player.Nickname,
+                        pss.GamesPlayed,
+                        pss.FirstPlaces,
+                        pss.SecondPlaces,
+                        pss.ThirdPlaces,
+                        pss.FirstPlaces + pss.SecondPlaces + pss.ThirdPlaces,
+                        pss.TotalCost,
+                        pss.TotalPrize,
+                        pss.Balance,
+                        roi,
+                        itmRate
+                    );
+                })
+                .ToList();
+        }
+
+        // Calcular normalmente via TournamentPlayer (comportamento original)
         var players = await _context.Players
             .Where(p => p.LeagueId == season.LeagueId)
             .Include(p => p.Participations)

@@ -17,6 +17,72 @@ public class RankingService : IRankingService
 
     public async Task<IReadOnlyList<PlayerRankingDto>> GetLeagueRankingAsync(Guid leagueId)
     {
+        // Verificar se existem dados legados (PlayerSeasonStats) para esta liga
+        var hasLegacyData = await _context.PlayerSeasonStats
+            .AnyAsync(pss => pss.Player.LeagueId == leagueId);
+
+        if (hasLegacyData)
+        {
+            return await GetLeagueRankingFromLegacyDataAsync(leagueId);
+        }
+
+        return await GetLeagueRankingFromTournamentDataAsync(leagueId);
+    }
+
+    private async Task<IReadOnlyList<PlayerRankingDto>> GetLeagueRankingFromLegacyDataAsync(Guid leagueId)
+    {
+        // Agregar dados de todas as temporadas por jogador
+        var legacyStats = await _context.PlayerSeasonStats
+            .Where(pss => pss.Player.LeagueId == leagueId)
+            .Include(pss => pss.Player)
+            .ToListAsync();
+
+        var playerStats = legacyStats
+            .GroupBy(pss => pss.Player)
+            .Select(g => new
+            {
+                Player = g.Key,
+                TotalGames = g.Sum(x => x.GamesPlayed),
+                TotalFirsts = g.Sum(x => x.FirstPlaces),
+                TotalSeconds = g.Sum(x => x.SecondPlaces),
+                TotalThirds = g.Sum(x => x.ThirdPlaces),
+                TotalCost = g.Sum(x => x.TotalCost),
+                TotalPrize = g.Sum(x => x.TotalPrize),
+                TotalBalance = g.Sum(x => x.Balance)
+            })
+            .OrderByDescending(p => p.TotalBalance)
+            .ToList();
+
+        return playerStats
+            .Select((p, index) =>
+            {
+                // Para dados legados: ITM = soma de posicoes premiadas (1o+2o+3o)
+                var itmCount = p.TotalFirsts + p.TotalSeconds + p.TotalThirds;
+                var itmRate = p.TotalGames > 0 ? ((decimal)itmCount / p.TotalGames) * 100 : 0;
+                var roi = p.TotalCost > 0 ? (p.TotalBalance / p.TotalCost) * 100 : 0;
+
+                return new PlayerRankingDto(
+                    index + 1,
+                    p.Player.Id,
+                    p.Player.Name,
+                    p.Player.Nickname,
+                    p.TotalGames,
+                    p.TotalFirsts,
+                    p.TotalSeconds,
+                    p.TotalThirds,
+                    p.TotalFirsts + p.TotalSeconds + p.TotalThirds,
+                    p.TotalCost,
+                    p.TotalPrize,
+                    p.TotalBalance,
+                    roi,
+                    itmRate
+                );
+            })
+            .ToList();
+    }
+
+    private async Task<IReadOnlyList<PlayerRankingDto>> GetLeagueRankingFromTournamentDataAsync(Guid leagueId)
+    {
         // Include inactive players to preserve history in rankings
         var players = await _context.Players
             .Where(p => p.LeagueId == leagueId)
