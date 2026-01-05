@@ -106,3 +106,457 @@ h1:focus {
 .ranking-bronze {
     border-left: 4px solid #CD7F32;
 }
+
+/* ==========================================
+   Mobile Layout Components
+   ========================================== */
+
+/* Mobile containers */
+.mobile-container {
+    min-height: 100vh;
+    background: var(--mud-palette-background);
+}
+
+.mobile-content {
+    padding-bottom: 72px;  /* Bottom nav height */
+}
+
+/* Mobile Page Layout - Fixed Header/Bottom with Scrollable Content */
+.mobile-page {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--mud-palette-background);
+}
+
+.mobile-fixed-header {
+    flex-shrink: 0;
+    background: var(--mud-palette-surface);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    z-index: 100;
+}
+
+.mobile-scroll-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 80px; /* Space for bottom nav */
+}
+
+.mobile-fixed-bottom {
+    flex-shrink: 0;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: var(--mud-palette-surface);
+}
+
+/* Bottom navigation estilo /ranking */
+.mobile-fixed-bottom .mud-nav-link {
+    flex-direction: column;
+    min-width: 64px;
+    padding: 6px 12px;
+    justify-content: center;
+    align-items: center;
+}
+
+.mobile-fixed-bottom .mud-nav-link .mud-icon-root {
+    margin-right: 0 !important;
+    margin-bottom: 2px;
+}
+
+.active-nav {
+    background: rgba(255, 193, 7, 0.1);
+    border-radius: 8px;
+}
+
+/* SubHeader contextual - abaixo do header padrão */
+.sub-header {
+    background: var(--mud-palette-surface);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    position: sticky;
+    top: 0;
+    z-index: 99;
+}
+
+.mobile-content.with-fab {
+    padding-bottom: 140px; /* Bottom nav + FAB */
+}
+
+/* Bottom navigation */
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: var(--mud-palette-surface);
+    border-top: 1px solid rgba(255,255,255,0.12);
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.bottom-nav .nav-item {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 64px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    text-transform: none !important;
+}
+
+.bottom-nav .nav-item.active {
+    background: rgba(76, 175, 80, 0.15);
+}
+
+.bottom-nav .nav-item.active .mud-icon-root {
+    color: var(--mud-palette-success) !important;
+}
+
+.bottom-nav .nav-item.active .mud-typography {
+    color: var(--mud-palette-success) !important;
+    font-weight: 600;
+}
+
+.bottom-nav .nav-item .mud-icon-root {
+    margin-bottom: 2px;
+    font-size: 1.25rem;
+}
+
+.bottom-nav .nav-item .mud-typography {
+    font-size: 0.7rem;
+    line-height: 1.2;
+}
+
+/* Card animations */
+.expandable-card {
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.expandable-card:active {
+    transform: scale(0.98);
+}
+
+/* Status indicator bar */
+.status-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    border-radius: 4px 0 0 4px;
+}
+
+.status-bar-success { background: var(--mud-palette-success); }
+.status-bar-warning { background: var(--mud-palette-warning); }
+.status-bar-error { background: var(--mud-palette-error); }
+.status-bar-info { background: var(--mud-palette-info); }
+
+/* Horizontal scroll for filters */
+.horizontal-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+.horizontal-scroll::-webkit-scrollbar { display: none; }
+
+/* Card with left indicator */
+.card-with-indicator {
+    position: relative;
+    padding-left: 8px;
+}
+
+/* Mobile AppBar adjustments */
+.mobile-appbar {
+    background: var(--mud-palette-success) !important;
+    color: white !important;
+}
+
+.mobile-appbar .mud-icon-button {
+    color: white !important;
+}
+
+.mobile-appbar .mud-text {
+    color: white !important;
+}
+
+.mobile-appbar .mud-text.mud-warning-text {
+    color: #FFD700 !important;
+}
+
+/* FAB positioning */
+.mobile-fab {
+    position: fixed;
+    bottom: 80px;
+    right: 16px;
+    z-index: 101;
+}
+
+/* Leader card - destacado com gradiente dourado */
+.leader-card {
+    background: linear-gradient(135deg, #FFF8E1 0%, #FFECB3 100%) !important;
+    border: 2px solid #FFC107 !important;
+    border-radius: 16px !important;
+}
+
+/* Leader card gradient backgrounds */
+.leader-card-gold {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.2) 0%, rgba(255, 193, 7, 0.08) 100%);
+    border-left: 4px solid #FFD700;
+    border-radius: 12px;
+}
+
+.leader-card-silver {
+    background: linear-gradient(135deg, rgba(192, 192, 192, 0.15) 0%, rgba(158, 158, 158, 0.05) 100%);
+    border-left: 4px solid #C0C0C0;
+    border-radius: 12px;
+}
+
+.leader-card-bronze {
+    background: linear-gradient(135deg, rgba(205, 127, 50, 0.15) 0%, rgba(161, 136, 127, 0.05) 100%);
+    border-left: 4px solid #CD7F32;
+    border-radius: 12px;
+}
+
+/* Ranking card with position badge */
+.ranking-card {
+    position: relative;
+    border-radius: 12px;
+    overflow: visible;
+}
+
+.ranking-card .position-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+/* Medal badges */
+.medal-gold { color: #FFD700; }
+.medal-silver { color: #C0C0C0; }
+.medal-bronze { color: #CD7F32; }
+
+/* Podium display */
+.podium-display {
+    display: flex;
+    gap: 12px;
+    padding-top: 8px;
+    margin-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.podium-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.podium-item .medal {
+    font-size: 1rem;
+}
+
+/* Stats chip */
+.stats-chip {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* Quick stats dividers */
+.quick-stats-divider {
+    height: 40px;
+    margin: 0 8px;
+}
+
+/* Chevron animation */
+.chevron-icon {
+    transition: transform 0.2s ease;
+}
+
+.expandable-card:hover .chevron-icon {
+    color: var(--mud-palette-primary);
+}
+
+/* Player card styles */
+.player-card {
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+
+.player-card:active {
+    transform: scale(0.98);
+}
+
+.position-badge-avatar {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    font-size: 0.9rem;
+}
+
+/* Tournament card styles */
+.tournament-card {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.stat-box {
+    text-align: center;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.prize-pool-box {
+    background: rgba(76, 175, 80, 0.1);
+}
+
+/* Leader highlight card */
+.leader-highlight-card {
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.2) 0%, rgba(255, 152, 0, 0.1) 100%);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+.leader-trophy {
+    position: absolute;
+    right: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 4rem;
+    opacity: 0.2;
+}
+
+/* Ranking player card */
+.ranking-player-card {
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+
+.ranking-player-card:active {
+    transform: scale(0.98);
+}
+
+.ranking-indicator {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+}
+
+.ranking-indicator.positive {
+    background: var(--mud-palette-success);
+}
+
+.ranking-indicator.negative {
+    background: var(--mud-palette-error);
+}
+
+/* ===== UNIFIED CARD STYLES (Based on JSX Reference) ===== */
+
+/* Unified Player Card */
+.player-card-unified {
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 72px;
+}
+
+.player-card-unified:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.player-card-unified:active {
+    transform: scale(0.98);
+}
+
+/* Podium badge on avatar */
+.podium-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    background: var(--mud-palette-warning);
+    color: var(--mud-palette-warning-darken);
+    font-size: 0.65rem;
+    font-weight: bold;
+    padding: 2px 4px;
+    border-radius: 8px;
+    white-space: nowrap;
+}
+
+/* Unified Tournament Card */
+.tournament-card-unified {
+    border-radius: 12px;
+    overflow: hidden;
+    min-height: 180px;
+}
+
+/* Unified Stat Box */
+.stat-box-unified {
+    text-align: center;
+    padding: 10px 8px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    min-width: 0;
+}
+
+.prize-pool-box-unified {
+    background: rgba(76, 175, 80, 0.15);
+}
+
+/* Unified Ranking Card */
+.ranking-card-unified {
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+    min-height: 72px;
+}
+
+.ranking-card-unified.leader {
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.15) 0%, rgba(255, 152, 0, 0.08) 100%);
+    border: 1px solid rgba(255, 193, 7, 0.25);
+}
+
+/* Ranking indicator unified */
+.ranking-indicator-unified {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+}
+
+.ranking-indicator-unified.positive {
+    background: var(--mud-palette-success);
+}
+
+.ranking-indicator-unified.negative {
+    background: var(--mud-palette-error);
+}
+
+/* Leader crown badge */
+.leader-crown {
+    position: absolute;
+    top: -8px;
+    right: -4px;
+    font-size: 1rem;
+}

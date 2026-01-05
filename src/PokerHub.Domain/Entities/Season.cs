@@ -12,6 +12,7 @@ public class Season
 
     // Navigation properties
     public League League { get; set; } = null!;
+    public ICollection<PlayerSeasonStats> PlayerStats { get; set; } = new List<PlayerSeasonStats>();
 
     public bool ContainsTournament(DateTime scheduledDateTime)
     {

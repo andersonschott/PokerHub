@@ -1,0 +1,49 @@
+@* Navegação inferior reutilizável para páginas mobile *@
+
+<MudPaper Class="bottom-nav" Elevation="4">
+    <div class="d-flex justify-space-around pa-1">
+        @foreach (var item in Items)
+        {
+            var buttonClass = item.IsActive ? "nav-item active" : "nav-item";
+            <MudButton Variant="Variant.Text"
+                       Color="@(item.IsActive ? Color.Success : Color.Default)"
+                       Class="@buttonClass"
+                       Href="@item.Href"
+                       OnClick="@(() => HandleClick(item))">
+                @if (item.Badge > 0)
+                {
+                    <MudBadge Content="@item.Badge" Color="Color.Error" Overlap="true" Bordered="true">
+                        <MudIcon Icon="@item.Icon" />
+                    </MudBadge>
+                }
+                else
+                {
+                    <MudIcon Icon="@item.Icon" />
+                }<br/>
+                <MudText Typo="Typo.caption">@item.Label</MudText>
+            </MudButton>
+        }
+    </div>
+</MudPaper>
+
+@code {
+    [Parameter] public List<NavItem> Items { get; set; } = new();
+    [Parameter] public EventCallback<string> OnItemClick { get; set; }
+
+    private async Task HandleClick(NavItem item)
+    {
+        if (OnItemClick.HasDelegate)
+        {
+            await OnItemClick.InvokeAsync(item.Key);
+        }
+    }
+
+    public record NavItem(
+        string Key,
+        string Label,
+        string Icon,
+        string? Href = null,
+        bool IsActive = false,
+        int Badge = 0
+    );
+}
