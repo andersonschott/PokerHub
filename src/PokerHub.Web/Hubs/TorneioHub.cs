@@ -22,6 +22,7 @@ public class TorneioHub : Hub
     {
         var groupName = GetGroupName(torneioId);
         await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
+        Console.WriteLine($"[TorneioHub] Client {Context.ConnectionId} joined group '{groupName}'");
         _logger.LogInformation("Client {ConnectionId} joined tournament {TorneioId}", Context.ConnectionId, torneioId);
 
         // Send current timer state to the newly connected client
@@ -129,6 +130,7 @@ public class TorneioHub : Hub
     public static async Task BroadcastPrizePoolUpdated(IHubContext<TorneioHub> hubContext, Guid torneioId, decimal prizePool, int totalRebuys, int totalAddons)
     {
         var groupName = GetGroupName(torneioId);
+        Console.WriteLine($"[TorneioHub] Sending PrizePoolAtualizado to group '{groupName}'");
         await hubContext.Clients.Group(groupName).SendAsync("PrizePoolAtualizado", new
         {
             PrizePool = prizePool,
@@ -153,6 +155,16 @@ public class TorneioHub : Hub
     {
         var groupName = GetGroupName(torneioId);
         await hubContext.Clients.Group(groupName).SendAsync("TimerStateUpdated", timerState);
+    }
+
+    /// <summary>
+    /// Broadcast player data updated (rebuy, addon, check-in, etc.)
+    /// </summary>
+    public static async Task BroadcastPlayerUpdated(IHubContext<TorneioHub> hubContext, Guid torneioId)
+    {
+        var groupName = GetGroupName(torneioId);
+        Console.WriteLine($"[TorneioHub] Sending PlayerUpdated to group '{groupName}'");
+        await hubContext.Clients.Group(groupName).SendAsync("PlayerUpdated");
     }
 
     #endregion

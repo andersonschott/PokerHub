@@ -52,7 +52,9 @@ public class TournamentService : ITournamentService
 
     public async Task<TournamentDetailDto?> GetTournamentDetailAsync(Guid tournamentId)
     {
+        // Use AsNoTracking to ensure fresh data is fetched (important for SignalR updates)
         var tournament = await _context.Tournaments
+            .AsNoTracking()
             .Include(t => t.League)
             .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
             .Include(t => t.Players)
@@ -358,10 +360,10 @@ public class TournamentService : ITournamentService
         {
             var prizeValues = ParsePrizeStructure(tournament.PrizeStructure);
 
-            // Calculate jackpot from league percentage if configured
+            // Calculate jackpot from league percentage if configured (arredondado para inteiro)
             if (tournament.League.JackpotPercentage > 0)
             {
-                jackpotContribution = prizePool * tournament.League.JackpotPercentage / 100;
+                jackpotContribution = Math.Round(prizePool * tournament.League.JackpotPercentage / 100, MidpointRounding.AwayFromZero);
                 if (tournament.PrizeDistributionType == PrizeDistributionType.Percentage)
                 {
                     prizePool -= jackpotContribution; // Only reduce prize pool for percentage-based
@@ -378,14 +380,31 @@ public class TournamentService : ITournamentService
                     {
                         if (tournament.PrizeDistributionType == PrizeDistributionType.Percentage)
                         {
-                            // Calculate prize as percentage of prize pool
-                            tp.Prize = prizePool * prizeValues[position - 1] / 100;
+                            // Calculate prize as percentage of prize pool (arredondado para inteiro)
+                            tp.Prize = Math.Round(prizePool * prizeValues[position - 1] / 100, MidpointRounding.AwayFromZero);
                         }
                         else
                         {
                             // Use fixed value directly
                             tp.Prize = prizeValues[position - 1];
                         }
+                    }
+                }
+            }
+
+            // Ajustar diferença de arredondamento no 1º colocado (apenas para distribuição por porcentagem)
+            if (tournament.PrizeDistributionType == PrizeDistributionType.Percentage)
+            {
+                var originalPrizePool = CalculatePrizePool(tournament);
+                var totalDistributed = tournament.Players.Sum(p => p.Prize) + jackpotContribution;
+                var roundingDiff = originalPrizePool - totalDistributed;
+
+                if (roundingDiff != 0)
+                {
+                    var firstPlace = tournament.Players.FirstOrDefault(p => p.Position == 1);
+                    if (firstPlace != null)
+                    {
+                        firstPlace.Prize += roundingDiff;
                     }
                 }
             }

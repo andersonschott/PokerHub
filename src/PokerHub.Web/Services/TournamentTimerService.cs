@@ -331,11 +331,15 @@ public class TournamentTimerService : BackgroundService
 
     public async Task NotifyPrizePoolUpdate(Guid tournamentId, decimal prizePool, int totalRebuys, int totalAddons)
     {
+        _logger.LogInformation("[TimerService] Broadcasting PrizePoolAtualizado to tournament {TournamentId}: PrizePool={PrizePool}, Rebuys={Rebuys}, Addons={Addons}",
+            tournamentId, prizePool, totalRebuys, totalAddons);
         await TorneioHub.BroadcastPrizePoolUpdated(_hubContext, tournamentId, prizePool, totalRebuys, totalAddons);
     }
 
     public async Task NotifyPlayerEliminated(Guid tournamentId, Guid playerId, string playerName, int position)
     {
+        _logger.LogInformation("[TimerService] Broadcasting JogadorEliminado to tournament {TournamentId}: Player={PlayerName}, Position={Position}",
+            tournamentId, playerName, position);
         await TorneioHub.BroadcastPlayerEliminated(_hubContext, tournamentId, playerId, playerName, position);
     }
 
@@ -343,6 +347,12 @@ public class TournamentTimerService : BackgroundService
     {
         _activeTimers.TryRemove(tournamentId, out _);
         await TorneioHub.BroadcastTournamentFinished(_hubContext, tournamentId);
+    }
+
+    public async Task NotifyPlayerUpdated(Guid tournamentId)
+    {
+        _logger.LogInformation("[TimerService] Broadcasting PlayerUpdated to tournament {TournamentId}", tournamentId);
+        await TorneioHub.BroadcastPlayerUpdated(_hubContext, tournamentId);
     }
 
     /// <summary>

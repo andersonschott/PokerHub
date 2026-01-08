@@ -56,7 +56,9 @@ public class PaymentService : IPaymentService
                 p.ToPlayer!.Name,
                 p.ToPlayer!.PixKey,
                 p.Amount,
-                (DateTime.UtcNow - p.CreatedAt).Days
+                (DateTime.UtcNow - p.CreatedAt).Days,
+                p.Type,
+                p.Description
             ))
             .ToListAsync();
     }
@@ -178,7 +180,8 @@ public class PaymentService : IPaymentService
             {
                 var amount = debtorAmounts[debtor.PlayerId];
                 var creditor = perfectMatchIdx.Creditor;
-                payments.Add(CreatePayment(tournamentId, debtor.PlayerId, creditor.PlayerId, amount, creditor.IsJackpot ? "Caixinha" : null));
+                var type = creditor.IsJackpot ? PaymentType.Jackpot : PaymentType.Poker;
+                payments.Add(CreatePayment(tournamentId, debtor.PlayerId, creditor.PlayerId, amount, type, creditor.IsJackpot ? "Caixinha" : null));
                 debtorAmounts[debtor.PlayerId] = 0;
                 creditorAmounts[perfectMatchIdx.Index] = 0;
             }
@@ -200,7 +203,8 @@ public class PaymentService : IPaymentService
             if (bestCreditorMatch != null)
             {
                 var creditor = bestCreditorMatch.Creditor;
-                payments.Add(CreatePayment(tournamentId, debtor.PlayerId, creditor.PlayerId, debt, creditor.IsJackpot ? "Caixinha" : null));
+                var type = creditor.IsJackpot ? PaymentType.Jackpot : PaymentType.Poker;
+                payments.Add(CreatePayment(tournamentId, debtor.PlayerId, creditor.PlayerId, debt, type, creditor.IsJackpot ? "Caixinha" : null));
                 debtorAmounts[debtor.PlayerId] = 0;
                 creditorAmounts[bestCreditorMatch.Index] -= debt;
             }
@@ -223,10 +227,41 @@ public class PaymentService : IPaymentService
                 if (paymentAmount > 0)
                 {
                     var creditor = creditorMatch.Creditor;
-                    payments.Add(CreatePayment(tournamentId, debtor.PlayerId, creditor.PlayerId, paymentAmount, creditor.IsJackpot ? "Caixinha" : null));
+                    var type = creditor.IsJackpot ? PaymentType.Jackpot : PaymentType.Poker;
+                    payments.Add(CreatePayment(tournamentId, debtor.PlayerId, creditor.PlayerId, paymentAmount, type, creditor.IsJackpot ? "Caixinha" : null));
                     remaining -= paymentAmount;
                     debtorAmounts[debtor.PlayerId] = remaining;
                     creditorAmounts[creditorMatch.Index] = credit - paymentAmount;
+                }
+            }
+        }
+
+        // Phase 4: Create payments for expenses (direct 1:1 payments)
+        var expenses = await _context.TournamentExpenses
+            .Include(e => e.Shares)
+            .Where(e => e.TournamentId == tournamentId)
+            .ToListAsync();
+
+        foreach (var expense in expenses)
+        {
+            foreach (var share in expense.Shares)
+            {
+                // If the player is not the one who paid, create a payment
+                if (share.PlayerId != expense.PaidByPlayerId)
+                {
+                    var amount = (int)Math.Round(share.Amount, MidpointRounding.AwayFromZero);
+                    if (amount > 0)
+                    {
+                        payments.Add(CreatePayment(
+                            tournamentId,
+                            share.PlayerId,           // From: who owes
+                            expense.PaidByPlayerId,   // To: who paid
+                            amount,
+                            PaymentType.Expense,
+                            expense.Description,      // e.g., "Pizza", "Cerveja"
+                            expense.Id                // Reference to expense
+                        ));
+                    }
                 }
             }
         }
@@ -245,7 +280,7 @@ public class PaymentService : IPaymentService
         return createdPayments.Select(p => MapToDto(p)).ToList();
     }
 
-    private static Payment CreatePayment(Guid tournamentId, Guid fromPlayerId, Guid? toPlayerId, int amount, string? description)
+    private static Payment CreatePayment(Guid tournamentId, Guid fromPlayerId, Guid? toPlayerId, int amount, PaymentType type, string? description = null, Guid? expenseId = null)
     {
         return new Payment
         {
@@ -254,8 +289,10 @@ public class PaymentService : IPaymentService
             FromPlayerId = fromPlayerId,
             ToPlayerId = toPlayerId,
             Amount = amount,
+            Type = type,
             Status = PaymentStatus.Pending,
             Description = description,
+            ExpenseId = expenseId,
             CreatedAt = DateTime.UtcNow
         };
     }
@@ -382,7 +419,9 @@ public class PaymentService : IPaymentService
 
     private static PaymentDto MapToDto(Payment p)
     {
-        var isJackpot = p.ToPlayerId == null;
+        // Handle legacy payments: check ToPlayerId == null for old jackpot payments
+        // that were created before the Type field was added
+        var isJackpot = p.Type == PaymentType.Jackpot || p.ToPlayerId == null;
         return new PaymentDto(
             p.Id,
             p.TournamentId,
@@ -395,11 +434,13 @@ public class PaymentService : IPaymentService
             isJackpot ? null : p.ToPlayer!.PixKeyType,
             p.Amount,
             p.Status,
+            p.Type,
             p.CreatedAt,
             p.PaidAt,
             p.ConfirmedAt,
             (DateTime.UtcNow - p.CreatedAt).Days,
             p.Description,
+            p.ExpenseId,
             isJackpot
         );
     }

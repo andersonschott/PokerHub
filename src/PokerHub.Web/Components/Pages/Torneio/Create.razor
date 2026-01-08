@@ -304,11 +304,11 @@
             case 3:
                 <MudGrid>
                     <MudItem xs="12">
-                        <MudText Typo="Typo.subtitle1" Class="mb-3">Estrutura de Premiacao</MudText>
+                        <MudText Typo="Typo.subtitle1" Class="mb-3">Estrutura de Premiação</MudText>
                     </MudItem>
 
                     <MudItem xs="12">
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">Tipo de distribuicao:</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">Tipo de distribuição:</MudText>
                         <MudButtonGroup Color="Color.Primary" Variant="Variant.Outlined" Class="mb-4">
                             <MudButton OnClick="@(() => _prizeDistributionType = PrizeDistributionType.Percentage)"
                                       Variant="@(_prizeDistributionType == PrizeDistributionType.Percentage ? Variant.Filled : Variant.Outlined)">
@@ -325,7 +325,7 @@
                     {
                         <MudItem xs="12">
                             <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
-                                Defina o percentual do prize pool para cada posicao:
+                                Defina o percentual do prize pool para cada posição:
                             </MudText>
                         </MudItem>
 
@@ -418,117 +418,22 @@
                         </MudItem>
                     }
 
-                    @if (_prizeTables.Any())
-                    {
-                        <MudItem xs="12">
-                            <MudDivider Class="my-2" />
-                        </MudItem>
-
-                        <MudItem xs="12">
-                            <MudSwitch @bind-Value="_usePrizeTable" Label="Usar tabela de premiacao (sobrescreve a definicao acima quando prize pool coincidir)" Color="Color.Primary" />
-                        </MudItem>
-
-                        @if (_usePrizeTable)
-                        {
-                            <MudItem xs="12">
-                                <MudSelect T="Guid?" @bind-Value="_selectedPrizeTableId"
-                                          Label="Selecione uma tabela especifica (opcional)"
-                                          Variant="Variant.Outlined"
-                                          AnchorOrigin="Origin.BottomCenter"
-                                          Clearable="true"
-                                          HelperText="Se nao selecionar, usara automaticamente a tabela com prize pool igual">
-                                    @foreach (var table in _prizeTables.OrderBy(t => t.PrizePoolTotal))
-                                    {
-                                        <MudSelectItem Value="@((Guid?)table.Id)">
-                                            @table.PrizePoolTotal.ToString("C") - @table.Name
-                                        </MudSelectItem>
-                                    }
-                                </MudSelect>
-                            </MudItem>
-
-                            @if (_selectedPrizeTableId.HasValue)
-                            {
-                                var selectedTable = _prizeTables.FirstOrDefault(t => t.Id == _selectedPrizeTableId.Value);
-                                if (selectedTable != null)
-                                {
-                                    <MudItem xs="12">
-                                        <MudCard Elevation="1" Class="mt-2">
-                                            <MudCardContent>
-                                                <MudSimpleTable Dense="true" Hover="true">
-                                                    <thead>
-                                                        <tr>
-                                                            <th>Posicao</th>
-                                                            <th style="text-align: right;">Premio</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        @foreach (var entry in selectedTable.Entries.OrderBy(e => e.Position))
-                                                        {
-                                                            <tr>
-                                                                <td>@entry.Position&ordm; Lugar</td>
-                                                                <td style="text-align: right;">@entry.PrizeAmount.ToString("C")</td>
-                                                            </tr>
-                                                        }
-                                                        @if (selectedTable.JackpotAmount > 0)
-                                                        {
-                                                            <tr>
-                                                                <td><MudIcon Icon="@Icons.Material.Filled.Savings" Size="Size.Small" Color="Color.Warning" Class="mr-1" />Caixinha</td>
-                                                                <td style="text-align: right;">@selectedTable.JackpotAmount.ToString("C")</td>
-                                                            </tr>
-                                                        }
-                                                    </tbody>
-                                                </MudSimpleTable>
-                                            </MudCardContent>
-                                        </MudCard>
-                                    </MudItem>
-                                }
-                            }
-                            else
-                            {
-                                <MudItem xs="12">
-                                    <MudAlert Severity="Severity.Info" Dense="true">
-                                        <MudText Typo="Typo.body2">
-                                            Ao finalizar o torneio, o sistema buscara automaticamente uma tabela com prize pool igual ao total arrecadado.
-                                        </MudText>
-                                    </MudAlert>
-                                </MudItem>
-                            }
-
-                            <MudItem xs="12">
-                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-                                    <MudText Typo="Typo.body2" Color="Color.Secondary">
-                                        Nao encontrou a tabela ideal?
-                                    </MudText>
-                                    <MudButton Variant="Variant.Text"
-                                              Color="Color.Primary"
-                                              Size="Size.Small"
-                                              Href="@($"/ligas/{LeagueId}/tabelas-premiacao")"
-                                              Target="_blank">
-                                        Gerenciar tabelas
-                                    </MudButton>
-                                </MudStack>
-                            </MudItem>
-                        }
-                    }
-                    else
-                    {
-                        <MudItem xs="12">
-                            <MudAlert Severity="Severity.Info" Dense="true">
-                                <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
-                                    <MudText Typo="Typo.body2">
-                                        Voce pode criar tabelas de premiacao com valores fixos para reutilizar em torneios.
-                                    </MudText>
-                                    <MudButton Variant="Variant.Text"
-                                              Color="Color.Primary"
-                                              Size="Size.Small"
-                                              Href="@($"/ligas/{LeagueId}/tabelas-premiacao")"
-                                              Target="_blank">
-                                        Gerenciar tabelas
-                                    </MudButton>
-                                </MudStack>
-                            </MudAlert>
-                        </MudItem>
-                    }
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Info" Dense="true">
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudText Typo="Typo.body2">
+                                    Voce pode criar tabelas de premiação com valores fixos para reutilizar em torneios.
+                                </MudText>
+                                <MudButton Variant="Variant.Text"
+                                           Color="Color.Primary"
+                                           Size="Size.Small"
+                                           Href="@($"/ligas/{LeagueId}/tabelas-premiacao")"
+                                           Target="_blank">
+                                    Gerenciar tabelas
+                                </MudButton>
+                            </MudStack>
+                        </MudAlert>
+                    </MudItem>
                 </MudGrid>
                 break;
 

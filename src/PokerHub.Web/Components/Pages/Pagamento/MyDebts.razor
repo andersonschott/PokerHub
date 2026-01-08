@@ -44,7 +44,18 @@
                     <MudCard Elevation="2" Class="@GetDebtCardClass(debt.DaysOpen)">
                         <MudCardHeader>
                             <CardHeaderContent>
-                                <MudText Typo="Typo.h6">@debt.TournamentName</MudText>
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                    <MudText Typo="Typo.h6">@debt.TournamentName</MudText>
+                                    @switch (debt.Type)
+                                    {
+                                        case PaymentType.Poker:
+                                            <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.Casino">Poker</MudChip>
+                                            break;
+                                        case PaymentType.Expense:
+                                            <MudChip T="string" Color="Color.Warning" Size="Size.Small" Icon="@Icons.Material.Filled.Receipt">@debt.Description</MudChip>
+                                            break;
+                                    }
+                                </MudStack>
                                 <MudText Typo="Typo.caption" Color="Color.Secondary">
                                     @debt.TournamentDate.ToString("dd/MM/yyyy")
                                 </MudText>
@@ -119,6 +130,7 @@
         <MudTable Items="_toReceive" Dense="true" Hover="true">
             <HeaderContent>
                 <MudTh>Torneio</MudTh>
+                <MudTh>Tipo</MudTh>
                 <MudTh>De</MudTh>
                 <MudTh Style="text-align: right;">Valor</MudTh>
                 <MudTh>Status</MudTh>
@@ -126,6 +138,20 @@
             </HeaderContent>
             <RowTemplate>
                 <MudTd>@context.TournamentName</MudTd>
+                <MudTd>
+                    @switch (context.Type)
+                    {
+                        case PaymentType.Poker:
+                            <MudChip T="string" Color="Color.Success" Size="Size.Small">Poker</MudChip>
+                            break;
+                        case PaymentType.Expense:
+                            <MudChip T="string" Color="Color.Warning" Size="Size.Small">@context.Description</MudChip>
+                            break;
+                        case PaymentType.Jackpot:
+                            <MudChip T="string" Color="Color.Info" Size="Size.Small">Caixinha</MudChip>
+                            break;
+                    }
+                </MudTd>
                 <MudTd>@context.FromPlayerName</MudTd>
                 <MudTd Style="text-align: right;">R$ @context.Amount.ToString("N2")</MudTd>
                 <MudTd>
@@ -163,6 +189,7 @@
         <MudTable Items="_organizerPayments" Dense="true" Hover="true">
             <HeaderContent>
                 <MudTh>Torneio</MudTh>
+                <MudTh>Tipo</MudTh>
                 <MudTh>De</MudTh>
                 <MudTh>Para</MudTh>
                 <MudTh Style="text-align: right;">Valor</MudTh>
@@ -172,20 +199,22 @@
             </HeaderContent>
             <RowTemplate>
                 <MudTd>@context.TournamentName</MudTd>
-                <MudTd>@context.FromPlayerName</MudTd>
                 <MudTd>
-                    @if (context.IsJackpotContribution)
+                    @switch (context.Type)
                     {
-                        <MudStack Row AlignItems="AlignItems.Center" Spacing="1">
-                            <MudIcon Icon="@Icons.Material.Filled.Savings" Color="Color.Warning" Size="Size.Small" />
-                            <MudText Color="Color.Warning" Style="font-weight: 600;">@context.ToPlayerName</MudText>
-                        </MudStack>
-                    }
-                    else
-                    {
-                        @context.ToPlayerName
+                        case PaymentType.Poker:
+                            <MudChip T="string" Color="Color.Success" Size="Size.Small">Poker</MudChip>
+                            break;
+                        case PaymentType.Expense:
+                            <MudChip T="string" Color="Color.Warning" Size="Size.Small">@context.Description</MudChip>
+                            break;
+                        case PaymentType.Jackpot:
+                            <MudChip T="string" Color="Color.Info" Size="Size.Small">Caixinha</MudChip>
+                            break;
                     }
                 </MudTd>
+                <MudTd>@context.FromPlayerName</MudTd>
+                <MudTd>@context.ToPlayerName</MudTd>
                 <MudTd Style="text-align: right;">
                     <MudText Style="font-weight: 600;" Color="@(context.IsJackpotContribution ? Color.Warning : Color.Default)">
                         R$ @context.Amount.ToString("N0")

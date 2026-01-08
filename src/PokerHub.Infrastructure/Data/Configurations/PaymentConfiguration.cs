@@ -37,8 +37,20 @@ public class PaymentConfiguration : IEntityTypeConfiguration<Payment>
             .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Description field for special payments (e.g., "Caixinha")
+        // Description field for special payments (e.g., "Caixinha", "Pizza")
         builder.Property(p => p.Description)
             .HasMaxLength(200);
+
+        // Payment type (Poker, Expense, Jackpot)
+        builder.Property(p => p.Type)
+            .HasConversion<int>()
+            .IsRequired();
+
+        // Configure Expense relationship - no action to avoid cascade cycles
+        builder.HasOne(p => p.Expense)
+            .WithMany()
+            .HasForeignKey(p => p.ExpenseId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.NoAction);
     }
 }

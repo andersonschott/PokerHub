@@ -2,137 +2,268 @@
 @rendermode InteractiveServer
 @implements IAsyncDisposable
 @inject ITournamentService TournamentService
+@inject IPrizeTableService PrizeTableService
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
 <PageTitle>Timer - @(_tournamentName ?? "Torneio")</PageTitle>
 
-<div class="timer-container @(_isFullscreen ? "fullscreen" : "")" @onclick="ToggleFullscreen">
+@{
+    var isMobile = _screenWidth < 900;
+    var isSmallMobile = _screenWidth < 480;
+
+    // Main container style
+    var containerStyle = "display: grid; min-height: 100vh; color: #fff; font-family: 'Space Grotesk', 'Segoe UI', sans-serif; cursor: pointer; user-select: none; overflow: hidden; " +
+        $"padding: {(isMobile ? "16px" : "24px")}; gap: {(isMobile ? "12px" : "24px")}; " +
+        $"background: linear-gradient(135deg, {(_isBreak ? "#1a2a1a 0%, #1a3320 50%, #0d1f15" : "#0a0f1a 0%, #0d1420 50%, #101820")} 100%); " +
+        (isMobile ? "grid-template-columns: 1fr; grid-template-rows: auto auto 1fr auto;" : "grid-template-columns: 300px 1fr 340px; grid-template-rows: auto 1fr auto;");
+
+    if (_isFullscreen)
+    {
+        containerStyle = "position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100vh; z-index: 99999; display: grid; color: #fff; font-family: 'Space Grotesk', 'Segoe UI', sans-serif; cursor: pointer; user-select: none; overflow: hidden; " +
+            $"padding: 24px; gap: 24px; " +
+            $"background: linear-gradient(135deg, {(_isBreak ? "#1a2a1a 0%, #1a3320 50%, #0d1f15" : "#0a0f1a 0%, #0d1420 50%, #101820")} 100%); " +
+            (isMobile ? "grid-template-columns: 1fr; grid-template-rows: auto 1fr;" : "grid-template-columns: 300px 1fr 340px; grid-template-rows: 1fr;");
+    }
+
+    // Font sizes based on screen
+    var levelFontSize = isSmallMobile ? "16px" : isMobile ? "20px" : "28px";
+    var blindFontSize = isSmallMobile ? "40px" : isMobile ? "56px" : "110px";
+    var separatorFontSize = isSmallMobile ? "28px" : isMobile ? "36px" : "70px";
+    var timerFontSize = isSmallMobile ? "48px" : isMobile ? "64px" : "140px";
+    var timerPadding = isSmallMobile ? "12px 20px" : isMobile ? "16px 32px" : "28px 56px";
+}
+
+<div style="@containerStyle" @onclick="ToggleFullscreen">
     @if (_loading)
     {
-        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+        <div style="grid-column: 1 / -1; grid-row: 1 / -1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 16px;">
+            <MudProgressCircular Color="Color.Success" Size="Size.Large" Indeterminate="true" />
+            <span style="font-size: 18px; color: #9ca3af;">Carregando torneio...</span>
+        </div>
     }
     else if (_error != null)
     {
-        <MudAlert Severity="Severity.Error" Class="ma-4">@_error</MudAlert>
+        <div style="grid-column: 1 / -1; grid-row: 1 / -1; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 16px;">
+            <MudAlert Severity="Severity.Error">@_error</MudAlert>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Href="/">Voltar</MudButton>
+        </div>
     }
     else
     {
-        <div class="timer-header">
-            <MudText Typo="Typo.h4" Class="tournament-name">@_tournamentName</MudText>
-            @if (_isPaused)
-            {
-                <MudChip T="string" Color="Color.Warning" Size="Size.Large" Class="paused-chip">PAUSADO</MudChip>
-            }
-        </div>
+        @* ===== HEADER ===== *@
+        @if (!_isFullscreen)
+        {
+            <header style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; border-bottom: 1px solid #1f2937; @(isMobile ? "flex-direction: column; gap: 8px; align-items: flex-start;" : "")">
+                <h1 style="font-size: @(isMobile ? "18px" : "24px"); font-weight: 700; letter-spacing: -0.5px; margin: 0;">@_tournamentName</h1>
+                <div style="display: flex; align-items: center; gap: @(isMobile ? "12px" : "24px"); @(isMobile ? "width: 100%; justify-content: space-between;" : "")">
+                    @if (_isPaused)
+                    {
+                        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 24px; font-size: 14px; font-weight: 600; background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.3); color: #eab308;">
+                            <span style="width: 8px; height: 8px; border-radius: 50%; background: currentColor;"></span>
+                            PAUSADO
+                        </div>
+                    }
+                    else if (!_isFinished)
+                    {
+                        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 24px; font-size: 14px; font-weight: 600; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.3); color: #22c55e;">
+                            <span style="width: 8px; height: 8px; border-radius: 50%; background: currentColor;"></span>
+                            AO VIVO
+                        </div>
+                    }
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: @(isMobile ? "14px" : "18px"); color: #9ca3af;">@DateTime.Now.ToString("HH:mm")</span>
+                </div>
+            </header>
+        }
 
-        <div class="timer-main">
+        @* ===== STATS ROW (Mobile/Tablet) ===== *@
+        @if (isMobile)
+        {
+            <div style="display: grid; grid-template-columns: repeat(@(isSmallMobile ? 2 : 4), 1fr); gap: @(isSmallMobile ? "8px" : "10px");">
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 8px 4px; background: #111827; border-radius: 12px; border: 1px solid #1f2937;">
+                    <span>👥</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: @(isSmallMobile ? "14px" : "16px"); font-weight: 700;">@_playersRemaining/@_totalPlayers</span>
+                    <span style="font-size: 9px; color: #6b7280; text-transform: uppercase;">Jogadores</span>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 8px 4px; background: #111827; border-radius: 12px; border: 1px solid #1f2937;">
+                    <span>💰</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: @(isSmallMobile ? "14px" : "16px"); font-weight: 700; color: #22c55e;">@_prizePool.ToString("C0")</span>
+                    <span style="font-size: 9px; color: #6b7280; text-transform: uppercase;">Prize Pool</span>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 8px 4px; background: #111827; border-radius: 12px; border: 1px solid #1f2937;">
+                    <span>🔄</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: @(isSmallMobile ? "14px" : "16px"); font-weight: 700;">@_totalRebuys</span>
+                    <span style="font-size: 9px; color: #6b7280; text-transform: uppercase;">Rebuys</span>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 8px 4px; background: #111827; border-radius: 12px; border: 1px solid #1f2937;">
+                    <span>➕</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: @(isSmallMobile ? "14px" : "16px"); font-weight: 700;">@_totalAddons</span>
+                    <span style="font-size: 9px; color: #6b7280; text-transform: uppercase;">Add-ons</span>
+                </div>
+            </div>
+        }
+
+        @* ===== PAINEL ESQUERDO - PREMIAÇÃO ===== *@
+        @if (!isMobile)
+        {
+            <aside style="display: flex; flex-direction: column; gap: 16px; overflow: hidden;">
+                <div style="font-size: 14px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 2px; padding-bottom: 8px; border-bottom: 1px solid #1f2937;">🏆 Premiação</div>
+                <div style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, #111827 100%); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 16px; padding: 20px; text-align: center;">
+                    <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">Prize Pool</div>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 32px; font-weight: 800; color: #22c55e; text-shadow: 0 0 30px rgba(34, 197, 94, 0.3);">@_prizePool.ToString("C")</div>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto;">
+                    @foreach (var prize in _prizeDistribution.Take(5))
+                    {
+                        var bgGradient = prize.Position switch { 1 => "linear-gradient(135deg, rgba(255, 215, 0, 0.1) 0%, #111827 100%)", 2 => "linear-gradient(135deg, rgba(192, 192, 192, 0.08) 0%, #111827 100%)", 3 => "linear-gradient(135deg, rgba(205, 127, 50, 0.08) 0%, #111827 100%)", _ => "#111827" };
+                        var borderColor = prize.Position switch { 1 => "rgba(255, 215, 0, 0.3)", 2 => "rgba(192, 192, 192, 0.2)", 3 => "rgba(205, 127, 50, 0.2)", _ => "#1f2937" };
+                        var valueColor = prize.Position switch { 1 => "#ffd700", 2 => "#c0c0c0", 3 => "#cd7f32", _ => "#ffffff" };
+                        var emoji = prize.Position switch { 1 => "🥇", 2 => "🥈", 3 => "🥉", _ => $"{prize.Position}º" };
+                        <div style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: @bgGradient; border-radius: 12px; border: 1px solid @borderColor;">
+                            <span style="font-size: 24px; width: 36px; text-align: center;">@emoji</span>
+                            <div style="flex: 1;">
+                                <div style="font-size: 12px; color: #6b7280;">@prize.Position º Lugar</div>
+                                <div style="font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; color: @valueColor;">@prize.Amount.ToString("C")</div>
+                            </div>
+                            @if (prize.Percentage.HasValue)
+                            {
+                                <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #6b7280; padding: 4px 10px; background: #0a0f1a; border-radius: 8px;">@prize.Percentage.Value.ToString("0")%</span>
+                            }
+                        </div>
+                    }
+                </div>
+            </aside>
+        }
+
+        @* ===== CENTRO - TIMER ===== *@
+        <main style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
             @if (_isFinished)
             {
-                <div class="finished-display">
-                    <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Large" Style="font-size: 5rem; color: #FFD700;" />
-                    <MudText Typo="Typo.h1" Style="color: #FFD700; margin-top: 1rem;">TORNEIO FINALIZADO</MudText>
-                    <MudText Typo="Typo.h4" Style="color: white; margin-top: 1rem;">Parabens ao campeao!</MudText>
+                <div style="text-align: center;">
+                    <div style="font-size: @(isMobile ? "80px" : "120px"); margin-bottom: 16px;">🏆</div>
+                    <div style="font-size: @(isSmallMobile ? "24px" : isMobile ? "32px" : "48px"); font-weight: 800; color: #ffd700; text-shadow: 0 0 40px rgba(255, 215, 0, 0.4);">TORNEIO FINALIZADO</div>
+                    <div style="font-size: @(isMobile ? "16px" : "24px"); color: #9ca3af; margin-top: 8px;">Parabéns ao campeão!</div>
                 </div>
             }
             else if (_isBreak)
             {
-                <MudText Typo="Typo.h2" Class="break-text">INTERVALO</MudText>
-                <MudText Typo="Typo.h6" Color="Color.Secondary">@_breakDescription</MudText>
-            }
-            else
-            {
-                <div class="blinds-display">
-                    <MudText Typo="Typo.h6" Color="Color.Secondary">NIVEL @_currentLevel</MudText>
-                    <div class="blinds-values">
-                        <span class="blind-value">@FormatChips(_smallBlind)</span>
-                        <span class="blind-separator">/</span>
-                        <span class="blind-value">@FormatChips(_bigBlind)</span>
-                    </div>
-                    @if (_ante > 0)
-                    {
-                        <MudText Typo="Typo.h5" Class="ante-display">ANTE: @FormatChips(_ante)</MudText>
-                    }
+                <div style="font-size: @levelFontSize; font-weight: 700; color: #eab308; text-transform: uppercase; letter-spacing: @(isMobile ? "4px" : "6px"); text-shadow: 0 0 40px rgba(234, 179, 8, 0.4);">☕ INTERVALO</div>
+                @if (!string.IsNullOrEmpty(_breakDescription))
+                {
+                    <div style="font-size: @(isMobile ? "14px" : "18px"); color: #9ca3af;">@_breakDescription</div>
+                }
+                <div style="background: #111827; border: 3px solid @GetTimerBorderColor(); border-radius: 24px; padding: @timerPadding; margin: @(isMobile ? "12px 0" : "20px 0"); box-shadow: 0 0 60px @GetTimerGlowColor();">
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: @timerFontSize; font-weight: 800; letter-spacing: @(isSmallMobile ? "2px" : isMobile ? "4px" : "8px"); line-height: 1; color: @GetTimerTextColor(); text-shadow: 0 0 60px rgba(255, 255, 255, 0.2);">@FormatTime(_secondsRemaining)</div>
                 </div>
-            }
-
-            @if (!_isFinished)
-            {
-                <div class="time-display @GetTimeClass()">
-                    <span class="time-value">@FormatTime(_secondsRemaining)</span>
-                </div>
-
                 @if (_nextLevel != null)
                 {
-                    <div class="next-level">
-                        <MudText Typo="Typo.subtitle1" Color="Color.Secondary">PROXIMO NIVEL</MudText>
-                        @if (_nextLevel.IsBreak)
-                        {
-                            <MudText Typo="Typo.h6">Intervalo</MudText>
-                        }
-                        else
-                        {
-                            <MudText Typo="Typo.h6">@FormatChips(_nextLevel.SmallBlind) / @FormatChips(_nextLevel.BigBlind)@(_nextLevel.Ante > 0 ? $" (Ante: {FormatChips(_nextLevel.Ante)})" : "")</MudText>
-                        }
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: @(isMobile ? "10px 20px" : "14px 28px"); background: #1a2332; border-radius: 16px; border: 1px solid #1f2937;">
+                        <span style="font-size: @(isMobile ? "11px" : "13px"); color: #22c55e; text-transform: uppercase; letter-spacing: 2px;">Próximo Nível</span>
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: @(isMobile ? "16px" : "20px"); font-weight: 600;">@FormatChips(_nextLevel.SmallBlind) / @FormatChips(_nextLevel.BigBlind)@(_nextLevel.Ante > 0 ? $" (Ante: {FormatChips(_nextLevel.Ante)})" : "")</span>
                     </div>
                 }
             }
-        </div>
-
-        <div class="timer-footer">
-            <div class="info-card">
-                <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Medium" />
-                <div class="info-content">
-                    <MudText Typo="Typo.caption">JOGADORES</MudText>
-                    <MudText Typo="Typo.h5">@_playersRemaining / @_totalPlayers</MudText>
+            else
+            {
+                <div style="font-size: @levelFontSize; font-weight: 700; color: #22c55e; text-transform: uppercase; letter-spacing: @(isMobile ? "4px" : "6px"); text-shadow: 0 0 40px rgba(34, 197, 94, 0.4);">NÍVEL @_currentLevel</div>
+                <div style="display: flex; align-items: baseline; gap: 8px;">
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: @blindFontSize; font-weight: 800; line-height: 1; background: linear-gradient(180deg, #ffffff 0%, #a0a0a0 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">@FormatChips(_smallBlind)</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: @separatorFontSize; font-weight: 300; color: #6b7280; margin: 0 -8px;">/</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: @blindFontSize; font-weight: 800; line-height: 1; background: linear-gradient(180deg, #ffffff 0%, #a0a0a0 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">@FormatChips(_bigBlind)</span>
                 </div>
-            </div>
-
-            <div class="info-card">
-                <MudIcon Icon="@Icons.Material.Filled.Payments" Size="Size.Medium" />
-                <div class="info-content">
-                    <MudText Typo="Typo.caption">PRIZE POOL</MudText>
-                    <MudText Typo="Typo.h5">R$ @_prizePool.ToString("N2")</MudText>
+                @if (_ante > 0)
+                {
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: @(isSmallMobile ? "14px" : isMobile ? "18px" : "24px"); color: #9ca3af; margin-top: 4px;">ANTE: @FormatChips(_ante)</div>
+                }
+                <div style="background: #111827; border: 3px solid @GetTimerBorderColor(); border-radius: 24px; padding: @timerPadding; margin: @(isMobile ? "12px 0" : "20px 0"); box-shadow: 0 0 60px @GetTimerGlowColor();">
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: @timerFontSize; font-weight: 800; letter-spacing: @(isSmallMobile ? "2px" : isMobile ? "4px" : "8px"); line-height: 1; color: @GetTimerTextColor(); text-shadow: 0 0 60px rgba(255, 255, 255, 0.2);">@FormatTime(_secondsRemaining)</div>
                 </div>
-            </div>
+                @if (_nextLevel != null)
+                {
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: @(isMobile ? "10px 20px" : "14px 28px"); background: #1a2332; border-radius: 16px; border: 1px solid #1f2937;">
+                        <span style="font-size: @(isMobile ? "11px" : "13px"); color: #22c55e; text-transform: uppercase; letter-spacing: 2px;">Próximo Nível</span>
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: @(isMobile ? "16px" : "20px"); font-weight: 600;">
+                            @if (_nextLevel.IsBreak)
+                            {
+                                <text>Intervalo @(!string.IsNullOrEmpty(_nextLevel.BreakDescription) ? $"({_nextLevel.BreakDescription})" : "")</text>
+                            }
+                            else
+                            {
+                                <text>@FormatChips(_nextLevel.SmallBlind) / @FormatChips(_nextLevel.BigBlind)@(_nextLevel.Ante > 0 ? $" (Ante: {FormatChips(_nextLevel.Ante)})" : "")</text>
+                            }
+                        </span>
+                    </div>
+                }
+            }
+        </main>
 
-            <div class="info-card">
-                <MudIcon Icon="@Icons.Material.Filled.Refresh" Size="Size.Medium" />
-                <div class="info-content">
-                    <MudText Typo="Typo.caption">REBUYS / ADD-ONS</MudText>
-                    <MudText Typo="Typo.h5">@_totalRebuys / @_totalAddons</MudText>
+        @* ===== PAINEL DIREITO - JOGADORES ===== *@
+        @if (!isMobile)
+        {
+            <aside style="display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid #1f2937;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700;">@_playersRemaining</span>
+                        <span style="font-size: 14px; color: #6b7280;">/ @_totalPlayers jogadores</span>
+                    </div>
+                    <div style="display: flex; gap: 16px;">
+                        <span style="font-size: 13px; color: #9ca3af;">🔄 <b>@_totalRebuys</b></span>
+                        <span style="font-size: 13px; color: #9ca3af;">➕ <b>@_totalAddons</b></span>
+                    </div>
                 </div>
-            </div>
-        </div>
-
-        <div class="fullscreen-hint">
-            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
-                <MudText Typo="Typo.caption" Color="Color.Secondary">Clique para @(_isFullscreen ? "sair da" : "entrar em") tela cheia</MudText>
-                <div class="connection-indicator">
-                    @if (_isReconnecting)
+                <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 8px;">
+                    @foreach (var player in _players.OrderBy(p => p.IsEliminated ? 1 : 0).ThenBy(p => p.Name))
                     {
-                        <MudChip T="string" Color="Color.Warning" Size="Size.Small">
-                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Style="width: 16px; height: 16px;" Class="mr-1" />
-                            Reconectando
-                        </MudChip>
-                    }
-                    else if (_isDisconnected)
-                    {
-                        <MudChip T="string" Color="Color.Error" Size="Size.Small">
-                            <MudIcon Icon="@Icons.Material.Filled.WifiOff" Size="Size.Small" Class="mr-1" />
-                            Offline
-                        </MudChip>
-                    }
-                    else
-                    {
-                        <MudChip T="string" Color="Color.Success" Size="Size.Small">
-                            <MudIcon Icon="@Icons.Material.Filled.Wifi" Size="Size.Small" Class="mr-1" />
-                            Online
-                        </MudChip>
+                        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #111827; border-radius: 10px; border: 1px solid #1f2937; @(player.IsEliminated ? "opacity: 0.4;" : "")">
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@GetDisplayName(player)</div>
+                            </div>
+                            <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                                @if (player.IsEliminated && player.Position.HasValue)
+                                {
+                                    <span style="padding: 4px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">@player.Position º</span>
+                                }
+                                @if (player.RebuyCount > 0)
+                                {
+                                    <span style="padding: 4px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.3);">R×@player.RebuyCount</span>
+                                }
+                                @if (player.HasAddon)
+                                {
+                                    <span style="padding: 4px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; background: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.3);">A</span>
+                                }
+                            </div>
+                        </div>
                     }
                 </div>
-            </MudStack>
-        </div>
+            </aside>
+        }
+
+        @* ===== FOOTER ===== *@
+        <footer style="@(_isFullscreen ? "position: absolute; bottom: 16px; left: 0; right: 0;" : "grid-column: 1 / -1; padding-top: 16px; border-top: 1px solid #1f2937;") display: flex; justify-content: center; align-items: center; gap: @(isMobile ? "8px" : "32px"); @(isMobile && !_isFullscreen ? "flex-direction: column;" : "")">
+            @if (!_isFullscreen)
+            {
+                <span style="font-size: @(isMobile ? "11px" : "13px"); color: #6b7280;">Clique para tela cheia</span>
+            }
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+                @if (_isReconnecting)
+                {
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Style="width: 16px; height: 16px;" />
+                    <span style="color: #eab308;">Reconectando...</span>
+                }
+                else if (_isDisconnected)
+                {
+                    <span style="color: #ef4444;">● Offline @(_connectionError != null ? $"({_connectionError})" : "")</span>
+                }
+                else
+                {
+                    <span style="color: #22c55e;">● Online</span>
+                }
+            </div>
+            @if (_isFullscreen)
+            {
+                <span style="font-size: 11px; color: #6b7280;">ESC para sair</span>
+            }
+        </footer>
     }
 </div>
 
@@ -143,13 +274,15 @@
     private bool _loading = true;
     private string? _error;
     private bool _isFullscreen;
+    private System.Timers.Timer? _clockTimer;
+    private int _screenWidth = 1920;
 
     // Connection state
     private bool _isReconnecting;
     private bool _isDisconnected;
-    private DateTime _lastUpdate = DateTime.UtcNow;
+    private string? _connectionError;
 
-    // Handler disposables (prevent memory leak)
+    // Handler disposables
     private IDisposable? _timerTickHandler;
     private IDisposable? _levelChangedHandler;
     private IDisposable? _pausedHandler;
@@ -158,6 +291,7 @@
     private IDisposable? _prizePoolHandler;
     private IDisposable? _finishedHandler;
     private IDisposable? _timerStateHandler;
+    private IDisposable? _playerUpdatedHandler;
 
     // Tournament info
     private string? _tournamentName;
@@ -168,6 +302,8 @@
     private decimal _prizePool;
     private int _totalRebuys;
     private int _totalAddons;
+    private string? _prizeStructure;
+    private Guid _leagueId;
 
     // Timer state
     private int _secondsRemaining;
@@ -179,19 +315,24 @@
     private string? _breakDescription;
     private BlindLevelDto? _nextLevel;
 
+    // Prize distribution
+    private List<PrizeInfo> _prizeDistribution = new();
+
+    // Players
+    private List<PlayerInfo> _players = new();
+
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            // Get timer state (contains all needed info)
-            var timerState = await TournamentService.GetTimerStateAsync(TournamentId);
-            if (timerState == null)
+            // Get full tournament details
+            var detail = await TournamentService.GetTournamentDetailAsync(TournamentId);
+            if (detail == null)
             {
-                // Try to get basic tournament info
                 var tournament = await TournamentService.GetTournamentByIdAsync(TournamentId);
                 if (tournament == null)
                 {
-                    _error = "Torneio nao encontrado";
+                    _error = "Torneio não encontrado";
                     _loading = false;
                     return;
                 }
@@ -200,13 +341,106 @@
                 _totalPlayers = tournament.PlayerCount;
                 _playersRemaining = tournament.CheckedInCount;
                 _isFinished = tournament.Status == TournamentStatus.Finished;
+                _leagueId = tournament.LeagueId;
             }
             else
+            {
+                _tournamentName = detail.Name;
+                _prizePool = detail.PrizePool;
+                _totalPlayers = detail.Players.Count;
+                _playersRemaining = detail.Players.Count(p => p.EliminatedAt == null);
+                _totalRebuys = detail.Players.Sum(p => p.RebuyCount);
+                _totalAddons = detail.Players.Count(p => p.HasAddon);
+                _isFinished = detail.Status == TournamentStatus.Finished;
+                _isPaused = detail.Status == TournamentStatus.Paused;
+                _prizeStructure = detail.PrizeStructure;
+                _leagueId = detail.LeagueId;
+                _currentLevel = detail.CurrentLevel;
+                _secondsRemaining = detail.TimeRemainingSeconds ?? 0;
+
+                _players = detail.Players.Select(p => new PlayerInfo
+                {
+                    Id = p.PlayerId,
+                    Name = p.PlayerName,
+                    Nickname = p.Nickname,
+                    RebuyCount = p.RebuyCount,
+                    HasAddon = p.HasAddon,
+                    IsEliminated = p.EliminatedAt.HasValue,
+                    Position = p.Position
+                }).ToList();
+
+                var currentBlind = detail.BlindLevels.FirstOrDefault(b => b.Order == detail.CurrentLevel);
+                if (currentBlind != null)
+                {
+                    _smallBlind = currentBlind.SmallBlind;
+                    _bigBlind = currentBlind.BigBlind;
+                    _ante = currentBlind.Ante;
+                    _isBreak = currentBlind.IsBreak;
+                    _breakDescription = currentBlind.BreakDescription;
+                }
+
+                _nextLevel = detail.BlindLevels.FirstOrDefault(b => b.Order == detail.CurrentLevel + 1);
+            }
+
+            await CalculatePrizeDistribution();
+
+            var timerState = await TournamentService.GetTimerStateAsync(TournamentId);
+            if (timerState != null)
             {
                 UpdateTimerState(timerState);
             }
 
-            // Setup SignalR connection with extended reconnection policy
+            await SetupSignalR();
+
+            _clockTimer = new System.Timers.Timer(1000);
+            _clockTimer.Elapsed += async (s, e) =>
+            {
+                try { _screenWidth = await JS.InvokeAsync<int>("eval", "window.innerWidth"); } catch { }
+                await InvokeAsync(StateHasChanged);
+            };
+            _clockTimer.Start();
+
+            _loading = false;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Erro ao carregar: {ex.Message}";
+            _loading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { _screenWidth = await JS.InvokeAsync<int>("eval", "window.innerWidth"); StateHasChanged(); } catch { }
+        }
+    }
+
+    private async Task CalculatePrizeDistribution()
+    {
+        try
+        {
+            var result = await PrizeTableService.CalculatePrizeDistributionAsync(_leagueId, _prizePool, _prizeStructure);
+            _prizeDistribution = result.Allocations.Select(a => new PrizeInfo { Position = a.Position, Amount = a.Amount, Percentage = _prizePool > 0 ? (a.Amount / _prizePool) * 100 : null }).ToList();
+        }
+        catch
+        {
+            if (!string.IsNullOrEmpty(_prizeStructure))
+            {
+                var percentages = _prizeStructure.Split(',').Select(s => decimal.TryParse(s.Trim(), out var val) ? val : 0).ToList();
+                _prizeDistribution = percentages.Select((p, i) => new PrizeInfo { Position = i + 1, Amount = _prizePool * (p / 100), Percentage = p }).Where(p => p.Amount > 0).ToList();
+            }
+        }
+    }
+
+    private async Task SetupSignalR()
+    {
+        try
+        {
+            _connectionError = null;
+            _isDisconnected = false;
+
             _hubConnection = new HubConnectionBuilder()
                 .WithUrl(Navigation.ToAbsoluteUri("/hubs/torneio"), options =>
                 {
@@ -220,23 +454,14 @@
                         return handler;
                     };
                 })
-                .WithAutomaticReconnect(new[] {
-                    TimeSpan.Zero,
-                    TimeSpan.FromSeconds(2),
-                    TimeSpan.FromSeconds(5),
-                    TimeSpan.FromSeconds(10),
-                    TimeSpan.FromSeconds(30),
-                    TimeSpan.FromSeconds(60),
-                    TimeSpan.FromSeconds(120),
-                    TimeSpan.FromSeconds(300)  // 5 min max - keeps retrying
-                })
+                .WithAutomaticReconnect(new[] { TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(120), TimeSpan.FromSeconds(300) })
                 .Build();
 
-            // Setup reconnection handlers
             _hubConnection.Reconnecting += async (error) =>
             {
                 _isReconnecting = true;
                 _isDisconnected = false;
+                _connectionError = error?.Message;
                 await InvokeAsync(StateHasChanged);
             };
 
@@ -244,8 +469,9 @@
             {
                 _isReconnecting = false;
                 _isDisconnected = false;
-                // Re-join tournament group and sync state
+                _connectionError = null;
                 await _hubConnection.SendAsync("JoinTorneio", TournamentId);
+                await RefreshData();
                 await InvokeAsync(StateHasChanged);
             };
 
@@ -253,20 +479,24 @@
             {
                 _isDisconnected = true;
                 _isReconnecting = false;
+                _connectionError = error?.Message;
                 await InvokeAsync(StateHasChanged);
             };
 
             RegisterHubHandlers();
 
             await _hubConnection.StartAsync();
+            _isDisconnected = false;
+            _connectionError = null;
+            Console.WriteLine($"[Timer] SignalR connected, joining tournament group {TournamentId}");
             await _hubConnection.SendAsync("JoinTorneio", TournamentId);
-
-            _loading = false;
+            Console.WriteLine($"[Timer] Successfully joined tournament group {TournamentId}");
         }
         catch (Exception ex)
         {
-            _error = $"Erro ao carregar torneio: {ex.Message}";
-            _loading = false;
+            Console.WriteLine($"SignalR connection failed: {ex.Message}");
+            _isDisconnected = true;
+            _connectionError = ex.Message;
         }
     }
 
@@ -279,24 +509,20 @@
             try
             {
                 var json = System.Text.Json.JsonSerializer.Serialize(data);
-                var tick = System.Text.Json.JsonSerializer.Deserialize<TimerTickData>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (tick != null)
+                var tickData = System.Text.Json.JsonSerializer.Deserialize<TimerTickData>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (tickData != null)
                 {
-                    _secondsRemaining = tick.SecondsRemaining;
-                    _currentLevel = tick.CurrentLevel;
-                    _smallBlind = tick.SmallBlind;
-                    _bigBlind = tick.BigBlind;
-                    _ante = tick.Ante;
-                    _isBreak = tick.IsBreak;
-                    _breakDescription = tick.BreakDescription;
-                    _lastUpdate = DateTime.UtcNow;
+                    _secondsRemaining = tickData.SecondsRemaining;
+                    _currentLevel = tickData.CurrentLevel;
+                    _smallBlind = tickData.SmallBlind;
+                    _bigBlind = tickData.BigBlind;
+                    _ante = tickData.Ante;
+                    _isBreak = tickData.IsBreak;
+                    _breakDescription = tickData.BreakDescription;
                     await InvokeAsync(StateHasChanged);
                 }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"TimerTick handler error: {ex.Message}");
-            }
+            catch { }
         });
 
         _levelChangedHandler = _hubConnection.On<object>("NivelAlterado", async (data) =>
@@ -313,64 +539,37 @@
                     _ante = levelData.NewLevel.Ante;
                     _isBreak = levelData.NewLevel.IsBreak;
                     _breakDescription = levelData.NewLevel.BreakDescription;
-                    _secondsRemaining = levelData.NewLevel.DurationMinutes * 60;
                     _nextLevel = levelData.NextLevel;
-                    _lastUpdate = DateTime.UtcNow;
-
-                    // Play appropriate sound
-                    if (levelData.NewLevel.IsBreak)
-                    {
-                        await PlayBreakSound();
-                    }
-                    else
-                    {
-                        await PlayLevelChangeSound();
-                    }
+                    await PlayLevelChangeSound();
                     await InvokeAsync(StateHasChanged);
                 }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"NivelAlterado handler error: {ex.Message}");
-            }
+            catch { }
         });
 
         _pausedHandler = _hubConnection.On("TorneioPausado", async () =>
         {
-            try
-            {
-                _isPaused = true;
-                await InvokeAsync(StateHasChanged);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"TorneioPausado handler error: {ex.Message}");
-            }
+            _isPaused = true;
+            await InvokeAsync(StateHasChanged);
         });
 
         _resumedHandler = _hubConnection.On("TorneioRetomado", async () =>
         {
-            try
-            {
-                _isPaused = false;
-                await InvokeAsync(StateHasChanged);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"TorneioRetomado handler error: {ex.Message}");
-            }
+            _isPaused = false;
+            await InvokeAsync(StateHasChanged);
         });
 
         _eliminatedHandler = _hubConnection.On<object>("JogadorEliminado", async (data) =>
         {
             try
             {
-                _playersRemaining--;
+                Console.WriteLine($"[Timer] JogadorEliminado event received: {System.Text.Json.JsonSerializer.Serialize(data)}");
+                await RefreshData();
                 await InvokeAsync(StateHasChanged);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"JogadorEliminado handler error: {ex.Message}");
+                Console.WriteLine($"[Timer] JogadorEliminado handler error: {ex.Message}");
             }
         });
 
@@ -378,48 +577,40 @@
         {
             try
             {
-                var json = System.Text.Json.JsonSerializer.Serialize(data);
-                var prizeData = System.Text.Json.JsonSerializer.Deserialize<PrizePoolData>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (prizeData != null)
-                {
-                    _prizePool = prizeData.PrizePool;
-                    _totalRebuys = prizeData.TotalRebuys;
-                    _totalAddons = prizeData.TotalAddons;
-                    await InvokeAsync(StateHasChanged);
-                }
+                Console.WriteLine($"[Timer] PrizePoolAtualizado event received: {System.Text.Json.JsonSerializer.Serialize(data)}");
+                await RefreshData();
+                await InvokeAsync(StateHasChanged);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"PrizePoolAtualizado handler error: {ex.Message}");
+                Console.WriteLine($"[Timer] PrizePoolAtualizado handler error: {ex.Message}");
             }
         });
 
         _finishedHandler = _hubConnection.On("TorneioFinalizado", async () =>
         {
-            try
-            {
-                _isFinished = true;
-                _isPaused = true;
-                await PlayFinishedSound();
-                await InvokeAsync(StateHasChanged);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"TorneioFinalizado handler error: {ex.Message}");
-            }
+            _isFinished = true;
+            await PlayFinishedSound();
+            await InvokeAsync(StateHasChanged);
         });
 
         _timerStateHandler = _hubConnection.On<TimerStateDto>("TimerStateUpdated", async (state) =>
         {
+            UpdateTimerState(state);
+            await InvokeAsync(StateHasChanged);
+        });
+
+        _playerUpdatedHandler = _hubConnection.On("PlayerUpdated", async () =>
+        {
             try
             {
-                UpdateTimerState(state);
-                _lastUpdate = DateTime.UtcNow;
+                Console.WriteLine("[Timer] PlayerUpdated event received");
+                await RefreshData();
                 await InvokeAsync(StateHasChanged);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"TimerStateUpdated handler error: {ex.Message}");
+                Console.WriteLine($"[Timer] PlayerUpdated handler error: {ex.Message}");
             }
         });
     }
@@ -449,96 +640,100 @@
         _nextLevel = state.NextBlindLevel;
     }
 
+    private async Task RefreshData()
+    {
+        try
+        {
+            Console.WriteLine($"[Timer] RefreshData START for tournament {TournamentId}");
+            var detail = await TournamentService.GetTournamentDetailAsync(TournamentId);
+            Console.WriteLine($"[Timer] RefreshData got detail: {(detail != null ? "OK" : "NULL")}");
+            if (detail != null)
+            {
+                Console.WriteLine($"[Timer] RefreshData detail has {detail.Players.Count} players, PrizePool={detail.PrizePool}");
+                _players = detail.Players.Select(p => new PlayerInfo
+                {
+                    Id = p.PlayerId,
+                    Name = p.PlayerName,
+                    Nickname = p.Nickname,
+                    RebuyCount = p.RebuyCount,
+                    HasAddon = p.HasAddon,
+                    IsEliminated = p.EliminatedAt.HasValue,
+                    Position = p.Position
+                }).ToList();
+
+                _playersRemaining = _players.Count(p => !p.IsEliminated);
+                _totalRebuys = detail.Players.Sum(p => p.RebuyCount);
+                _totalAddons = detail.Players.Count(p => p.HasAddon);
+                _prizePool = detail.PrizePool;
+                _totalPlayers = detail.Players.Count;
+
+                await CalculatePrizeDistribution();
+                Console.WriteLine($"[Timer] RefreshData COMPLETE: {_totalRebuys} rebuys, {_totalAddons} addons, {_playersRemaining} players remaining, prize pool: {_prizePool}");
+            }
+            else
+            {
+                Console.WriteLine($"[Timer] RefreshData: detail was null!");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Timer] RefreshData ERROR: {ex.GetType().Name}: {ex.Message}");
+            Console.WriteLine($"[Timer] RefreshData STACK: {ex.StackTrace}");
+        }
+    }
+
+    private string GetDisplayName(PlayerInfo player)
+    {
+        if (!string.IsNullOrEmpty(player.Nickname)) return player.Nickname;
+        var parts = player.Name.Split(' ');
+        return parts.Length > 1 ? $"{parts[0]} {parts[^1][0]}." : player.Name;
+    }
+
     private string FormatTime(int totalSeconds)
     {
         if (totalSeconds < 0) totalSeconds = 0;
-        var minutes = totalSeconds / 60;
-        var seconds = totalSeconds % 60;
-        return $"{minutes:D2}:{seconds:D2}";
+        return $"{totalSeconds / 60:D2}:{totalSeconds % 60:D2}";
     }
 
     private string FormatChips(decimal value)
     {
-        if (value >= 1000000)
-            return $"{value / 1000000:0.#}M";
-        if (value >= 1000)
-            return $"{value / 1000:0.#}K";
+        if (value >= 1000000) return $"{value / 1000000:0.#}M";
+        if (value >= 1000) return $"{value / 1000:0.#}K";
         return value.ToString("0");
     }
 
-    private string GetTimeClass()
-    {
-        if (_secondsRemaining <= 10) return "time-critical";
-        if (_secondsRemaining <= 60) return "time-warning";
-        return "";
-    }
+    private string GetTimerBorderColor() => _secondsRemaining <= 10 ? "#ef4444" : _secondsRemaining <= 60 ? "#eab308" : "#22c55e";
+    private string GetTimerTextColor() => _secondsRemaining <= 10 ? "#ef4444" : _secondsRemaining <= 60 ? "#eab308" : "#ffffff";
+    private string GetTimerGlowColor() => _secondsRemaining <= 10 ? "rgba(239, 68, 68, 0.4)" : _secondsRemaining <= 60 ? "rgba(234, 179, 8, 0.4)" : "rgba(34, 197, 94, 0.2)";
 
     private async Task ToggleFullscreen()
     {
         _isFullscreen = !_isFullscreen;
-        if (_isFullscreen)
-        {
-            await JS.InvokeVoidAsync("document.documentElement.requestFullscreen");
-            // Prevent screen from sleeping in fullscreen mode
-            await JS.InvokeVoidAsync("requestWakeLock");
-        }
-        else
-        {
-            await JS.InvokeVoidAsync("document.exitFullscreen");
-            // Release wake lock when exiting fullscreen
-            await JS.InvokeVoidAsync("releaseWakeLock");
-        }
-    }
-
-    private async Task PlayLevelChangeSound()
-    {
         try
         {
-            await JS.InvokeVoidAsync("timerSounds.playLevelChange");
+            if (_isFullscreen)
+            {
+                await JS.InvokeVoidAsync("document.documentElement.requestFullscreen");
+                await JS.InvokeVoidAsync("requestWakeLock");
+            }
+            else
+            {
+                await JS.InvokeVoidAsync("document.exitFullscreen");
+                await JS.InvokeVoidAsync("releaseWakeLock");
+            }
         }
-        catch
-        {
-            // Ignore audio errors
-        }
+        catch { }
     }
 
-    private async Task PlayBreakSound()
-    {
-        try
-        {
-            await JS.InvokeVoidAsync("timerSounds.playBreakStart");
-        }
-        catch
-        {
-            // Ignore audio errors
-        }
-    }
-
-    private async Task PlayFinishedSound()
-    {
-        try
-        {
-            await JS.InvokeVoidAsync("timerSounds.playFinished");
-        }
-        catch
-        {
-            // Ignore audio errors
-        }
-    }
+    private async Task PlayLevelChangeSound() { try { await JS.InvokeVoidAsync("timerSounds.playLevelChange"); } catch { } }
+    private async Task PlayFinishedSound() { try { await JS.InvokeVoidAsync("timerSounds.playFinished"); } catch { } }
 
     public async ValueTask DisposeAsync()
     {
-        // Release wake lock when leaving the page
-        try
-        {
-            await JS.InvokeVoidAsync("releaseWakeLock");
-        }
-        catch
-        {
-            // Ignore errors - JS might not be available
-        }
+        _clockTimer?.Stop();
+        _clockTimer?.Dispose();
+        try { await JS.InvokeVoidAsync("releaseWakeLock"); } catch { }
 
-        // Dispose all handler subscriptions to prevent memory leaks
         _timerTickHandler?.Dispose();
         _levelChangedHandler?.Dispose();
         _pausedHandler?.Dispose();
@@ -547,43 +742,18 @@
         _prizePoolHandler?.Dispose();
         _finishedHandler?.Dispose();
         _timerStateHandler?.Dispose();
+        _playerUpdatedHandler?.Dispose();
 
         if (_hubConnection != null)
         {
-            try
-            {
-                await _hubConnection.SendAsync("LeaveTorneio", TournamentId);
-            }
-            catch
-            {
-                // Ignore errors when leaving - connection might already be closed
-            }
+            try { await _hubConnection.SendAsync("LeaveTorneio", TournamentId); } catch { }
             await _hubConnection.DisposeAsync();
         }
     }
 
-    // DTOs for SignalR deserialization
-    private class TimerTickData
-    {
-        public int SecondsRemaining { get; set; }
-        public int CurrentLevel { get; set; }
-        public decimal SmallBlind { get; set; }
-        public decimal BigBlind { get; set; }
-        public decimal Ante { get; set; }
-        public bool IsBreak { get; set; }
-        public string? BreakDescription { get; set; }
-    }
-
-    private class LevelChangedData
-    {
-        public BlindLevelDto? NewLevel { get; set; }
-        public BlindLevelDto? NextLevel { get; set; }
-    }
-
-    private class PrizePoolData
-    {
-        public decimal PrizePool { get; set; }
-        public int TotalRebuys { get; set; }
-        public int TotalAddons { get; set; }
-    }
+    private class PrizeInfo { public int Position { get; set; } public decimal Amount { get; set; } public decimal? Percentage { get; set; } }
+    private class PlayerInfo { public Guid Id { get; set; } public string Name { get; set; } = ""; public string? Nickname { get; set; } public int RebuyCount { get; set; } public bool HasAddon { get; set; } public bool IsEliminated { get; set; } public int? Position { get; set; } }
+    private class TimerTickData { public int SecondsRemaining { get; set; } public int CurrentLevel { get; set; } public decimal SmallBlind { get; set; } public decimal BigBlind { get; set; } public decimal Ante { get; set; } public bool IsBreak { get; set; } public string? BreakDescription { get; set; } }
+    private class LevelChangedData { public BlindLevelDto? NewLevel { get; set; } public BlindLevelDto? NextLevel { get; set; } }
+    private class PrizePoolData { public decimal PrizePool { get; set; } public int TotalRebuys { get; set; } public int TotalAddons { get; set; } }
 }

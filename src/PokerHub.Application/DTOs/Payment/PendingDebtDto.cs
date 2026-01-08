@@ -1,3 +1,5 @@
+using PokerHub.Domain.Enums;
+
 namespace PokerHub.Application.DTOs.Payment;
 
 public record PendingDebtDto(
@@ -9,5 +11,7 @@ public record PendingDebtDto(
     string CreditorPlayerName,
     string? CreditorPixKey,
     decimal Amount,
-    int DaysOpen
+    int DaysOpen,
+    PaymentType Type = PaymentType.Poker,
+    string? Description = null
 );

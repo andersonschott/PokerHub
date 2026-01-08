@@ -218,6 +218,22 @@ else
                                                  Style="position: relative; overflow: hidden;">
                                             <div class="status-bar @statusClass"></div>
                                             <MudCardContent Class="pa-3 pl-4">
+                                                @* Tipo do pagamento *@
+                                                <div class="d-flex justify-space-between align-center mb-2">
+                                                    @switch (payment.Type)
+                                                    {
+                                                        case PaymentType.Poker:
+                                                            <MudChip T="string" Color="Color.Success" Size="Size.Small">Poker</MudChip>
+                                                            break;
+                                                        case PaymentType.Expense:
+                                                            <MudChip T="string" Color="Color.Warning" Size="Size.Small">@payment.Description</MudChip>
+                                                            break;
+                                                        case PaymentType.Jackpot:
+                                                            <MudChip T="string" Color="Color.Info" Size="Size.Small">Caixinha</MudChip>
+                                                            break;
+                                                    }
+                                                </div>
+
                                                 @* Fluxo visual: De -> Para *@
                                                 <div class="d-flex align-center gap-2 mb-2">
                                                     <MudAvatar Size="Size.Small" Color="Color.Secondary">
@@ -226,20 +242,10 @@ else
                                                     <MudText Typo="Typo.body2">@payment.FromPlayerName</MudText>
                                                     <MudIcon Icon="@Icons.Material.Filled.ArrowForward"
                                                              Size="Size.Small" Color="Color.Secondary" />
-                                                    @if (payment.IsJackpotContribution)
-                                                    {
-                                                        <MudIcon Icon="@Icons.Material.Filled.Savings" Color="Color.Warning" Size="Size.Small" />
-                                                        <MudText Typo="Typo.body2" Color="Color.Warning" Class="font-weight-medium">
-                                                            Caixinha
-                                                        </MudText>
-                                                    }
-                                                    else
-                                                    {
-                                                        <MudAvatar Size="Size.Small" Color="Color.Primary">
-                                                            @payment.ToPlayerName[0]
-                                                        </MudAvatar>
-                                                        <MudText Typo="Typo.body2">@payment.ToPlayerName</MudText>
-                                                    }
+                                                    <MudAvatar Size="Size.Small" Color="Color.Primary">
+                                                        @payment.ToPlayerName[0]
+                                                    </MudAvatar>
+                                                    <MudText Typo="Typo.body2">@payment.ToPlayerName</MudText>
                                                 </div>
 
                                                 <div class="d-flex justify-space-between align-center">
@@ -444,6 +450,7 @@ else
 
                                 <MudTable Items="@FilteredPayments" Hover="true" Elevation="0" Breakpoint="Breakpoint.None">
                                     <HeaderContent>
+                                        <MudTh>Tipo</MudTh>
                                         <MudTh>De</MudTh>
                                         <MudTh>Para</MudTh>
                                         <MudTh Style="text-align: right;">Valor</MudTh>
@@ -455,6 +462,20 @@ else
                                         }
                                     </HeaderContent>
                                     <RowTemplate>
+                                        <MudTd DataLabel="Tipo">
+                                            @switch (context.Type)
+                                            {
+                                                case PaymentType.Poker:
+                                                    <MudChip T="string" Color="Color.Success" Size="Size.Small">Poker</MudChip>
+                                                    break;
+                                                case PaymentType.Expense:
+                                                    <MudChip T="string" Color="Color.Warning" Size="Size.Small">@context.Description</MudChip>
+                                                    break;
+                                                case PaymentType.Jackpot:
+                                                    <MudChip T="string" Color="Color.Info" Size="Size.Small">Caixinha</MudChip>
+                                                    break;
+                                            }
+                                        </MudTd>
                                         <MudTd DataLabel="De">
                                             <div class="d-flex align-center gap-2">
                                                 <MudAvatar Size="Size.Small" Color="Color.Secondary">
@@ -464,22 +485,12 @@ else
                                             </div>
                                         </MudTd>
                                         <MudTd DataLabel="Para">
-                                            @if (context.IsJackpotContribution)
-                                            {
-                                                <div class="d-flex align-center gap-2">
-                                                    <MudIcon Icon="@Icons.Material.Filled.Savings" Color="Color.Warning" Size="Size.Small" />
-                                                    <MudText Color="Color.Warning" Class="font-weight-medium">Caixinha</MudText>
-                                                </div>
-                                            }
-                                            else
-                                            {
-                                                <div class="d-flex align-center gap-2">
-                                                    <MudAvatar Size="Size.Small" Color="Color.Primary">
-                                                        @context.ToPlayerName[0]
-                                                    </MudAvatar>
-                                                    <MudText>@context.ToPlayerName</MudText>
-                                                </div>
-                                            }
+                                            <div class="d-flex align-center gap-2">
+                                                <MudAvatar Size="Size.Small" Color="Color.Primary">
+                                                    @context.ToPlayerName[0]
+                                                </MudAvatar>
+                                                <MudText>@context.ToPlayerName</MudText>
+                                            </div>
                                         </MudTd>
                                         <MudTd DataLabel="Valor" Style="text-align: right;">
                                             <MudText Typo="Typo.body1" Class="font-weight-bold"

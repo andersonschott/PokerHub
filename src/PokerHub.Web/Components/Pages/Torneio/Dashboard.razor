@@ -29,80 +29,117 @@
     else
     {
         <MudGrid>
-            <MudItem xs="12">
-                <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
-                    <div>
-                        <MudText Typo="Typo.h4">@_tournament.Name</MudText>
-                        <MudChip T="string" Color="@GetStatusColor(_tournament.Status)" Size="Size.Small">
-                            @GetStatusText(_tournament.Status)
-                        </MudChip>
-                    </div>
-                    <div class="d-flex flex-wrap gap-2 justify-end">
-                        @if (_canManage && _tournament.Status == TournamentStatus.Scheduled)
-                        {
-                            <MudButton Variant="Variant.Outlined"
-                                      Color="Color.Default"
-                                      StartIcon="@Icons.Material.Filled.Edit"
-                                      Href="@($"/torneios/{TournamentId}/editar")">
-                                Editar
-                            </MudButton>
-                            <MudButton Variant="Variant.Outlined"
-                                      Color="Color.Primary"
-                                      StartIcon="@Icons.Material.Filled.Share"
-                                      OnClick="ShowInviteDialog">
-                                Convidar
-                            </MudButton>
-                            <MudButton Variant="Variant.Filled"
-                                      Color="Color.Success"
-                                      StartIcon="@Icons.Material.Filled.PlayArrow"
-                                      OnClick="StartTournament"
-                                      Disabled="_processing">
-                                Iniciar Torneio
-                            </MudButton>
-                        }
-                        else if (_tournament.Status == TournamentStatus.InProgress)
-                        {
-                            @if (_canManage)
+            @* Header - apenas em desktop *@
+            @if (!_isSmallScreen)
+            {
+                <MudItem xs="12">
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
+                        <div>
+                            <MudText Typo="Typo.h4">@_tournament.Name</MudText>
+                            <MudChip T="string" Color="@GetStatusColor(_tournament.Status)" Size="Size.Small">
+                                @GetStatusText(_tournament.Status)
+                            </MudChip>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 justify-end">
+                            @if (_canManage && _tournament.Status == TournamentStatus.Scheduled)
                             {
                                 <MudButton Variant="Variant.Outlined"
-                                          Color="Color.Warning"
-                                          StartIcon="@Icons.Material.Filled.Pause"
-                                          OnClick="PauseTournament"
+                                          Color="Color.Default"
+                                          StartIcon="@Icons.Material.Filled.Edit"
+                                          Href="@($"/torneios/{TournamentId}/editar")">
+                                    Editar
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined"
+                                          Color="Color.Primary"
+                                          StartIcon="@Icons.Material.Filled.Share"
+                                          OnClick="ShowInviteDialog">
+                                    Convidar
+                                </MudButton>
+                                <MudButton Variant="Variant.Filled"
+                                          Color="Color.Success"
+                                          StartIcon="@Icons.Material.Filled.PlayArrow"
+                                          OnClick="StartTournament"
                                           Disabled="_processing">
-                                    Pausar
+                                    Iniciar Torneio
                                 </MudButton>
                             }
-                            <MudButton Variant="Variant.Filled"
-                                      Color="Color.Primary"
-                                      StartIcon="@Icons.Material.Filled.Tv"
-                                      Href="@($"/timer/{TournamentId}")"
-                                      Target="_blank">
-                                Abrir Timer
-                            </MudButton>
-                        }
-                        else if (_canManage && _tournament.Status == TournamentStatus.Paused)
-                        {
-                            <MudButton Variant="Variant.Filled"
-                                      Color="Color.Success"
-                                      StartIcon="@Icons.Material.Filled.PlayArrow"
-                                      OnClick="ResumeTournament"
-                                      Disabled="_processing">
-                                Retomar
-                            </MudButton>
-                        }
-                        else if (_tournament.Status == TournamentStatus.Finished)
-                        {
-                            <MudButton Variant="Variant.Filled"
-                                      Color="Color.Primary"
-                                      StartIcon="@Icons.Material.Filled.Payments"
-                                      Href="@($"/torneios/{TournamentId}/pagamentos")">
-                                Ver Pagamentos
-                            </MudButton>
-                        }
-                    </div>
-                </MudStack>
-            </MudItem>
+                            else if (_tournament.Status == TournamentStatus.InProgress)
+                            {
+                                @if (_canManage)
+                                {
+                                    <MudButton Variant="Variant.Outlined"
+                                              Color="Color.Warning"
+                                              StartIcon="@Icons.Material.Filled.Pause"
+                                              OnClick="PauseTournament"
+                                              Disabled="_processing">
+                                        Pausar
+                                    </MudButton>
+                                }
+                                <MudButton Variant="Variant.Filled"
+                                          Color="Color.Primary"
+                                          StartIcon="@Icons.Material.Filled.Tv"
+                                          Href="@($"/timer/{TournamentId}")"
+                                          Target="_blank">
+                                    Abrir Timer
+                                </MudButton>
+                            }
+                            else if (_canManage && _tournament.Status == TournamentStatus.Paused)
+                            {
+                                <MudButton Variant="Variant.Filled"
+                                          Color="Color.Success"
+                                          StartIcon="@Icons.Material.Filled.PlayArrow"
+                                          OnClick="ResumeTournament"
+                                          Disabled="_processing">
+                                    Retomar
+                                </MudButton>
+                            }
+                            else if (_tournament.Status == TournamentStatus.Finished)
+                            {
+                                <MudButton Variant="Variant.Filled"
+                                          Color="Color.Primary"
+                                          StartIcon="@Icons.Material.Filled.Payments"
+                                          Href="@($"/torneios/{TournamentId}/pagamentos")">
+                                    Ver Pagamentos
+                                </MudButton>
+                            }
+                        </div>
+                    </MudStack>
+                </MudItem>
+            }
 
+            @* Conteudo condicional: Mobile vs Desktop *@
+            @if (_isSmallScreen)
+            {
+                <MudItem xs="12">
+                    <TournamentMobileDashboard
+                        Tournament="_tournament"
+                        Detail="_detail"
+                        TimerState="_timerState"
+                        Expenses="_expenses"
+                        CanManage="_canManage"
+                        RebuyAllowed="_rebuyAllowed"
+                        Processing="_processing"
+                        OnEditClick="@(() => Navigation.NavigateTo($"/torneios/{TournamentId}/editar"))"
+                        OnInviteClick="ShowInviteDialog"
+                        OnStartClick="StartTournament"
+                        OnPauseClick="PauseTournament"
+                        OnResumeClick="ResumeTournament"
+                        OnOpenTimerClick="@(() => Navigation.NavigateTo($"/timer/{TournamentId}", true))"
+                        OnAddPlayerClick="OpenAddPlayerDialog"
+                        OnCheckInClick="CheckIn"
+                        OnCheckOutClick="CheckOut"
+                        OnAddRebuyClick="AddRebuyWithConfirm"
+                        OnRemoveRebuyClick="RemoveRebuyWithConfirm"
+                        OnToggleAddonClick="ToggleAddon"
+                        OnEliminateClick="EliminatePlayer"
+                        OnAddExpenseClick="OpenAddExpenseDialog"
+                        OnViewPaymentsClick="@(() => Navigation.NavigateTo($"/torneios/{TournamentId}/pagamentos"))"
+                        OnCancelClick="CancelTournament"
+                        OnFinishClick="FinishTournament" />
+                </MudItem>
+            }
+            else
+            {
             <!-- Info Cards -->
             <MudItem xs="6" sm="6" md="3">
                 <MudCard Elevation="2">
@@ -306,7 +343,7 @@
                         {
                             <!-- Desktop Table View -->
                             <div style="overflow-x: auto;">
-                                <MudTable Items="_detail?.Players" Dense="true" Hover="true" Breakpoint="Breakpoint.None">
+                                <MudTable Items="@GetSortedPlayers()" Dense="true" Hover="true" Breakpoint="Breakpoint.None">
                                     <HeaderContent>
                                         <MudTh>Jogador</MudTh>
                                         <MudTh>Status</MudTh>
@@ -522,6 +559,7 @@
                     </div>
                 </MudItem>
             }
+            } @* Fecha else do _isSmallScreen *@
         </MudGrid>
     }
 </MudContainer>
@@ -566,6 +604,7 @@
     private bool _isOrganizer;
     private string? _currentUserId;
     private bool _rebuyAddonInProgress;
+    private bool _refreshInProgress;
     private bool _inviteDialogVisible;
 
     // Connection state
@@ -696,8 +735,18 @@
     /// </summary>
     private async Task RefreshPlayerData()
     {
-        _detail = await TournamentService.GetTournamentDetailAsync(TournamentId);
-        _rebuyAllowed = await TournamentService.IsRebuyAllowedAsync(TournamentId);
+        // Prevent concurrent database operations
+        if (_refreshInProgress) return;
+        _refreshInProgress = true;
+        try
+        {
+            _detail = await TournamentService.GetTournamentDetailAsync(TournamentId);
+            _rebuyAllowed = await TournamentService.IsRebuyAllowedAsync(TournamentId);
+        }
+        finally
+        {
+            _refreshInProgress = false;
+        }
     }
 
     private void RegisterHubHandlers()
@@ -813,6 +862,25 @@
     private bool IsPlayerEliminated(TournamentPlayerDto player)
     {
         return player.Position.HasValue || player.EliminatedAt != null;
+    }
+
+    private IEnumerable<TournamentPlayerDto> GetSortedPlayers()
+    {
+        if (_detail?.Players == null) return Enumerable.Empty<TournamentPlayerDto>();
+
+        // Quando o torneio estiver finalizado, ordenar por posição
+        if (_tournament?.Status == TournamentStatus.Finished)
+        {
+            return _detail.Players
+                .OrderBy(p => p.Position ?? int.MaxValue)
+                .ThenBy(p => p.PlayerName);
+        }
+
+        // Para outros status, ordenar por status de jogo
+        return _detail.Players
+            .OrderBy(p => p.Position.HasValue ? 0 : 1)
+            .ThenBy(p => p.Position)
+            .ThenBy(p => p.PlayerName);
     }
 
     private async Task StartTournament()
@@ -979,7 +1047,8 @@
         {
             await TournamentService.AddRebuyAsync(TournamentId, playerId);
             await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail!.PrizePool + (_detail.RebuyValue ?? 0), GetTotalRebuys() + 1, GetTotalAddons());
-            await RefreshPlayerData();
+            await TimerService.NotifyPlayerUpdated(TournamentId);
+            // RefreshPlayerData is called by SignalR handler when broadcast is received
         }
         catch (Exception ex)
         {
@@ -999,7 +1068,8 @@
         {
             await TournamentService.RemoveRebuyAsync(TournamentId, playerId);
             await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail!.PrizePool - (_detail.RebuyValue ?? 0), GetTotalRebuys() - 1, GetTotalAddons());
-            await RefreshPlayerData();
+            await TimerService.NotifyPlayerUpdated(TournamentId);
+            // RefreshPlayerData is called by SignalR handler when broadcast is received
         }
         catch (Exception ex)
         {
@@ -1021,7 +1091,8 @@
             var change = hasAddon ? 1 : -1;
             var prizeChange = hasAddon ? (_detail!.AddonValue ?? 0) : -(_detail!.AddonValue ?? 0);
             await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail!.PrizePool + prizeChange, GetTotalRebuys(), GetTotalAddons() + change);
-            await RefreshPlayerData();
+            await TimerService.NotifyPlayerUpdated(TournamentId);
+            // RefreshPlayerData is called by SignalR handler when broadcast is received
         }
         catch (Exception ex)
         {
@@ -1030,6 +1101,56 @@
         finally
         {
             _rebuyAddonInProgress = false;
+        }
+    }
+
+    // Metodos com confirmacao para uso no mobile
+    private async Task AddRebuyWithConfirm(Guid playerId)
+    {
+        var player = _detail?.Players?.FirstOrDefault(p => p.PlayerId == playerId);
+        if (player == null) return;
+
+        var confirm = await DialogService.ShowMessageBox(
+            "Confirmar Rebuy",
+            $"Adicionar rebuy para {player.PlayerName}? (Total: {player.RebuyCount + 1})",
+            "Confirmar", "Cancelar");
+
+        if (confirm == true)
+        {
+            await AddRebuy(playerId);
+        }
+    }
+
+    private async Task RemoveRebuyWithConfirm(Guid playerId)
+    {
+        var player = _detail?.Players?.FirstOrDefault(p => p.PlayerId == playerId);
+        if (player == null || player.RebuyCount <= 0) return;
+
+        var confirm = await DialogService.ShowMessageBox(
+            "Confirmar Remocao",
+            $"Remover rebuy de {player.PlayerName}? (Total: {player.RebuyCount - 1})",
+            "Confirmar", "Cancelar");
+
+        if (confirm == true)
+        {
+            await RemoveRebuy(playerId);
+        }
+    }
+
+    private async Task ToggleAddon(Guid playerId)
+    {
+        var player = _detail?.Players?.FirstOrDefault(p => p.PlayerId == playerId);
+        if (player == null) return;
+
+        var action = player.HasAddon ? "remover" : "adicionar";
+        var confirm = await DialogService.ShowMessageBox(
+            "Confirmar Add-on",
+            $"Deseja {action} add-on para {player.PlayerName}?",
+            "Confirmar", "Cancelar");
+
+        if (confirm == true)
+        {
+            await SetAddon(playerId, !player.HasAddon);
         }
     }
 
@@ -1049,6 +1170,7 @@
             {
                 await TournamentService.EliminatePlayerAsync(TournamentId, player.PlayerId, null, position);
                 await TimerService.NotifyPlayerEliminated(TournamentId, player.PlayerId, player.PlayerName, position);
+                await TimerService.NotifyPlayerUpdated(TournamentId);
                 await LoadTournament();
             }
             catch (Exception ex)

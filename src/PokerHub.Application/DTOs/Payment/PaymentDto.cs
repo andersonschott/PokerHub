@@ -14,10 +14,12 @@ public record PaymentDto(
     PixKeyType? ToPlayerPixKeyType,
     decimal Amount,
     PaymentStatus Status,
+    PaymentType Type,
     DateTime CreatedAt,
     DateTime? PaidAt,
     DateTime? ConfirmedAt,
     int DaysOpen,
     string? Description = null,
+    Guid? ExpenseId = null,
     bool IsJackpotContribution = false
 );
