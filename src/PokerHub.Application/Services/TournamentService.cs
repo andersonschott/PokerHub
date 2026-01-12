@@ -837,7 +837,7 @@ public class TournamentService : ITournamentService
         return tournament == null ? null : MapToDto(tournament);
     }
 
-    public async Task<bool> SelfRegisterPlayerAsync(Guid tournamentId, string userId)
+    public async Task<(bool Success, string Message)> SelfRegisterPlayerAsync(Guid tournamentId, string userId)
     {
         var tournament = await _context.Tournaments
             .Include(t => t.League)
@@ -845,19 +845,35 @@ public class TournamentService : ITournamentService
             .Include(t => t.Players)
             .FirstOrDefaultAsync(t => t.Id == tournamentId);
 
-        if (tournament == null) return false;
+        if (tournament == null)
+            return (false, "Torneio nao encontrado.");
 
         // Tournament must allow check-in (scheduled or early check-in period)
-        if (!tournament.IsCheckInAllowed()) return false;
+        if (!tournament.IsCheckInAllowed())
+            return (false, "Inscricoes nao estao abertas para este torneio.");
 
         // Find the player linked to this user in the league
         var player = tournament.League.Players
             .FirstOrDefault(p => p.UserId == userId && p.IsActive);
 
-        if (player == null) return false;
+        if (player == null)
+            return (false, "Voce nao e membro ativo desta liga.");
 
         // Check if already registered
-        if (tournament.Players.Any(tp => tp.PlayerId == player.Id)) return false;
+        if (tournament.Players.Any(tp => tp.PlayerId == player.Id))
+            return (false, "Voce ja esta inscrito neste torneio.");
+
+        // Check for pending debts if league blocks check-in with debt
+        if (tournament.League.BlockCheckInWithDebt)
+        {
+            var hasPendingDebts = await _context.Payments
+                .AnyAsync(p => p.FromPlayerId == player.Id &&
+                              p.Status == PaymentStatus.Pending &&
+                              p.ToPlayerId != null);
+
+            if (hasPendingDebts)
+                return (false, "Voce possui debitos pendentes na liga. Quite suas pendencias antes de se inscrever.");
+        }
 
         // Add player to tournament and auto-checkin if tournament already started
         var tournamentPlayer = new TournamentPlayer
@@ -872,7 +888,7 @@ public class TournamentService : ITournamentService
         _context.TournamentPlayers.Add(tournamentPlayer);
         await _context.SaveChangesAsync();
 
-        return true;
+        return (true, "Inscricao realizada com sucesso!");
     }
 
     public async Task<bool> SelfUnregisterPlayerAsync(Guid tournamentId, string userId)

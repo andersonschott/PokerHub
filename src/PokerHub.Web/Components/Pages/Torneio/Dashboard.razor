@@ -1410,15 +1410,15 @@
         _processing = true;
         try
         {
-            var success = await TournamentService.SelfRegisterPlayerAsync(TournamentId, _currentUserId);
+            var (success, message) = await TournamentService.SelfRegisterPlayerAsync(TournamentId, _currentUserId);
             if (success)
             {
-                Snackbar.Add("Inscricao realizada com sucesso!", Severity.Success);
+                Snackbar.Add(message, Severity.Success);
                 await LoadTournament();
             }
             else
             {
-                Snackbar.Add("Nao foi possivel realizar a inscricao.", Severity.Error);
+                Snackbar.Add(message, Severity.Error);
             }
         }
         catch (Exception ex)

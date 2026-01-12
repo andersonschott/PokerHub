@@ -64,8 +64,9 @@ public interface ITournamentService
 
     /// <summary>
     /// Allows a logged-in user to register themselves for a tournament.
+    /// Returns (Success, Message) where Message contains error details if failed.
     /// </summary>
-    Task<bool> SelfRegisterPlayerAsync(Guid tournamentId, string userId);
+    Task<(bool Success, string Message)> SelfRegisterPlayerAsync(Guid tournamentId, string userId);
 
     /// <summary>
     /// Allows a logged-in user to unregister themselves from a tournament.

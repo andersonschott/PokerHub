@@ -281,15 +281,15 @@
         _processing = true;
         try
         {
-            var success = await TournamentService.SelfRegisterPlayerAsync(_tournament.Id, _currentUserId);
+            var (success, message) = await TournamentService.SelfRegisterPlayerAsync(_tournament.Id, _currentUserId);
             if (success)
             {
-                Snackbar.Add("Inscricao realizada com sucesso!", Severity.Success);
+                Snackbar.Add(message, Severity.Success);
                 await LoadData();
             }
             else
             {
-                Snackbar.Add("Nao foi possivel realizar a inscricao.", Severity.Error);
+                Snackbar.Add(message, Severity.Error);
             }
         }
         catch (Exception ex)
@@ -378,14 +378,14 @@
             Snackbar.Add(joinMessage, Severity.Success);
 
             // Now register for the tournament
-            var registerSuccess = await TournamentService.SelfRegisterPlayerAsync(_tournament.Id, _currentUserId);
+            var (registerSuccess, registerMessage) = await TournamentService.SelfRegisterPlayerAsync(_tournament.Id, _currentUserId);
             if (registerSuccess)
             {
-                Snackbar.Add("Inscricao no torneio realizada com sucesso!", Severity.Success);
+                Snackbar.Add(registerMessage, Severity.Success);
             }
             else
             {
-                Snackbar.Add("Voce entrou na liga, mas nao foi possivel inscrever no torneio.", Severity.Warning);
+                Snackbar.Add($"Voce entrou na liga, mas: {registerMessage}", Severity.Warning);
             }
 
             await LoadData();
