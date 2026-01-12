@@ -102,6 +102,34 @@
                                     Ver Pagamentos
                                 </MudButton>
                             }
+                            @* Self-Registration for League Members (Desktop) *@
+                            @if (!_canManage && _isUserInLeague && _tournament.Status == TournamentStatus.Scheduled)
+                            {
+                                @if (_isUserRegistered)
+                                {
+                                    <MudChip T="string" Color="Color.Success" Size="Size.Medium">
+                                        Inscrito
+                                    </MudChip>
+                                    <MudButton Variant="Variant.Outlined"
+                                              Color="Color.Warning"
+                                              Size="Size.Small"
+                                              OnClick="CancelSelfRegistration"
+                                              Disabled="_processing">
+                                        Cancelar Inscricao
+                                    </MudButton>
+                                }
+                                else
+                                {
+                                    <MudButton Variant="Variant.Filled"
+                                              Color="Color.Primary"
+                                              Size="Size.Medium"
+                                              StartIcon="@Icons.Material.Filled.HowToReg"
+                                              OnClick="SelfRegister"
+                                              Disabled="_processing">
+                                        Inscrever-me
+                                    </MudButton>
+                                }
+                            }
                         </div>
                     </MudStack>
                 </MudItem>
@@ -119,6 +147,8 @@
                         CanManage="_canManage"
                         RebuyAllowed="_rebuyAllowed"
                         Processing="_processing"
+                        IsUserInLeague="_isUserInLeague"
+                        IsUserRegistered="_isUserRegistered"
                         OnEditClick="@(() => Navigation.NavigateTo($"/torneios/{TournamentId}/editar"))"
                         OnInviteClick="ShowInviteDialog"
                         OnStartClick="StartTournament"
@@ -135,7 +165,9 @@
                         OnAddExpenseClick="OpenAddExpenseDialog"
                         OnViewPaymentsClick="@(() => Navigation.NavigateTo($"/torneios/{TournamentId}/pagamentos"))"
                         OnCancelClick="CancelTournament"
-                        OnFinishClick="FinishTournament" />
+                        OnFinishClick="FinishTournament"
+                        OnSelfRegisterClick="SelfRegister"
+                        OnCancelSelfRegistrationClick="CancelSelfRegistration" />
                 </MudItem>
             }
             else
@@ -607,6 +639,10 @@
     private bool _refreshInProgress;
     private bool _inviteDialogVisible;
 
+    // Self-registration state
+    private bool _isUserInLeague;
+    private bool _isUserRegistered;
+
     // Connection state
     private bool _isReconnecting;
     private bool _isDisconnected;
@@ -725,6 +761,10 @@
         {
             _canManage = await TournamentService.CanUserManageTournamentAsync(TournamentId, _currentUserId);
             _isOrganizer = await LeagueService.IsUserOrganizerAsync(_tournament.LeagueId, _currentUserId);
+
+            // Check self-registration state for league members
+            _isUserInLeague = await LeagueService.CanUserAccessLeagueAsync(_tournament.LeagueId, _currentUserId);
+            _isUserRegistered = await TournamentService.IsUserRegisteredInTournamentAsync(TournamentId, _currentUserId);
         }
 
         _loading = false;
@@ -1361,6 +1401,69 @@
         var url = GetInviteUrl();
         await JS.InvokeVoidAsync("navigator.clipboard.writeText", url);
         Snackbar.Add("Link copiado!", Severity.Success);
+    }
+
+    private async Task SelfRegister()
+    {
+        if (string.IsNullOrEmpty(_currentUserId) || _tournament == null) return;
+
+        _processing = true;
+        try
+        {
+            var success = await TournamentService.SelfRegisterPlayerAsync(TournamentId, _currentUserId);
+            if (success)
+            {
+                Snackbar.Add("Inscricao realizada com sucesso!", Severity.Success);
+                await LoadTournament();
+            }
+            else
+            {
+                Snackbar.Add("Nao foi possivel realizar a inscricao.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private async Task CancelSelfRegistration()
+    {
+        if (string.IsNullOrEmpty(_currentUserId) || _tournament == null) return;
+
+        var confirm = await DialogService.ShowMessageBox(
+            "Cancelar Inscricao",
+            "Tem certeza que deseja cancelar sua inscricao?",
+            "Sim", "Nao");
+
+        if (confirm != true) return;
+
+        _processing = true;
+        try
+        {
+            var success = await TournamentService.SelfUnregisterPlayerAsync(TournamentId, _currentUserId);
+            if (success)
+            {
+                Snackbar.Add("Inscricao cancelada.", Severity.Info);
+                await LoadTournament();
+            }
+            else
+            {
+                Snackbar.Add("Nao foi possivel cancelar. Voce ja fez check-in?", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
     }
 
     public async ValueTask DisposeAsync()

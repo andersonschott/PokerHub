@@ -96,6 +96,43 @@
         </div>
     }
 
+    @* ===== SELF-REGISTRATION FOR LEAGUE MEMBERS ===== *@
+    @if (!CanManage && IsUserInLeague && Tournament?.Status == TournamentStatus.Scheduled)
+    {
+        <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+            @if (IsUserRegistered)
+            {
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Success"
+                           Size="Size.Medium"
+                           Disabled="true"
+                           Style="flex: 2;">
+                    Inscrito
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Warning"
+                           Size="Size.Medium"
+                           OnClick="OnCancelSelfRegistrationClick"
+                           Disabled="@Processing"
+                           Style="flex: 1;">
+                    Cancelar
+                </MudButton>
+            }
+            else
+            {
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           Size="Size.Large"
+                           StartIcon="@Icons.Material.Filled.HowToReg"
+                           OnClick="OnSelfRegisterClick"
+                           Disabled="@Processing"
+                           FullWidth="true">
+                    Inscrever-me
+                </MudButton>
+            }
+        </div>
+    }
+
     @* ===== TIMER CARD ===== *@
     @if (Tournament?.Status is TournamentStatus.InProgress or TournamentStatus.Paused && TimerState != null)
     {
@@ -465,6 +502,10 @@
     [Parameter] public bool RebuyAllowed { get; set; }
     [Parameter] public bool Processing { get; set; }
 
+    // Self-registration state
+    [Parameter] public bool IsUserInLeague { get; set; }
+    [Parameter] public bool IsUserRegistered { get; set; }
+
     // Callbacks - Header Actions
     [Parameter] public EventCallback OnEditClick { get; set; }
     [Parameter] public EventCallback OnInviteClick { get; set; }
@@ -487,6 +528,10 @@
     [Parameter] public EventCallback OnViewPaymentsClick { get; set; }
     [Parameter] public EventCallback OnCancelClick { get; set; }
     [Parameter] public EventCallback OnFinishClick { get; set; }
+
+    // Callbacks - Self-registration
+    [Parameter] public EventCallback OnSelfRegisterClick { get; set; }
+    [Parameter] public EventCallback OnCancelSelfRegistrationClick { get; set; }
 
     private string GetPlayerCountDisplay()
     {
