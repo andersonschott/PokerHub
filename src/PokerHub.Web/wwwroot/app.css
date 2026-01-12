@@ -155,23 +155,60 @@ h1:focus {
     background: var(--mud-palette-surface);
 }
 
-/* Bottom navigation estilo /ranking */
-.mobile-fixed-bottom .mud-nav-link {
+/* Bottom Navigation - Custom */
+.bottom-nav-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-around;
+    align-items: stretch;
+    background: var(--mud-palette-surface);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 8px 4px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    z-index: 100;
+}
+
+.bottom-nav-item {
+    flex: 1;
+    display: flex;
     flex-direction: column;
-    min-width: 64px;
-    padding: 6px 12px;
-    justify-content: center;
     align-items: center;
-}
-
-.mobile-fixed-bottom .mud-nav-link .mud-icon-root {
-    margin-right: 0 !important;
-    margin-bottom: 2px;
-}
-
-.active-nav {
-    background: rgba(255, 193, 7, 0.1);
+    justify-content: center;
+    gap: 4px;
+    padding: 6px 2px;
+    background: transparent;
+    border: none;
     border-radius: 8px;
+    color: var(--mud-palette-text-secondary);
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 0;
+}
+
+.bottom-nav-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.bottom-nav-item.active {
+    color: #ffc107;
+    background: rgba(255, 193, 7, 0.1);
+}
+
+.bottom-nav-item .mud-icon-root {
+    font-size: 20px;
+}
+
+.bottom-nav-item span {
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
 }
 
 /* SubHeader contextual - abaixo do header padrão */
@@ -559,4 +596,80 @@ h1:focus {
     top: -8px;
     right: -4px;
     font-size: 1rem;
+}
+
+/* ===== PLAYER STATS PAGE - RESPONSIVE ===== */
+/* Mobile (default) */
+.player-stats-page .hero-stats {
+    grid-template-columns: repeat(2, 1fr) !important;
+}
+
+.player-stats-page .hero-stat.highlight {
+    grid-column: 1 / -1 !important;
+}
+
+.player-stats-page .history-list {
+    display: flex !important;
+}
+
+.player-stats-page .history-table {
+    display: none !important;
+}
+
+/* Desktop (768px+) */
+@media (min-width: 768px) {
+    .player-stats-page .hero-stats {
+        grid-template-columns: repeat(4, 1fr) !important;
+    }
+
+    .player-stats-page .hero-stat.highlight {
+        grid-column: span 2 !important;
+    }
+
+    .player-stats-page .history-list {
+        display: none !important;
+    }
+
+    .player-stats-page .history-table {
+        display: block !important;
+    }
+
+    .player-stats-page .player-avatar {
+        width: 72px !important;
+        height: 72px !important;
+        font-size: 24px !important;
+    }
+
+    .player-stats-page .player-name {
+        font-size: 28px !important;
+    }
+
+    .player-stats-page .hero-stat-value {
+        font-size: 32px !important;
+    }
+
+    .player-stats-page .hero-stat.highlight .hero-stat-value {
+        font-size: 36px !important;
+    }
+
+    .player-stats-page .roi-value {
+        font-size: 64px !important;
+    }
+
+    .player-stats-page .stat-value {
+        font-size: 24px !important;
+    }
+
+    .player-stats-page .podium-item {
+        padding: 16px 24px !important;
+        min-width: 90px !important;
+    }
+
+    .player-stats-page .podium-medal {
+        font-size: 32px !important;
+    }
+
+    .player-stats-page .podium-count {
+        font-size: 28px !important;
+    }
 }

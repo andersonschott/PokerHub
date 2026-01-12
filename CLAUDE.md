@@ -133,30 +133,132 @@ app.MapHub<TorneioHub>("/hubs/torneio");
 - Propriedades de tempo: `TimeRemainingSeconds` (int)
 - Status derivados de propriedades existentes, nao campos separados
 
+### 7. Mobile Responsivo - Padroes
+
+**Layout Mobile**: Usar classes CSS customizadas em `wwwroot/app.css`:
+```css
+.mobile-page { display: flex; flex-direction: column; height: 100vh; }
+.mobile-fixed-header { flex-shrink: 0; z-index: 100; }
+.mobile-scroll-content { flex: 1; overflow-y: auto; padding-bottom: 80px; }
+```
+
+**Headers com texto longo**: Usar truncamento:
+```razor
+<div style="flex: 1; min-width: 0; overflow: hidden;">
+    <MudText Typo="Typo.subtitle1" Style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+        @_league.Name
+    </MudText>
+</div>
+<div style="flex-shrink: 0;">
+    @* botoes que nao devem encolher *@
+</div>
+```
+
+**Bottom Navigation**: NAO usar MudNavMenu/MudNavLink (estilos dificeis de sobrescrever). Usar HTML puro:
+```razor
+<div class="bottom-nav-container">
+    <button class="bottom-nav-item @(active ? "active" : "")" @onclick="...">
+        <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Small" />
+        <span>Label</span>
+    </button>
+</div>
+```
+CSS em `wwwroot/app.css` classe `.bottom-nav-container` e `.bottom-nav-item`.
+
+**ResponsiveLayout**: Componente em `Components/Layout/ResponsiveLayout.razor` para alternar entre Mobile e Desktop baseado em breakpoint.
+
+### 8. Auto-Inscricao em Torneios
+
+**Jogadores podem se inscrever** diretamente em torneios agendados via:
+- `Dashboard.razor` - botao "Inscrever-me" para membros da liga
+- `Join.razor` - pagina publica via codigo de convite `/torneios/entrar/{InviteCode}`
+
+**Metodos no TournamentService**:
+```csharp
+Task<(bool Success, string Message)> SelfRegisterPlayerAsync(Guid tournamentId, string userId);
+Task<bool> SelfUnregisterPlayerAsync(Guid tournamentId, string userId);
+Task<bool> IsUserRegisteredInTournamentAsync(Guid tournamentId, string userId);
+```
+
+**Bloqueio por Debitos**: Se `League.BlockCheckInWithDebt == true`, jogadores com debitos pendentes nao podem se inscrever (verificado em `SelfRegisterPlayerAsync`). Admins podem adicionar jogadores diretamente via `AddPlayerToTournamentAsync` (sem verificacao).
+
+### 9. Sistema de Pagamentos/Debitos
+
+**Entidades**:
+- `Payment` - registra debitos entre jogadores
+- `PaymentStatus`: Pending, Paid, Confirmed
+- `PaymentType`: Poker, Expense, Jackpot
+
+**Verificar debitos de um jogador**:
+```csharp
+// PaymentService
+Task<IReadOnlyList<PendingDebtDto>> GetPendingDebtsByPlayerAsync(Guid playerId);
+
+// Verificacao direta no TournamentService
+var hasPendingDebts = await _context.Payments
+    .AnyAsync(p => p.FromPlayerId == playerId &&
+                  p.Status == PaymentStatus.Pending &&
+                  p.ToPlayerId != null);
+```
+
 ---
 
 ## Arquivos Importantes
 
+### Documentacao
+- `VISUAL_IDENTITY.md` - **Guia de identidade visual** (cores, fontes, componentes, layout responsivo). Consultar ao refatorar UI.
+
 ### Configuracoes de Entidade
 - `src/PokerHub.Infrastructure/Data/Configurations/` - Todas as configuracoes EF
 
-### Services
-- `src/PokerHub.Application/Services/` - Logica de negocio
+### Services Principais
+- `src/PokerHub.Application/Services/TournamentService.cs` - Logica de torneios, inscricoes, check-in
+- `src/PokerHub.Application/Services/PaymentService.cs` - Calculos de pagamentos, debitos
+- `src/PokerHub.Application/Services/LeagueService.cs` - Gestao de ligas, membros
+- `src/PokerHub.Application/Services/PlayerService.cs` - CRUD de jogadores
 - `src/PokerHub.Web/Services/TournamentTimerService.cs` - Background service do timer
+
+### Interfaces
+- `src/PokerHub.Application/Interfaces/` - Todas as interfaces dos services
 
 ### Hubs SignalR
 - `src/PokerHub.Web/Hubs/TorneioHub.cs` - Hub para tempo real
 
+### Estilos CSS
+- `src/PokerHub.Web/wwwroot/app.css` - CSS customizado (mobile layouts, bottom-nav, etc)
+
+### Layout Components
+- `src/PokerHub.Web/Components/Layout/ResponsiveLayout.razor` - Alternancia Mobile/Desktop
+
 ### Paginas Principais
 ```
 Components/Pages/
-├── Liga/           # CRUD de ligas
-├── Jogador/        # CRUD de jogadores
-├── Torneio/        # Gestao de torneios (Index, Create, Dashboard)
-├── Timer/          # Timer TV mode
-├── Pagamento/      # Sistema de pagamentos
-└── Ranking/        # Ranking e estatisticas
+├── Liga/
+│   ├── Index.razor      # Lista de ligas
+│   ├── Create.razor     # Criar liga
+│   ├── Details.razor    # Lobby da liga (mobile tem bottom-nav customizado)
+│   └── Edit.razor       # Editar liga
+├── Torneio/
+│   ├── Index.razor      # Lista de torneios
+│   ├── Create.razor     # Wizard 5 passos
+│   ├── Dashboard.razor  # Painel de controle + auto-inscricao
+│   ├── Join.razor       # Inscricao via codigo de convite
+│   └── Edit.razor       # Editar torneio
+├── Timer/               # Timer TV mode
+├── Pagamento/
+│   ├── TournamentPayments.razor  # Pagamentos pos-torneio
+│   └── MyDebts.razor            # Meus debitos com PIX
+├── Ranking/             # Ranking e estatisticas
+└── Jogador/             # CRUD de jogadores
 ```
+
+### Componentes Shared
+- `src/PokerHub.Web/Components/Shared/TournamentMobileDashboard.razor` - Dashboard mobile do torneio
+- `src/PokerHub.Web/Components/Pages/Torneio/AddTournamentPlayerDialog.razor` - Dialog para admin adicionar jogador
+
+### Referencia de Identidade Visual
+- `src/PokerHub.Web/Components/Pages/Ranking/PlayerStats.razor` - **Implementacao de referencia** para nova identidade visual
+- `src/PokerHub.Web/Components/Pages/Ranking/PlayerStats.razor.css` - CSS com variaveis MudBlazor e layout responsivo
 
 ---
 
@@ -291,3 +393,68 @@ Components/Pages/
 5. **MudBlazor**: Documentacao em https://mudblazor.com/
 
 6. **Tema**: Usando tema escuro com verde poker como cor primaria
+
+### 7. Mobile Responsive - Bottom Navigation
+**Problema**: MudNavMenu/MudNavLink tem estilos dificeis de sobrescrever, causando truncamento de texto
+
+**Solucao**: Usar HTML puro com CSS customizado ao inves de componentes MudBlazor:
+```razor
+<div class="bottom-nav-container">
+    <button class="bottom-nav-item @(_activeTab == 0 ? "active" : "")" @onclick="@(() => _activeTab = 0)">
+        <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Small" />
+        <span>Jogadores</span>
+    </button>
+    <a class="bottom-nav-item" href="@($"/rota")">
+        <MudIcon Icon="@Icons.Material.Filled.Savings" Size="Size.Small" />
+        <span>Caixa</span>
+    </a>
+</div>
+```
+
+**CSS em app.css**:
+```css
+.bottom-nav-container {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    display: flex; justify-content: space-around;
+    background: var(--mud-palette-surface);
+    padding: 8px 4px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+}
+.bottom-nav-item {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; gap: 4px;
+    background: transparent; border: none;
+    color: var(--mud-palette-text-secondary);
+}
+.bottom-nav-item.active { color: #ffc107; }
+.bottom-nav-item span { font-size: 10px; white-space: nowrap; }
+```
+
+### 8. Auto-Inscricao em Torneios
+**Funcionalidade**: Jogadores podem se auto-inscrever em torneios agendados de ligas que participam
+
+**Arquivos**:
+- `TournamentService.SelfRegisterPlayerAsync()` - Retorna `(bool Success, string Message)`
+- `Dashboard.razor` - Botao "Inscrever-me" / status "Inscrito"
+- `TournamentMobileDashboard.razor` - Mesma logica para mobile
+
+**Verificacoes**:
+1. Usuario e membro da liga
+2. Torneio esta em status Scheduled
+3. Usuario nao esta inscrito ainda
+4. Usuario nao tem debitos pendentes (se `League.BlockCheckInWithDebt = true`)
+
+### 9. Sistema de Debitos e Bloqueio
+**Propriedade**: `League.BlockCheckInWithDebt` (bool)
+
+**Comportamento**:
+- Se `true`: Jogadores com debitos pendentes NAO podem se auto-inscrever
+- Admins podem adicionar jogadores diretamente (bypass)
+
+**Verificacao de debitos**:
+```csharp
+var hasPendingDebts = await _context.Payments
+    .AnyAsync(p => p.FromPlayerId == player.Id &&
+                  p.Status == PaymentStatus.Pending &&
+                  p.ToPlayerId != null);
+```

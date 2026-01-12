@@ -1,173 +1,371 @@
 @page "/jogador/{PlayerId:guid}/stats"
 @rendermode InteractiveServer
 @attribute [Authorize]
+@implements IBrowserViewportObserver
+@implements IAsyncDisposable
 @inject IRankingService RankingService
+@inject IPlayerService PlayerService
+@inject ILeagueService LeagueService
+@inject IBrowserViewportService BrowserViewportService
 @inject NavigationManager Navigation
 
-<PageTitle>Estatisticas - PokerHub</PageTitle>
+<PageTitle>@(_stats?.PlayerName ?? "Jogador") - Estatisticas</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="player-stats-page mt-4">
     @if (_loading)
     {
-        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <div class="loading-container">
+            <MudProgressCircular Color="Color.Success" Size="Size.Large" Indeterminate="true" />
+            <MudText Typo="Typo.body1" Class="mt-3">Carregando estatisticas...</MudText>
+        </div>
     }
     else if (_stats == null)
     {
-        <MudAlert Severity="Severity.Warning">Jogador nao encontrado ou sem historico de torneios.</MudAlert>
+        <div class="error-container">
+            <MudIcon Icon="@Icons.Material.Filled.PersonOff" Size="Size.Large" Color="Color.Warning" />
+            <MudText Typo="Typo.h6" Class="mt-3">Jogador nao encontrado</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Nao ha historico de torneios para este jogador.</MudText>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-4" OnClick="@(() => Navigation.NavigateTo("/"))">
+                Voltar
+            </MudButton>
+        </div>
     }
     else
     {
-        <MudText Typo="Typo.h4" Class="mb-2">
-            @_stats.PlayerName
-            @if (!string.IsNullOrEmpty(_stats.Nickname))
+        @* ===== HEADER ===== *@
+        <div class="stats-header">
+            <div class="player-avatar" style="@GetAvatarStyle()">
+                @GetInitials(_stats.PlayerName)
+            </div>
+            <div class="player-info">
+                <div class="player-name">@GetDisplayName()</div>
+                <div class="player-league">@(_leagueName ?? "Liga") - @_stats.TournamentsPlayed torneios</div>
+            </div>
+            @if (_rankingPosition.HasValue)
             {
-                <MudText Typo="Typo.caption" Color="Color.Secondary"> (@_stats.Nickname)</MudText>
+                <div class="rank-badge">
+                    <div class="rank-position">#@_rankingPosition</div>
+                    <div class="rank-label">No Ranking</div>
+                </div>
             }
-        </MudText>
+        </div>
 
-        <!-- Summary Cards -->
-        <MudGrid Class="mb-4">
-            <MudItem xs="12" sm="6" md="3">
-                <MudCard Elevation="2" Class="text-center pa-4">
-                    <MudIcon Icon="@Icons.Material.Filled.Casino" Size="Size.Large" Color="Color.Primary" />
-                    <MudText Typo="Typo.h3">@_stats.TournamentsPlayed</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary">Torneios</MudText>
-                </MudCard>
-            </MudItem>
-            <MudItem xs="12" sm="6" md="3">
-                <MudCard Elevation="2" Class="text-center pa-4">
-                    <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Large" Color="Color.Warning" />
-                    <MudText Typo="Typo.h3">@_stats.Wins</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary">Vitorias</MudText>
-                </MudCard>
-            </MudItem>
-            <MudItem xs="12" sm="6" md="3">
-                <MudCard Elevation="2" Class="text-center pa-4">
-                    <MudIcon Icon="@Icons.Material.Filled.Star" Size="Size.Large" Color="Color.Tertiary" />
-                    <MudText Typo="Typo.h3">@_stats.Top3Finishes</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary">Top 3</MudText>
-                </MudCard>
-            </MudItem>
-            <MudItem xs="12" sm="6" md="3">
-                <MudCard Elevation="2" Class="text-center pa-4">
-                    <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Large" Color="@(_stats.Profit >= 0 ? Color.Success : Color.Error)" />
-                    <MudText Typo="Typo.h3" Color="@(_stats.Profit >= 0 ? Color.Success : Color.Error)">
-                        @(_stats.Profit >= 0 ? "+" : "")R$ @_stats.Profit.ToString("N0")
-                    </MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary">Lucro/Prejuizo</MudText>
-                </MudCard>
-            </MudItem>
-        </MudGrid>
-
-        <!-- Detailed Stats -->
-        <MudGrid>
-            <MudItem xs="12" md="6">
-                <MudCard Elevation="2">
-                    <MudCardHeader>
-                        <CardHeaderContent>
-                            <MudText Typo="Typo.h6">Estatisticas Detalhadas</MudText>
-                        </CardHeaderContent>
-                    </MudCardHeader>
-                    <MudCardContent>
-                        <MudSimpleTable Dense="true" Hover="true">
-                            <tbody>
-                                <tr>
-                                    <td><strong>Total em Buy-ins</strong></td>
-                                    <td style="text-align: right;">R$ @_stats.TotalBuyIns.ToString("N2")</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Total em Premios</strong></td>
-                                    <td style="text-align: right;">R$ @_stats.TotalPrizes.ToString("N2")</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Lucro/Prejuizo</strong></td>
-                                    <td style="text-align: right; color: @(_stats.Profit >= 0 ? "#4CAF50" : "#f44336");">
-                                        @(_stats.Profit >= 0 ? "+" : "")R$ @_stats.Profit.ToString("N2")
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Posicao Media</strong></td>
-                                    <td style="text-align: right;">@_stats.AveragePosition.ToString("N1") o</td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Melhor Resultado</strong></td>
-                                    <td style="text-align: right; color: #4CAF50;">
-                                        @(_stats.BestResult.HasValue ? $"+R$ {_stats.BestResult:N2}" : "-")
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Pior Resultado</strong></td>
-                                    <td style="text-align: right; color: #f44336;">
-                                        @(_stats.WorstResult.HasValue ? $"R$ {_stats.WorstResult:N2}" : "-")
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><strong>Taxa de Vitoria</strong></td>
-                                    <td style="text-align: right;">
-                                        @((_stats.TournamentsPlayed > 0 ? (_stats.Wins * 100.0 / _stats.TournamentsPlayed) : 0).ToString("N1"))%
-                                    </td>
-                                </tr>
-                                <tr>
-                                    <td><strong>ITM (In The Money)</strong></td>
-                                    <td style="text-align: right;">
-                                        @((_stats.TournamentsPlayed > 0 ? (_stats.Top3Finishes * 100.0 / _stats.TournamentsPlayed) : 0).ToString("N1"))%
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </MudSimpleTable>
-                    </MudCardContent>
-                </MudCard>
-            </MudItem>
-
-            <MudItem xs="12" md="6">
-                <MudCard Elevation="2">
-                    <MudCardHeader>
-                        <CardHeaderContent>
-                            <MudText Typo="Typo.h6">ROI (Return on Investment)</MudText>
-                        </CardHeaderContent>
-                    </MudCardHeader>
-                    <MudCardContent>
-                        @{
-                            var roi = _stats.TotalBuyIns > 0 ? (_stats.Profit / _stats.TotalBuyIns * 100) : 0;
-                            var roiColor = roi >= 0 ? Color.Success : Color.Error;
-                        }
-                        <MudStack AlignItems="AlignItems.Center" Class="pa-4">
-                            <MudText Typo="Typo.h1" Color="@roiColor">@roi.ToString("N1")%</MudText>
-                            <MudText Typo="Typo.body2" Color="Color.Secondary">
-                                @if (roi >= 20)
-                                {
-                                    <text>Excelente! Voce esta muito acima da media.</text>
-                                }
-                                else if (roi >= 0)
-                                {
-                                    <text>Positivo! Continue assim.</text>
-                                }
-                                else if (roi >= -20)
-                                {
-                                    <text>Fique atento, mas esta dentro do normal.</text>
-                                }
-                                else
-                                {
-                                    <text>Momento dificil, mas a sorte pode mudar!</text>
-                                }
-                            </MudText>
-                        </MudStack>
-                    </MudCardContent>
-                </MudCard>
-            </MudItem>
-        </MudGrid>
-
-        <!-- Recent Results -->
-        @if (_stats.RecentResults.Any())
+        @if (_isMobile)
         {
-            <MudCard Elevation="2" Class="mt-4">
-                <MudCardHeader>
-                    <CardHeaderContent>
-                        <MudText Typo="Typo.h6">Historico de Torneios</MudText>
-                    </CardHeaderContent>
-                </MudCardHeader>
-                <MudCardContent>
-                    <MudTable Items="_stats.RecentResults" Dense="true" Hover="true">
+            @* ===== MOBILE LAYOUT ===== *@
+
+            @* Hero Stats *@
+            <div class="hero-stats">
+                <div class="hero-stat">
+                    <div class="hero-stat-icon">🎯</div>
+                    <div class="hero-stat-value">@_stats.TournamentsPlayed</div>
+                    <div class="hero-stat-label">Torneios</div>
+                </div>
+                <div class="hero-stat">
+                    <div class="hero-stat-icon">🏆</div>
+                    <div class="hero-stat-value gold">@_stats.Wins</div>
+                    <div class="hero-stat-label">Vitorias</div>
+                </div>
+                <div class="hero-stat highlight">
+                    <div class="hero-stat-icon">📈</div>
+                    <div class="hero-stat-value @(_stats.Profit >= 0 ? "positive" : "negative")">
+                        @(_stats.Profit >= 0 ? "+" : "")@_stats.Profit.ToString("C0")
+                    </div>
+                    <div class="hero-stat-label">Lucro Total</div>
+                </div>
+            </div>
+
+            @* Podios *@
+            <div class="section-title">🏅 Podios</div>
+            <div class="podium-stats">
+                <div class="podium-item gold">
+                    <div class="podium-medal">🥇</div>
+                    <div class="podium-count">@_stats.Wins</div>
+                </div>
+                <div class="podium-item silver">
+                    <div class="podium-medal">🥈</div>
+                    <div class="podium-count">@_stats.SecondPlaces</div>
+                </div>
+                <div class="podium-item bronze">
+                    <div class="podium-medal">🥉</div>
+                    <div class="podium-count">@_stats.ThirdPlaces</div>
+                </div>
+            </div>
+
+            @* ROI Card *@
+            <div class="roi-card">
+                <div class="roi-label">ROI (Return on Investment)</div>
+                <div class="roi-value @(_roi >= 0 ? "" : "negative")">@(_roi >= 0 ? "+" : "")@_roi.ToString("N1")%</div>
+                <div class="roi-message @(_roi >= 0 ? "" : "negative")">
+                    @GetRoiMessage()
+                </div>
+            </div>
+
+            @* Performance *@
+            <div class="section-title">📊 Performance</div>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-value">@_itm.ToString("N0")%</div>
+                    <div class="stat-label">ITM</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">@_winRate.ToString("N0")%</div>
+                    <div class="stat-label">Taxa Vitoria</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">@_stats.AveragePosition.ToString("N1")º</div>
+                    <div class="stat-label">Pos. Media</div>
+                </div>
+            </div>
+
+            @* Financeiro *@
+            <div class="section-title">💰 Financeiro</div>
+            <div class="stats-list">
+                <div class="stat-row">
+                    <span class="stat-row-label">Total Investido</span>
+                    <span class="stat-row-value">@_stats.TotalBuyIns.ToString("C")</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-row-label">Total em Premios</span>
+                    <span class="stat-row-value">@_stats.TotalPrizes.ToString("C")</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-row-label">Lucro/Prejuizo</span>
+                    <span class="stat-row-value @(_stats.Profit >= 0 ? "positive" : "negative")">
+                        @(_stats.Profit >= 0 ? "+" : "")@_stats.Profit.ToString("C")
+                    </span>
+                </div>
+                @if (_stats.BestResult.HasValue)
+                {
+                    <div class="stat-row">
+                        <span class="stat-row-label">Melhor Resultado</span>
+                        <span class="stat-row-value positive">+@_stats.BestResult.Value.ToString("C")</span>
+                    </div>
+                }
+                @if (_stats.WorstResult.HasValue)
+                {
+                    <div class="stat-row">
+                        <span class="stat-row-label">Pior Resultado</span>
+                        <span class="stat-row-value negative">@_stats.WorstResult.Value.ToString("C")</span>
+                    </div>
+                }
+            </div>
+
+            @* Historico Mobile *@
+            @if (_stats.RecentResults.Any())
+            {
+                <div class="section-title">📅 Ultimos Torneios</div>
+                <div class="history-list">
+                    @foreach (var result in _stats.RecentResults.Take(10))
+                    {
+                        <div class="history-item" @onclick="() => NavigateToTournament(result.TournamentId)">
+                            <div class="history-header">
+                                <div>
+                                    <div class="history-name">@result.TournamentName</div>
+                                    <div class="history-date">@result.Date.ToString("dd/MM/yyyy")</div>
+                                </div>
+                                <div class="history-result @(result.Profit >= 0 ? "positive" : "negative")">
+                                    @(result.Profit >= 0 ? "+" : "")@result.Profit.ToString("C")
+                                </div>
+                            </div>
+                            <div class="history-details">
+                                <div class="history-detail">
+                                    <span class="position-badge @GetPositionClass(result.Position)">
+                                        @(result.Position.HasValue ? $"{result.Position}º" : "-") / @result.TotalPlayers
+                                    </span>
+                                </div>
+                                <div class="history-detail">
+                                    Invest: @result.Investment.ToString("C0")
+                                </div>
+                                <div class="history-detail">
+                                    Premio: @result.Prize.ToString("C0")
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+        else
+        {
+            @* ===== DESKTOP LAYOUT ===== *@
+
+            @* Hero Stats - 4 columns *@
+            <div class="hero-stats desktop">
+                <div class="hero-stat">
+                    <div class="hero-stat-icon">🎯</div>
+                    <div class="hero-stat-value">@_stats.TournamentsPlayed</div>
+                    <div class="hero-stat-label">Torneios</div>
+                </div>
+                <div class="hero-stat">
+                    <div class="hero-stat-icon">🏆</div>
+                    <div class="hero-stat-value gold">@_stats.Wins</div>
+                    <div class="hero-stat-label">Vitorias</div>
+                </div>
+                <div class="hero-stat">
+                    <div class="hero-stat-icon">⭐</div>
+                    <div class="hero-stat-value">@_stats.Top3Finishes</div>
+                    <div class="hero-stat-label">Top 3</div>
+                </div>
+                <div class="hero-stat">
+                    <div class="hero-stat-icon">📈</div>
+                    <div class="hero-stat-value @(_stats.Profit >= 0 ? "positive" : "negative")">
+                        @(_stats.Profit >= 0 ? "+" : "")@_stats.Profit.ToString("C0")
+                    </div>
+                    <div class="hero-stat-label">Lucro</div>
+                </div>
+            </div>
+
+            @* Two Column Layout *@
+            <div class="desktop-grid">
+                @* Left Column *@
+                <div class="desktop-left">
+                    @* Podios + ROI side by side *@
+                    <div class="podium-roi-row">
+                        <div class="podium-section">
+                            <div class="section-title">🏅 Podios</div>
+                            <div class="podium-stats compact">
+                                <div class="podium-item gold">
+                                    <div class="podium-medal">🥇</div>
+                                    <div class="podium-count">@_stats.Wins</div>
+                                </div>
+                                <div class="podium-item silver">
+                                    <div class="podium-medal">🥈</div>
+                                    <div class="podium-count">@_stats.SecondPlaces</div>
+                                </div>
+                                <div class="podium-item bronze">
+                                    <div class="podium-medal">🥉</div>
+                                    <div class="podium-count">@_stats.ThirdPlaces</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="roi-section">
+                            <div class="section-title">💰 ROI</div>
+                            <div class="roi-card compact">
+                                <div class="roi-value @(_roi >= 0 ? "" : "negative")">@(_roi >= 0 ? "+" : "")@_roi.ToString("N1")%</div>
+                                <div class="roi-message @(_roi >= 0 ? "" : "negative")">
+                                    @GetRoiMessageShort()
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    @* Estatisticas Financeiras *@
+                    <div class="section-title">💵 Estatisticas Financeiras</div>
+                    <div class="stats-list">
+                        <div class="stat-row">
+                            <span class="stat-row-label">Total em Buy-ins</span>
+                            <span class="stat-row-value">@_stats.TotalBuyIns.ToString("C")</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-row-label">Total em Premios</span>
+                            <span class="stat-row-value">@_stats.TotalPrizes.ToString("C")</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-row-label">Lucro/Prejuizo</span>
+                            <span class="stat-row-value @(_stats.Profit >= 0 ? "positive" : "negative")">
+                                @(_stats.Profit >= 0 ? "+" : "")@_stats.Profit.ToString("C")
+                            </span>
+                        </div>
+                        @if (_stats.BestResult.HasValue)
+                        {
+                            <div class="stat-row">
+                                <span class="stat-row-label">Melhor Resultado</span>
+                                <span class="stat-row-value positive">+@_stats.BestResult.Value.ToString("C")</span>
+                            </div>
+                        }
+                        @if (_stats.WorstResult.HasValue)
+                        {
+                            <div class="stat-row">
+                                <span class="stat-row-label">Pior Resultado</span>
+                                <span class="stat-row-value negative">@_stats.WorstResult.Value.ToString("C")</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @* Right Column *@
+                <div class="desktop-right">
+                    @* Performance with Progress Bars *@
+                    <div class="section-title">📊 Performance</div>
+                    <div class="performance-card">
+                        <div class="performance-item">
+                            <div class="performance-label">
+                                <span>Posicao Media</span>
+                                <span class="performance-value">@_stats.AveragePosition.ToString("N1")º</span>
+                            </div>
+                        </div>
+                        <div class="performance-item">
+                            <div class="performance-label">
+                                <span>Taxa de Vitoria</span>
+                                <span class="performance-value">@_winRate.ToString("N1")%</span>
+                            </div>
+                            <MudProgressLinear Color="Color.Primary" Value="@((double)_winRate)" Max="100" Class="performance-bar" />
+                        </div>
+                        <div class="performance-item">
+                            <div class="performance-label">
+                                <span>ITM (In The Money)</span>
+                                <span class="performance-value">@_itm.ToString("N1")%</span>
+                            </div>
+                            <MudProgressLinear Color="Color.Info" Value="@((double)_itm)" Max="100" Class="performance-bar" />
+                        </div>
+                    </div>
+
+                    @* Second Performance Card with colored bars *@
+                    <div class="performance-card mt-3">
+                        <div class="performance-item">
+                            <div class="performance-label">
+                                <span>Taxa de Vitoria</span>
+                                <span class="performance-value">@_winRate.ToString("N0")%</span>
+                            </div>
+                            <MudProgressLinear Color="Color.Primary" Value="@((double)_winRate)" Max="100" Class="performance-bar" />
+                        </div>
+                        <div class="performance-item">
+                            <div class="performance-label">
+                                <span>ITM</span>
+                                <span class="performance-value">@_itm.ToString("N0")%</span>
+                            </div>
+                            <MudProgressLinear Color="Color.Info" Value="@((double)_itm)" Max="100" Class="performance-bar" />
+                        </div>
+                        <div class="performance-item">
+                            <div class="performance-label">
+                                <span>Top 3</span>
+                                <span class="performance-value">@_topThreePercentage.ToString("N0")%</span>
+                            </div>
+                            <MudProgressLinear Color="Color.Warning" Value="@((double)_topThreePercentage)" Max="100" Class="performance-bar" />
+                        </div>
+                    </div>
+
+                    @* Evolution Chart *@
+                    @if (_stats.RecentResults.Any())
+                    {
+                        <div class="section-title mt-4">📈 Evolucao (Ultimos @Math.Min(6, _stats.RecentResults.Count))</div>
+                        <div class="evolution-card">
+                            <div class="evolution-chart">
+                                @foreach (var result in _stats.RecentResults.Take(6).Reverse())
+                                {
+                                    var maxProfit = _stats.RecentResults.Take(6).Max(r => Math.Abs(r.Profit));
+                                    var height = maxProfit > 0 ? (Math.Abs(result.Profit) / maxProfit) * 100 : 0;
+                                    var isPositive = result.Profit >= 0;
+                                    <div class="evolution-bar-container">
+                                        <div class="evolution-bar @(isPositive ? "positive" : "negative")"
+                                             style="height: @height.ToString("N0")%;">
+                                        </div>
+                                        <div class="evolution-label">@result.Date.ToString("MMM").Substring(0, 3)</div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @* Historico Desktop - Full Width Table *@
+            @if (_stats.RecentResults.Any())
+            {
+                <div class="section-title mt-4">📅 Historico de Torneios</div>
+                <div class="history-table">
+                    <MudTable Items="@_stats.RecentResults.Take(10)" Hover="true" Dense="true" Elevation="0" Class="stats-table">
                         <HeaderContent>
                             <MudTh>Torneio</MudTh>
                             <MudTh>Data</MudTh>
@@ -177,33 +375,45 @@
                             <MudTh Style="text-align: right;">Resultado</MudTh>
                         </HeaderContent>
                         <RowTemplate>
-                            <MudTd>
-                                <MudLink Href="@($"/torneios/{context.TournamentId}")">@context.TournamentName</MudLink>
+                            <MudTd DataLabel="Torneio">
+                                <MudLink Href="@($"/torneio/{context.TournamentId}")" Color="Color.Success">
+                                    @context.TournamentName
+                                </MudLink>
                             </MudTd>
-                            <MudTd>@context.Date.ToString("dd/MM/yyyy")</MudTd>
-                            <MudTd Style="text-align: center;">
-                                @if (context.Position.HasValue)
-                                {
-                                    <MudChip T="string" Size="Size.Small" Color="@GetPositionColor(context.Position.Value)">
-                                        @context.Position.Value o / @context.TotalPlayers
-                                    </MudChip>
-                                }
-                                else
-                                {
-                                    <text>-</text>
-                                }
+                            <MudTd DataLabel="Data">
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    @context.Date.ToString("dd/MM/yyyy")
+                                </MudText>
                             </MudTd>
-                            <MudTd Style="text-align: right;">R$ @context.Investment.ToString("N2")</MudTd>
-                            <MudTd Style="text-align: right;">R$ @context.Prize.ToString("N2")</MudTd>
-                            <MudTd Style="text-align: right;">
-                                <MudText Color="@(context.Profit >= 0 ? Color.Success : Color.Error)">
-                                    @(context.Profit >= 0 ? "+" : "")R$ @context.Profit.ToString("N2")
+                            <MudTd DataLabel="Posicao" Style="text-align: center;">
+                                <MudChip T="string"
+                                         Size="Size.Small"
+                                         Color="@GetPositionColor(context.Position)"
+                                         Variant="Variant.Filled">
+                                    @(context.Position.HasValue ? $"{context.Position}º" : "-") / @context.TotalPlayers
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Investimento" Style="text-align: right;">
+                                <MudText Typo="Typo.body2" Class="mono-font">
+                                    @context.Investment.ToString("C")
+                                </MudText>
+                            </MudTd>
+                            <MudTd DataLabel="Premio" Style="text-align: right;">
+                                <MudText Typo="Typo.body2" Class="mono-font">
+                                    @context.Prize.ToString("C")
+                                </MudText>
+                            </MudTd>
+                            <MudTd DataLabel="Resultado" Style="text-align: right;">
+                                <MudText Typo="Typo.body2"
+                                         Class="mono-font font-weight-bold"
+                                         Color="@(context.Profit >= 0 ? Color.Success : Color.Error)">
+                                    @(context.Profit >= 0 ? "+" : "")@context.Profit.ToString("C")
                                 </MudText>
                             </MudTd>
                         </RowTemplate>
                     </MudTable>
-                </MudCardContent>
-            </MudCard>
+                </div>
+            }
         }
     }
 </MudContainer>
@@ -212,19 +422,182 @@
     [Parameter] public Guid PlayerId { get; set; }
 
     private PlayerStatsDto? _stats;
+    private string? _leagueName;
+    private int? _rankingPosition;
+    private decimal _topThreePercentage;
+    private decimal _roi;
+    private decimal _itm;
+    private decimal _winRate;
     private bool _loading = true;
+    private bool _isMobile;
+
+    public Guid Id { get; } = Guid.NewGuid();
 
     protected override async Task OnInitializedAsync()
     {
-        _stats = await RankingService.GetPlayerStatsAsync(PlayerId);
-        _loading = false;
+        await LoadStats();
     }
 
-    private Color GetPositionColor(int position) => position switch
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await BrowserViewportService.SubscribeAsync(this, fireImmediately: true);
+        }
+    }
+
+    Task IBrowserViewportObserver.NotifyBrowserViewportChangeAsync(BrowserViewportEventArgs args)
+    {
+        _isMobile = args.Breakpoint <= Breakpoint.Sm;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await BrowserViewportService.UnsubscribeAsync(this);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadStats();
+    }
+
+    private async Task LoadStats()
+    {
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            _stats = await RankingService.GetPlayerStatsAsync(PlayerId);
+
+            if (_stats != null)
+            {
+                // Calculate derived stats
+                _roi = _stats.TotalBuyIns > 0
+                    ? (_stats.Profit / _stats.TotalBuyIns) * 100
+                    : 0;
+
+                _winRate = _stats.TournamentsPlayed > 0
+                    ? ((decimal)_stats.Wins / _stats.TournamentsPlayed) * 100
+                    : 0;
+
+                // Calculate ITM (In The Money) - aproximado como Top 3 quando temos dados legados
+                // Para dados de torneios usamos quem recebeu premio, para legados usamos Top 3
+                _itm = _stats.TournamentsPlayed > 0
+                    ? ((decimal)_stats.Top3Finishes / _stats.TournamentsPlayed) * 100
+                    : 0;
+
+                // Top 3 percentage (SecondPlaces e ThirdPlaces agora vem do DTO)
+                _topThreePercentage = _stats.TournamentsPlayed > 0
+                    ? ((decimal)_stats.Top3Finishes / _stats.TournamentsPlayed) * 100
+                    : 0;
+
+                // Try to get player details for league info
+                try
+                {
+                    var player = await PlayerService.GetPlayerByIdAsync(PlayerId);
+                    if (player != null)
+                    {
+                        // Get league name
+                        var league = await LeagueService.GetLeagueByIdAsync(player.LeagueId);
+                        _leagueName = league?.Name;
+
+                        // Get league ranking position
+                        var ranking = await RankingService.GetLeagueRankingAsync(player.LeagueId);
+                        var playerRank = ranking.FirstOrDefault(r => r.PlayerId == PlayerId);
+                        if (playerRank != null)
+                        {
+                            _rankingPosition = ranking.ToList().IndexOf(playerRank) + 1;
+                        }
+                    }
+                }
+                catch (Exception) { /* Silently ignore - league info is optional */ }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading stats: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private string GetDisplayName()
+    {
+        if (_stats == null) return "";
+
+        if (!string.IsNullOrEmpty(_stats.Nickname))
+            return _stats.Nickname;
+
+        return _stats.PlayerName;
+    }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "?";
+
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[^1][0]}".ToUpper();
+
+        return name.Length >= 2 ? name[..2].ToUpper() : name.ToUpper();
+    }
+
+    private string GetAvatarStyle()
+    {
+        if (_stats == null) return "";
+
+        // Generate consistent color based on name hash
+        var hash = Math.Abs(_stats.PlayerName.GetHashCode());
+        var hue = hash % 360;
+
+        return $"background: linear-gradient(135deg, hsl({hue}, 70%, 45%) 0%, hsl({hue}, 70%, 35%) 100%);";
+    }
+
+    private string GetRoiMessage()
+    {
+        return _roi switch
+        {
+            >= 100 => "🔥 Excelente! Voce esta muito acima da media.",
+            >= 50 => "👍 Muito bom! Acima da media.",
+            >= 0 => "📈 Positivo! Continue assim.",
+            >= -25 => "📉 Negativo, mas recuperavel.",
+            _ => "⚠️ Momento dificil. Paciencia!"
+        };
+    }
+
+    private string GetRoiMessageShort()
+    {
+        return _roi switch
+        {
+            >= 50 => "🔥 Acima da media",
+            >= 0 => "📈 Positivo",
+            _ => "📉 Negativo"
+        };
+    }
+
+    private string GetPositionClass(int? position) => position switch
+    {
+        1 => "gold",
+        2 => "silver",
+        3 => "bronze",
+        _ => "default"
+    };
+
+    private Color GetPositionColor(int? position) => position switch
     {
         1 => Color.Warning,
         2 => Color.Default,
         3 => Color.Tertiary,
         _ => Color.Default
     };
+
+    private void NavigateToTournament(Guid tournamentId)
+    {
+        Navigation.NavigateTo($"/torneio/{tournamentId}");
+    }
 }

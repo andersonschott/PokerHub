@@ -6,6 +6,8 @@ public record PlayerStatsDto(
     string? Nickname,
     int TournamentsPlayed,
     int Wins,
+    int SecondPlaces,
+    int ThirdPlaces,
     int Top3Finishes,
     decimal TotalBuyIns,
     decimal TotalPrizes,
@@ -13,7 +15,8 @@ public record PlayerStatsDto(
     decimal? BestResult,
     decimal? WorstResult,
     decimal AveragePosition,
-    IReadOnlyList<PlayerTournamentResultDto> RecentResults
+    IReadOnlyList<PlayerTournamentResultDto> RecentResults,
+    bool HasLegacyData = false
 );
 
 public record PlayerTournamentResultDto(

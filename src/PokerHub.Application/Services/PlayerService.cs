@@ -89,20 +89,27 @@ public class PlayerService : IPlayerService
             .ToList();
 
         var profits = finishedParticipations.Select(tp => tp.ProfitLoss(tp.Tournament)).ToList();
+        var positions = finishedParticipations.Where(tp => tp.Position.HasValue).Select(tp => tp.Position!.Value).ToList();
+
+        var wins = finishedParticipations.Count(tp => tp.Position == 1);
+        var seconds = finishedParticipations.Count(tp => tp.Position == 2);
+        var thirds = finishedParticipations.Count(tp => tp.Position == 3);
 
         return new PlayerStatsDto(
             player.Id,
             player.Name,
             player.Nickname,
             finishedParticipations.Count,
-            finishedParticipations.Count(tp => tp.Position == 1),
-            finishedParticipations.Count(tp => tp.Position is >= 1 and <= 3),
+            wins,
+            seconds,
+            thirds,
+            wins + seconds + thirds,
             finishedParticipations.Sum(tp => tp.TotalInvestment(tp.Tournament)),
             finishedParticipations.Sum(tp => tp.Prize),
             profits.Sum(),
             profits.Count > 0 ? profits.Max() : null,
             profits.Count > 0 ? profits.Min() : null,
-            finishedParticipations.Where(tp => tp.Position.HasValue).Average(tp => (decimal)tp.Position!.Value),
+            positions.Count > 0 ? (decimal)positions.Average() : 0,
             results
         );
     }

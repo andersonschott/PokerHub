@@ -330,6 +330,14 @@ public class RankingService : IRankingService
 
         if (player == null) return null;
 
+        // Buscar dados legados (PlayerSeasonStats)
+        var legacyStats = await _context.PlayerSeasonStats
+            .Where(pss => pss.PlayerId == playerId)
+            .ToListAsync();
+
+        var hasLegacyData = legacyStats.Any();
+
+        // Dados de torneios
         var finishedParticipations = player.Participations
             .Where(tp => tp.Tournament.Status == TournamentStatus.Finished)
             .ToList();
@@ -349,23 +357,66 @@ public class RankingService : IRankingService
             .Take(10)
             .ToList();
 
-        var profits = finishedParticipations.Select(tp => tp.ProfitLoss(tp.Tournament)).ToList();
+        // Estatisticas de torneios
+        var tournamentGames = finishedParticipations.Count;
+        var tournamentWins = finishedParticipations.Count(tp => tp.Position == 1);
+        var tournamentSeconds = finishedParticipations.Count(tp => tp.Position == 2);
+        var tournamentThirds = finishedParticipations.Count(tp => tp.Position == 3);
+        var tournamentBuyIns = finishedParticipations.Sum(tp => tp.TotalInvestment(tp.Tournament));
+        var tournamentPrizes = finishedParticipations.Sum(tp => tp.Prize);
+        var tournamentProfits = finishedParticipations.Select(tp => tp.ProfitLoss(tp.Tournament)).ToList();
+        var tournamentProfit = tournamentProfits.Sum();
         var positions = finishedParticipations.Where(tp => tp.Position.HasValue).Select(tp => tp.Position!.Value).ToList();
+
+        // Estatisticas legadas (agregadas de todas as temporadas)
+        var legacyGames = legacyStats.Sum(x => x.GamesPlayed);
+        var legacyWins = legacyStats.Sum(x => x.FirstPlaces);
+        var legacySeconds = legacyStats.Sum(x => x.SecondPlaces);
+        var legacyThirds = legacyStats.Sum(x => x.ThirdPlaces);
+        var legacyCost = legacyStats.Sum(x => x.TotalCost);
+        var legacyPrize = legacyStats.Sum(x => x.TotalPrize);
+        var legacyBalance = legacyStats.Sum(x => x.Balance);
+
+        // Combinar estatisticas
+        var totalGames = tournamentGames + legacyGames;
+        var totalWins = tournamentWins + legacyWins;
+        var totalSeconds = tournamentSeconds + legacySeconds;
+        var totalThirds = tournamentThirds + legacyThirds;
+        var totalTop3 = totalWins + totalSeconds + totalThirds;
+        var totalBuyIns = tournamentBuyIns + legacyCost;
+        var totalPrizes = tournamentPrizes + legacyPrize;
+        var totalProfit = tournamentProfit + legacyBalance;
+
+        // Best/Worst result - apenas de torneios (nao temos detalhes dos legados)
+        decimal? bestResult = tournamentProfits.Count > 0 ? tournamentProfits.Max() : null;
+        decimal? worstResult = tournamentProfits.Count > 0 ? tournamentProfits.Min() : null;
+
+        // Posicao media - apenas de torneios (nao temos detalhes dos legados)
+        var avgPosition = positions.Count > 0 ? (decimal)positions.Average() : 0;
+
+        // Se nao ha dados de torneios nem legados, retornar null
+        if (totalGames == 0)
+        {
+            return null;
+        }
 
         return new PlayerStatsDto(
             player.Id,
             player.Name,
             player.Nickname,
-            finishedParticipations.Count,
-            finishedParticipations.Count(tp => tp.Position == 1),
-            finishedParticipations.Count(tp => tp.Position is >= 1 and <= 3),
-            finishedParticipations.Sum(tp => tp.TotalInvestment(tp.Tournament)),
-            finishedParticipations.Sum(tp => tp.Prize),
-            profits.Sum(),
-            profits.Count > 0 ? profits.Max() : null,
-            profits.Count > 0 ? profits.Min() : null,
-            positions.Count > 0 ? (decimal)positions.Average() : 0,
-            results
+            totalGames,
+            totalWins,
+            totalSeconds,
+            totalThirds,
+            totalTop3,
+            totalBuyIns,
+            totalPrizes,
+            totalProfit,
+            bestResult,
+            worstResult,
+            avgPosition,
+            results,
+            hasLegacyData
         );
     }
 }
