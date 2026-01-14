@@ -458,3 +458,56 @@ var hasPendingDebts = await _context.Payments
                   p.Status == PaymentStatus.Pending &&
                   p.ToPlayerId != null);
 ```
+
+### 10. EF Core - Atualizar Entidades com Colecoes Filhas
+**Problema**: Erro de concorrencia otimista ao atualizar entidade pai e substituir colecao filha:
+`The database operation was expected to affect 1 row(s), but actually affected 0 row(s)`
+
+**Causa**: Usar `RemoveRange(entity.Children)` + `entity.Children.Add(new...)` causa conflito no change tracker do EF.
+
+**Solucao**: Usar `ExecuteDeleteAsync()` para deletar filhos diretamente no banco (bypassa change tracker):
+```csharp
+// NAO FAZER:
+_context.ChildEntities.RemoveRange(parent.Children);
+parent.Children.Clear();
+parent.Children.Add(new Child { ... }); // Conflito!
+
+// FAZER:
+await _context.ChildEntities
+    .Where(c => c.ParentId == parentId)
+    .ExecuteDeleteAsync(); // Deleta direto no banco
+
+var newChildren = new List<Child> { new Child { ... } };
+_context.ChildEntities.AddRange(newChildren); // Adiciona novos
+await _context.SaveChangesAsync();
+```
+
+**Exemplo real**: `TournamentExpenseService.UpdateExpenseAsync()` - atualiza despesa e substitui shares.
+
+### 11. Dialogs Reutilizaveis para Criar/Editar
+**Padrao**: Usar mesmo dialog para criar e editar, com parametro `Id` opcional.
+
+```csharp
+// Dialog
+[Parameter] public Guid? ExpenseId { get; set; }
+private bool _isEditMode => ExpenseId.HasValue;
+
+protected override async Task OnInitializedAsync()
+{
+    if (_isEditMode)
+    {
+        var existing = await Service.GetByIdAsync(ExpenseId!.Value);
+        // Preencher campos com dados existentes
+    }
+}
+
+private async Task Submit()
+{
+    if (_isEditMode)
+        await Service.UpdateAsync(ExpenseId!.Value, dto);
+    else
+        await Service.CreateAsync(dto);
+}
+```
+
+**Exemplo**: `AddExpenseDialog.razor` - cria ou edita despesas de torneio.

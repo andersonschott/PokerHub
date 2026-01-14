@@ -171,6 +171,30 @@
                 </div>
             }
         </div>
+
+        @* ===== LEVEL CONTROLS ===== *@
+        @if (CanManage)
+        {
+            <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Default"
+                           Size="Size.Medium"
+                           StartIcon="@Icons.Material.Filled.SkipPrevious"
+                           OnClick="OnPreviousLevelClick"
+                           Disabled="@(TimerState?.CurrentLevel <= 1)"
+                           Style="flex: 1;">
+                    Anterior
+                </MudButton>
+                <MudButton Variant="Variant.Outlined"
+                           Color="Color.Primary"
+                           Size="Size.Medium"
+                           EndIcon="@Icons.Material.Filled.SkipNext"
+                           OnClick="OnNextLevelClick"
+                           Style="flex: 1;">
+                    Proximo
+                </MudButton>
+            </div>
+        }
     }
 
     @* ===== STATS ROW ===== *@
@@ -339,22 +363,33 @@
         case TournamentStatus.Paused:
             @* TORNEIO EM ANDAMENTO *@
             <div style="margin-bottom: 16px;">
-                <div style="font-size: 13px; font-weight: 600; color: var(--mud-palette-text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">
-                    🎮 Jogadores Ativos
-                </div>
-                <div style="background: var(--mud-palette-surface); border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08);">
-                    @foreach (var player in GetSortedPlayersForRunning())
+                @* Header com botão Adicionar *@
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <span style="font-size: 13px; font-weight: 600; color: var(--mud-palette-text-secondary); text-transform: uppercase; letter-spacing: 1px;">
+                        🎮 Jogadores Ativos
+                    </span>
+                    @if (CanAddPlayerOrCheckIn)
                     {
-                        var isEliminated = player.EliminatedAt.HasValue;
-                        <div style="display: flex; align-items: center; padding: 12px 14px; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.08); @(isEliminated ? "opacity: 0.5;" : "")">
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Primary"
+                                   Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.PersonAdd"
+                                   OnClick="OnAddPlayerClick"
+                                   Style="font-size: 11px; padding: 4px 12px;">
+                            Adicionar
+                        </MudButton>
+                    }
+                </div>
+
+                @* Lista de jogadores ativos *@
+                <div style="background: var(--mud-palette-surface); border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08);">
+                    @foreach (var player in GetActivePlayers())
+                    {
+                        <div style="display: flex; align-items: center; padding: 12px 14px; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.08);">
                             <div style="flex: 1; min-width: 0;">
                                 <div style="font-size: 14px; font-weight: 500; color: var(--mud-palette-text-primary);">@GetDisplayName(player)</div>
-                                @if (isEliminated && player.Position.HasValue)
-                                {
-                                    <div style="font-size: 10px; color: var(--mud-palette-text-secondary);">@player.Position º lugar</div>
-                                }
                             </div>
-                            @if (!isEliminated && CanManage)
+                            @if (CanManage)
                             {
                                 <div style="display: flex; align-items: center; gap: 4px;">
                                     @* Rebuy Controls *@
@@ -387,17 +422,79 @@
                                                    Style="width: 28px; height: 28px; min-width: 28px; background: rgba(239, 68, 68, 0.1); color: #ef4444; border-radius: 6px;" />
                                 </div>
                             }
-                            else if (isEliminated)
-                            {
-                                <MudChip T="string" Size="Size.Small" Color="Color.Error" Style="font-size: 10px; height: 24px;">
-                                    @player.Position º
-                                </MudChip>
-                            }
                         </div>
                     }
                 </div>
+
+                @* Jogadores eliminados com botão de restaurar *@
+                @{
+                    var eliminatedPlayers = GetEliminatedPlayers();
+                }
+                @if (eliminatedPlayers.Any())
+                {
+                    <div style="margin-top: 16px;">
+                        <div style="font-size: 13px; font-weight: 600; color: var(--mud-palette-text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">
+                            ❌ Eliminados
+                        </div>
+                        <div style="background: var(--mud-palette-surface); border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08);">
+                            @foreach (var player in eliminatedPlayers)
+                            {
+                                <div style="display: flex; align-items: center; padding: 12px 14px; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.08); opacity: 0.6;">
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div style="font-size: 14px; font-weight: 500; color: var(--mud-palette-text-primary);">@GetDisplayName(player)</div>
+                                        <div style="font-size: 10px; color: var(--mud-palette-text-secondary);">@player.Position º lugar</div>
+                                    </div>
+                                    @if (CanManage)
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Filled.Undo"
+                                                       Size="Size.Small"
+                                                       Color="Color.Warning"
+                                                       OnClick="@(() => OnRestorePlayerClick.InvokeAsync(player.PlayerId))"
+                                                       Style="width: 28px; height: 28px; min-width: 28px;" />
+                                    }
+                                    else
+                                    {
+                                        <MudChip T="string" Size="Size.Small" Color="Color.Error" Style="font-size: 10px; height: 24px;">
+                                            @player.Position º
+                                        </MudChip>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @* Jogadores pendentes de check-in *@
+                @{
+                    var pendingPlayers = GetPendingCheckInPlayers();
+                }
+                @if (pendingPlayers.Any() && CanAddPlayerOrCheckIn)
+                {
+                    <div style="margin-top: 16px;">
+                        <div style="font-size: 13px; font-weight: 600; color: var(--mud-palette-text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">
+                            ⏳ Aguardando Check-in
+                        </div>
+                        <div style="background: var(--mud-palette-surface); border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08);">
+                            @foreach (var player in pendingPlayers)
+                            {
+                                <div style="display: flex; align-items: center; padding: 12px 14px; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                                    <div style="flex: 1; min-width: 0;">
+                                        <div style="font-size: 14px; font-weight: 500; color: var(--mud-palette-text-primary);">@GetDisplayName(player)</div>
+                                    </div>
+                                    <MudButton Variant="Variant.Filled"
+                                               Color="Color.Success"
+                                               Size="Size.Small"
+                                               OnClick="@(() => OnCheckInClick.InvokeAsync(player.PlayerId))">
+                                        Check-in
+                                    </MudButton>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
                 <div style="text-align: center; margin-top: 8px; font-size: 11px; color: var(--mud-palette-text-disabled);">
-                    Rebuy [-/+] · Add-on [A] · Eliminar [⚙️]
+                    Rebuy [-/+] · Add-on [A] · Eliminar [🗑️]
                 </div>
             </div>
             break;
@@ -407,40 +504,55 @@
     <div style="background: var(--mud-palette-surface); border-radius: 14px; border: 1px solid rgba(255,255,255,0.08); overflow: hidden; margin-bottom: 16px;">
         <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px; border-bottom: 1px solid rgba(255,255,255,0.08);">
             <span style="font-size: 14px; font-weight: 600; color: var(--mud-palette-text-primary);">🧾 Despesas</span>
-            @if (Expenses?.Any() == true)
-            {
-                <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #ef4444;">
-                    @Expenses.Sum(e => e.TotalAmount).ToString("C")
-                </span>
-            }
-            else if (CanManage && Tournament?.Status != TournamentStatus.Finished)
-            {
-                <MudButton Variant="Variant.Outlined"
-                           Color="Color.Primary"
-                           Size="Size.Small"
-                           OnClick="OnAddExpenseClick"
-                           Style="font-size: 11px; padding: 4px 12px;">
-                    + Add
-                </MudButton>
-            }
+            <div style="display: flex; align-items: center; gap: 8px;">
+                @if (Expenses?.Any() == true)
+                {
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #ef4444;">
+                        @Expenses.Sum(e => e.TotalAmount).ToString("C")
+                    </span>
+                }
+                @if (CanManage && Tournament?.Status != TournamentStatus.Finished)
+                {
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               Size="Size.Small"
+                               OnClick="OnAddExpenseClick"
+                               Style="font-size: 11px; padding: 4px 12px;">
+                        + Add
+                    </MudButton>
+                }
+            </div>
         </div>
         @if (Expenses?.Any() == true)
         {
             foreach (var expense in Expenses)
             {
-                <MudTooltip Text="@GetExpenseTooltip(expense)" Placement="Placement.Top">
-                    <div style="padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.08); cursor: help;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-size: 13px; font-weight: 500; color: var(--mud-palette-text-primary);">@expense.Description</span>
+                <div style="padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.08);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <MudTooltip Text="@GetExpenseTooltip(expense)" Placement="Placement.Top">
+                            <span style="font-size: 13px; font-weight: 500; color: var(--mud-palette-text-primary); cursor: help;">@expense.Description</span>
+                        </MudTooltip>
+                        <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; color: var(--mud-palette-text-primary);">
                                 @expense.TotalAmount.ToString("C")
                             </span>
-                        </div>
-                        <div style="font-size: 10px; color: var(--mud-palette-text-secondary); margin-top: 4px;">
-                            Pago por @expense.PaidByPlayerName
+                            @if (CanManage && Tournament?.Status != TournamentStatus.Finished)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                               Size="Size.Small"
+                                               Color="Color.Primary"
+                                               OnClick="@(() => OnEditExpenseClick.InvokeAsync(expense.Id))" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Size="Size.Small"
+                                               Color="Color.Error"
+                                               OnClick="@(() => OnDeleteExpenseClick.InvokeAsync(expense.Id))" />
+                            }
                         </div>
                     </div>
-                </MudTooltip>
+                    <div style="font-size: 10px; color: var(--mud-palette-text-secondary); margin-top: 4px;">
+                        Pago por @expense.PaidByPlayerName
+                    </div>
+                </div>
             }
         }
     </div>
@@ -506,6 +618,9 @@
     [Parameter] public bool IsUserInLeague { get; set; }
     [Parameter] public bool IsUserRegistered { get; set; }
 
+    // Admin state
+    [Parameter] public bool IsOrganizer { get; set; }
+
     // Callbacks - Header Actions
     [Parameter] public EventCallback OnEditClick { get; set; }
     [Parameter] public EventCallback OnInviteClick { get; set; }
@@ -522,9 +637,12 @@
     [Parameter] public EventCallback<Guid> OnRemoveRebuyClick { get; set; }
     [Parameter] public EventCallback<Guid> OnToggleAddonClick { get; set; }
     [Parameter] public EventCallback<TournamentPlayerDto> OnEliminateClick { get; set; }
+    [Parameter] public EventCallback<Guid> OnRestorePlayerClick { get; set; }
 
     // Callbacks - Other Actions
     [Parameter] public EventCallback OnAddExpenseClick { get; set; }
+    [Parameter] public EventCallback<Guid> OnEditExpenseClick { get; set; }
+    [Parameter] public EventCallback<Guid> OnDeleteExpenseClick { get; set; }
     [Parameter] public EventCallback OnViewPaymentsClick { get; set; }
     [Parameter] public EventCallback OnCancelClick { get; set; }
     [Parameter] public EventCallback OnFinishClick { get; set; }
@@ -532,6 +650,10 @@
     // Callbacks - Self-registration
     [Parameter] public EventCallback OnSelfRegisterClick { get; set; }
     [Parameter] public EventCallback OnCancelSelfRegistrationClick { get; set; }
+
+    // Callbacks - Level Controls
+    [Parameter] public EventCallback OnPreviousLevelClick { get; set; }
+    [Parameter] public EventCallback OnNextLevelClick { get; set; }
 
     private string GetPlayerCountDisplay()
     {
@@ -554,6 +676,32 @@
     private int GetTotalAddons() => Detail?.Players?.Count(p => p.HasAddon) ?? 0;
 
     private bool HasEliminatedPlayers() => Detail?.Players?.Any(p => p.EliminatedAt.HasValue) ?? false;
+
+    private bool CanAddPlayerOrCheckIn => CanManage && (
+        Tournament?.Status == TournamentStatus.Scheduled ||
+        ((Tournament?.Status == TournamentStatus.InProgress || Tournament?.Status == TournamentStatus.Paused) &&
+         (IsOrganizer || Detail?.IsCheckInAllowed == true)));
+
+    private IEnumerable<TournamentPlayerDto> GetActivePlayers()
+    {
+        return Detail?.Players?
+            .Where(p => p.IsCheckedIn && !p.EliminatedAt.HasValue)
+            .OrderBy(p => p.PlayerName) ?? Enumerable.Empty<TournamentPlayerDto>();
+    }
+
+    private IEnumerable<TournamentPlayerDto> GetEliminatedPlayers()
+    {
+        return Detail?.Players?
+            .Where(p => p.EliminatedAt.HasValue)
+            .OrderByDescending(p => p.EliminatedAt) ?? Enumerable.Empty<TournamentPlayerDto>();
+    }
+
+    private IEnumerable<TournamentPlayerDto> GetPendingCheckInPlayers()
+    {
+        return Detail?.Players?
+            .Where(p => !p.IsCheckedIn)
+            .OrderBy(p => p.PlayerName) ?? Enumerable.Empty<TournamentPlayerDto>();
+    }
 
     private IEnumerable<TournamentPlayerDto> GetSortedPlayersForRunning()
     {
@@ -607,9 +755,10 @@
         if (expense.Shares == null || !expense.Shares.Any())
             return $"Pago por {expense.PaidByPlayerName}";
 
-        var participants = string.Join(", ", expense.Shares.Select(s => s.PlayerName.Split(' ').First()));
-        var perPerson = expense.TotalAmount / expense.Shares.Count;
-        return $"Rateio: {participants} ({perPerson:C}/pessoa)";
+        // Mostrar valor real de cada pessoa (igual ao desktop)
+        var shareDetails = string.Join(", ", expense.Shares.Select(s =>
+            $"{s.PlayerName.Split(' ').First()}: {s.Amount:C}"));
+        return $"Rateio: {shareDetails}";
     }
 
     private Color GetStatusColor(TournamentStatus status) => status switch

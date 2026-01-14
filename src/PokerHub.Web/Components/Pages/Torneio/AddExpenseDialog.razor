@@ -3,9 +3,17 @@
 
 <MudDialog>
     <TitleContent>
-        <MudText Typo="Typo.h6">Adicionar Despesa</MudText>
+        <MudText Typo="Typo.h6">@(_isEditMode ? "Editar Despesa" : "Adicionar Despesa")</MudText>
     </TitleContent>
     <DialogContent>
+        @if (_loading)
+        {
+            <div style="display: flex; justify-content: center; padding: 40px;">
+                <MudProgressCircular Indeterminate="true" />
+            </div>
+        }
+        else
+        {
         <MudForm @ref="_form" @bind-IsValid="_formValid">
             <MudTextField @bind-Value="_model.Description"
                          Label="Descricao"
@@ -107,6 +115,7 @@
                 </MudStack>
             }
         </MudForm>
+        }
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">Cancelar</MudButton>
@@ -118,7 +127,7 @@
             {
                 <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
             }
-            Adicionar
+            @(_isEditMode ? "Salvar" : "Adicionar")
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -126,21 +135,56 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public Guid TournamentId { get; set; }
+    [Parameter] public Guid? ExpenseId { get; set; }
     [Parameter] public IReadOnlyList<PlayerDto> LeaguePlayers { get; set; } = new List<PlayerDto>();
     [Parameter] public IReadOnlyList<PlayerDto> CheckedInPlayers { get; set; } = new List<PlayerDto>();
 
     private MudForm _form = null!;
     private bool _formValid;
     private bool _saving;
+    private bool _loading;
     private ExpenseModel _model = new();
     private HashSet<Guid> _selectedPlayers = new();
     private Dictionary<Guid, decimal> _customShares = new();
     private decimal _customSharesTotal => _customShares.Values.Sum();
 
-    protected override void OnInitialized()
+    private bool _isEditMode => ExpenseId.HasValue;
+
+    protected override async Task OnInitializedAsync()
     {
-        // Pre-select all checked-in players for equal split
-        _selectedPlayers = CheckedInPlayers.Select(p => p.Id).ToHashSet();
+        if (_isEditMode)
+        {
+            _loading = true;
+            try
+            {
+                var expense = await ExpenseService.GetExpenseByIdAsync(ExpenseId!.Value);
+                if (expense != null)
+                {
+                    _model.Description = expense.Description;
+                    _model.TotalAmount = expense.TotalAmount;
+                    _model.PaidByPlayerId = expense.PaidByPlayerId;
+                    _model.SplitType = expense.SplitType;
+
+                    if (expense.SplitType == ExpenseSplitType.Equal)
+                    {
+                        _selectedPlayers = expense.Shares.Select(s => s.PlayerId).ToHashSet();
+                    }
+                    else
+                    {
+                        _customShares = expense.Shares.ToDictionary(s => s.PlayerId, s => s.Amount);
+                    }
+                }
+            }
+            finally
+            {
+                _loading = false;
+            }
+        }
+        else
+        {
+            // Pre-select all checked-in players for equal split
+            _selectedPlayers = CheckedInPlayers.Select(p => p.Id).ToHashSet();
+        }
     }
 
     private void TogglePlayer(Guid playerId, bool include)
@@ -211,8 +255,16 @@
                 shares
             );
 
-            await ExpenseService.CreateExpenseAsync(TournamentId, dto);
-            Snackbar.Add("Despesa adicionada com sucesso!", Severity.Success);
+            if (_isEditMode)
+            {
+                await ExpenseService.UpdateExpenseAsync(ExpenseId!.Value, dto);
+                Snackbar.Add("Despesa atualizada com sucesso!", Severity.Success);
+            }
+            else
+            {
+                await ExpenseService.CreateExpenseAsync(TournamentId, dto);
+                Snackbar.Add("Despesa adicionada com sucesso!", Severity.Success);
+            }
             MudDialog.Close(DialogResult.Ok(true));
         }
         catch (Exception ex)

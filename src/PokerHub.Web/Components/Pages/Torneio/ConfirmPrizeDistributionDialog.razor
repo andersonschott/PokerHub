@@ -1,0 +1,338 @@
+@using PokerHub.Application.DTOs.Tournament
+@inject IPrizeTableService PrizeTableService
+@inject ISnackbar Snackbar
+
+<MudDialog Class="prize-confirmation-dialog">
+    <TitleContent>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Color="Color.Warning" />
+            <MudText Typo="Typo.h6">Confirmar Premiacao</MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        @if (_loading)
+        {
+            <div style="display: flex; justify-content: center; padding: 32px;">
+                <MudProgressCircular Indeterminate="true" />
+            </div>
+        }
+        else
+        {
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                @* Prize Pool Info Card *@
+                <div style="background: var(--mud-palette-surface); border-radius: 14px; border: 1px solid rgba(255,255,255,0.08); padding: 16px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <span style="font-size: 18px;">💰</span>
+                        <span style="font-size: 12px; font-weight: 600; color: var(--mud-palette-text-secondary); text-transform: uppercase; letter-spacing: 1px;">Prize Pool</span>
+                    </div>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700; color: #22c55e;">
+                        @PrizePool.ToString("C")
+                    </div>
+                    <div style="font-size: 12px; color: var(--mud-palette-text-secondary); margin-top: 4px;">
+                        Fonte: @(_usedPrizeTable ? "Tabela de Premiacao" : "Percentual")
+                    </div>
+                </div>
+
+                @* Distribution Section *@
+                <div>
+                    <div style="font-size: 12px; font-weight: 600; color: var(--mud-palette-text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">
+                        Distribuicao
+                    </div>
+
+                    <div style="background: var(--mud-palette-surface); border-radius: 14px; border: 1px solid rgba(255,255,255,0.08); overflow: hidden;">
+                        @foreach (var (item, index) in _prizeItems.Select((item, index) => (item, index)))
+                        {
+                            <div style="padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); @(index == _prizeItems.Count - 1 ? "border-bottom: none;" : "")">
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                                    <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
+                                        <span style="font-size: 20px;">@GetPositionEmoji(item.Position)</span>
+                                        <div style="min-width: 0; flex: 1;">
+                                            <div style="font-size: 14px; font-weight: 600; color: var(--mud-palette-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                @item.PlayerName
+                                            </div>
+                                            <div style="font-size: 11px; color: var(--mud-palette-text-secondary);">
+                                                @(item.Position)o lugar
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <MudNumericField @bind-Value="item.Prize"
+                                                        Variant="Variant.Outlined"
+                                                        Margin="Margin.Dense"
+                                                        Min="0"
+                                                        Format="N2"
+                                                        HideSpinButtons="true"
+                                                        Immediate="true"
+                                                        Style="width: 120px;" />
+                                        <div style="font-size: 12px; color: var(--mud-palette-text-secondary); min-width: 45px; text-align: right;">
+                                            @(GetPercentage(item.Prize))%
+                                        </div>
+                                        @if (item.CanRemove)
+                                        {
+                                            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                                                          Size="Size.Small"
+                                                          Color="Color.Error"
+                                                          OnClick="@(() => RemovePosition(item))" />
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                @* Add Position Button *@
+                @if (_availablePlayers.Any())
+                {
+                    <MudButton Variant="Variant.Text"
+                              Color="Color.Primary"
+                              StartIcon="@Icons.Material.Filled.Add"
+                              OnClick="ShowAddPositionMenu"
+                              Size="Size.Small">
+                        Adicionar posicao premiada
+                    </MudButton>
+                }
+
+                @* Totals *@
+                <MudDivider />
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 14px; color: var(--mud-palette-text-secondary);">Total distribuido:</span>
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 600; color: var(--mud-palette-text-primary);">
+                            @GetTotalDistributed().ToString("C")
+                        </span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 14px; color: var(--mud-palette-text-secondary);">Caixinha:</span>
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: var(--mud-palette-text-secondary);">
+                            @_jackpotContribution.ToString("C")
+                        </span>
+                    </div>
+                    @{
+                        var remaining = GetRemaining();
+                    }
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 14px; color: var(--mud-palette-text-secondary);">Restante:</span>
+                        @if (Math.Abs(remaining) < 0.01m)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Success" Style="margin: 0;">
+                                R$ 0,00
+                            </MudChip>
+                        }
+                        else if (remaining > 0)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Style="margin: 0;">
+                                @remaining.ToString("C") nao distribuido
+                            </MudChip>
+                        }
+                        else
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Error" Style="margin: 0;">
+                                @Math.Abs(remaining).ToString("C") excedido
+                            </MudChip>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Cancelar</MudButton>
+        <MudButton OnClick="Confirm"
+                   Variant="Variant.Filled"
+                   Color="Color.Success"
+                   Disabled="@(_loading || !CanConfirm())">
+            Confirmar e Finalizar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@* Menu for adding players *@
+<MudPopover Open="@_showAddMenu" AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft">
+    <MudPaper Style="padding: 8px; max-height: 200px; overflow-y: auto;">
+        @foreach (var player in _availablePlayers)
+        {
+            <MudMenuItem OnClick="@(() => AddPosition(player))">
+                @player.PlayerName
+            </MudMenuItem>
+        }
+    </MudPaper>
+</MudPopover>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public Guid TournamentId { get; set; }
+    [Parameter] public Guid LeagueId { get; set; }
+    [Parameter] public decimal PrizePool { get; set; }
+    [Parameter] public bool UsePrizeTable { get; set; }
+    [Parameter] public string? PrizeStructure { get; set; }
+    [Parameter] public IReadOnlyList<PlayerPositionInfo> Positions { get; set; } = [];
+
+    private bool _loading = true;
+    private bool _usedPrizeTable;
+    private decimal _jackpotContribution;
+    private List<PrizeItem> _prizeItems = [];
+    private List<AvailablePlayer> _availablePlayers = [];
+    private bool _showAddMenu;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPrizeDistribution();
+    }
+
+    private async Task LoadPrizeDistribution()
+    {
+        _loading = true;
+        try
+        {
+            var result = await PrizeTableService.CalculatePrizeDistributionAsync(
+                LeagueId, PrizePool, PrizeStructure, UsePrizeTable);
+
+            _usedPrizeTable = result.UsedPrizeTable;
+            _jackpotContribution = result.JackpotContribution;
+
+            // Create prize items from positions and allocations
+            _prizeItems = [];
+            foreach (var pos in Positions.OrderBy(p => p.Position))
+            {
+                var allocation = result.Allocations.FirstOrDefault(a => a.Position == pos.Position);
+                _prizeItems.Add(new PrizeItem
+                {
+                    PlayerId = pos.PlayerId,
+                    PlayerName = pos.PlayerName,
+                    Position = pos.Position,
+                    Prize = allocation?.Amount ?? 0,
+                    CanRemove = pos.Position > 3 // Can remove 4th place onwards
+                });
+            }
+
+            // Available players are those eliminated but not in prize positions
+            var prizePlayerIds = _prizeItems.Select(p => p.PlayerId).ToHashSet();
+            _availablePlayers = Positions
+                .Where(p => !prizePlayerIds.Contains(p.PlayerId) && p.IsEliminated)
+                .OrderBy(p => p.Position)
+                .Select(p => new AvailablePlayer { PlayerId = p.PlayerId, PlayerName = p.PlayerName, OriginalPosition = p.Position })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro ao carregar distribuicao: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string GetPositionEmoji(int position) => position switch
+    {
+        1 => "🥇",
+        2 => "🥈",
+        3 => "🥉",
+        _ => $"{position}o"
+    };
+
+    private string GetPercentage(decimal amount)
+    {
+        if (PrizePool == 0) return "0";
+        return ((amount / PrizePool) * 100).ToString("N0");
+    }
+
+    private decimal GetTotalDistributed() => _prizeItems.Sum(p => p.Prize);
+
+    private decimal GetRemaining() => PrizePool - GetTotalDistributed() - _jackpotContribution;
+
+    private bool CanConfirm()
+    {
+        var remaining = GetRemaining();
+        // Allow if all distributed or within rounding tolerance
+        return Math.Abs(remaining) < 0.01m || remaining >= 0;
+    }
+
+    private void ShowAddPositionMenu()
+    {
+        _showAddMenu = !_showAddMenu;
+    }
+
+    private void AddPosition(AvailablePlayer player)
+    {
+        _showAddMenu = false;
+
+        var nextPosition = _prizeItems.Max(p => p.Position) + 1;
+        _prizeItems.Add(new PrizeItem
+        {
+            PlayerId = player.PlayerId,
+            PlayerName = player.PlayerName,
+            Position = nextPosition,
+            Prize = 0,
+            CanRemove = true
+        });
+
+        _availablePlayers.Remove(player);
+    }
+
+    private void RemovePosition(PrizeItem item)
+    {
+        _prizeItems.Remove(item);
+
+        // Re-add to available players
+        _availablePlayers.Add(new AvailablePlayer
+        {
+            PlayerId = item.PlayerId,
+            PlayerName = item.PlayerName,
+            OriginalPosition = item.Position
+        });
+        _availablePlayers = _availablePlayers.OrderBy(p => p.OriginalPosition).ToList();
+
+        // Recalculate positions
+        var sorted = _prizeItems.OrderBy(p => p.Position).ToList();
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            sorted[i].Position = i + 1;
+            sorted[i].CanRemove = sorted[i].Position > 3;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Confirm()
+    {
+        var result = new ConfirmedPrizeDistributionDto(
+            _prizeItems.Select(p => new PlayerPositionForPrizeDto(
+                p.PlayerId,
+                p.PlayerName,
+                p.Position,
+                p.Prize
+            )).ToList(),
+            _jackpotContribution
+        );
+
+        MudDialog.Close(DialogResult.Ok(result));
+    }
+
+    // Helper classes
+    public class PlayerPositionInfo
+    {
+        public Guid PlayerId { get; set; }
+        public string PlayerName { get; set; } = "";
+        public int Position { get; set; }
+        public bool IsEliminated { get; set; }
+    }
+
+    private class PrizeItem
+    {
+        public Guid PlayerId { get; set; }
+        public string PlayerName { get; set; } = "";
+        public int Position { get; set; }
+        public decimal Prize { get; set; }
+        public bool CanRemove { get; set; }
+    }
+
+    private class AvailablePlayer
+    {
+        public Guid PlayerId { get; set; }
+        public string PlayerName { get; set; } = "";
+        public int OriginalPosition { get; set; }
+    }
+}

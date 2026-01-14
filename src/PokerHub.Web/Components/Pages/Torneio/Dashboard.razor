@@ -3,6 +3,7 @@
 @attribute [Authorize]
 @implements IAsyncDisposable
 @implements IBrowserViewportObserver
+@using PokerHub.Application.DTOs.Tournament
 @inject ITournamentService TournamentService
 @inject IBrowserViewportService BrowserViewportService
 @inject IPlayerService PlayerService
@@ -149,6 +150,7 @@
                         Processing="_processing"
                         IsUserInLeague="_isUserInLeague"
                         IsUserRegistered="_isUserRegistered"
+                        IsOrganizer="_isOrganizer"
                         OnEditClick="@(() => Navigation.NavigateTo($"/torneios/{TournamentId}/editar"))"
                         OnInviteClick="ShowInviteDialog"
                         OnStartClick="StartTournament"
@@ -162,12 +164,17 @@
                         OnRemoveRebuyClick="RemoveRebuyWithConfirm"
                         OnToggleAddonClick="ToggleAddon"
                         OnEliminateClick="EliminatePlayer"
+                        OnRestorePlayerClick="RestorePlayer"
                         OnAddExpenseClick="OpenAddExpenseDialog"
+                        OnEditExpenseClick="EditExpense"
+                        OnDeleteExpenseClick="DeleteExpense"
                         OnViewPaymentsClick="@(() => Navigation.NavigateTo($"/torneios/{TournamentId}/pagamentos"))"
                         OnCancelClick="CancelTournament"
                         OnFinishClick="FinishTournament"
                         OnSelfRegisterClick="SelfRegister"
-                        OnCancelSelfRegistrationClick="CancelSelfRegistration" />
+                        OnCancelSelfRegistrationClick="CancelSelfRegistration"
+                        OnPreviousLevelClick="GoToPreviousLevel"
+                        OnNextLevelClick="AdvanceLevel" />
                 </MudItem>
             }
             else
@@ -262,10 +269,19 @@
                             </MudText>
                             <MudStack Row="true" Spacing="2" Class="mt-2">
                                 <MudButton Variant="Variant.Outlined"
+                                          Color="Color.Default"
+                                          Size="Size.Small"
+                                          StartIcon="@Icons.Material.Filled.SkipPrevious"
+                                          OnClick="GoToPreviousLevel"
+                                          Disabled="@(_timerState?.CurrentLevel <= 1)">
+                                    Anterior
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined"
                                           Color="Color.Primary"
                                           Size="Size.Small"
+                                          EndIcon="@Icons.Material.Filled.SkipNext"
                                           OnClick="AdvanceLevel">
-                                    Proximo Nivel
+                                    Proximo
                                 </MudButton>
                             </MudStack>
                         </MudStack>
@@ -496,6 +512,16 @@
                                                     Eliminar
                                                 </MudButton>
                                             }
+                                            @if (_canManage && (_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused) && IsPlayerEliminated(context))
+                                            {
+                                                <MudButton Variant="Variant.Text"
+                                                          Color="Color.Warning"
+                                                          Size="Size.Small"
+                                                          StartIcon="@Icons.Material.Filled.Undo"
+                                                          OnClick="@(() => RestorePlayer(context.PlayerId))">
+                                                    Restaurar
+                                                </MudButton>
+                                            }
                                         </MudTd>
                                     </RowTemplate>
                                 </MudTable>
@@ -551,8 +577,12 @@
                                             </MudTooltip>
                                         </MudTd>
                                         <MudTd>
-                                            @if (_canManage)
+                                            @if (_canManage && _tournament.Status != TournamentStatus.Finished)
                                             {
+                                                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                              Color="Color.Primary"
+                                                              Size="Size.Small"
+                                                              OnClick="@(() => EditExpense(context.Id))" />
                                                 <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                                               Color="Color.Error"
                                                               Size="Size.Small"
@@ -947,8 +977,10 @@
         _processing = true;
         try
         {
+            // IMPORTANT: Persist timer state FIRST, before changing status
+            // This ensures we don't lose time when the status changes to Paused
+            await TimerService.PauseTournamentAsync(TournamentId);
             await TournamentService.PauseTournamentAsync(TournamentId);
-            TimerService.PauseTournament(TournamentId);
             Snackbar.Add("Torneio pausado", Severity.Info);
             await LoadTournament();
         }
@@ -1005,6 +1037,29 @@
         }
     }
 
+    private async Task GoToPreviousLevel()
+    {
+        try
+        {
+            var success = await TournamentService.GoToPreviousLevelAsync(TournamentId);
+            if (success)
+            {
+                // Sync timer service state and broadcast to all clients
+                await TimerService.ManualGoToPreviousLevel(TournamentId);
+                await LoadTournament();
+                Snackbar.Add("Nivel anterior", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add("Ja esta no primeiro nivel", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+    }
+
     private async Task OpenAddPlayerDialog()
     {
         var leaguePlayers = await PlayerService.GetPlayersByLeagueAsync(_tournament!.LeagueId);
@@ -1038,6 +1093,13 @@
         {
             await TournamentService.CheckInPlayerAsync(TournamentId, playerId);
             await LoadTournament();
+
+            // Broadcast atualização para Timer e outros clientes
+            if (_detail != null)
+            {
+                await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail.PrizePool, GetTotalRebuys(), GetTotalAddons());
+                await TimerService.NotifyPlayerUpdated(TournamentId);
+            }
         }
         catch (Exception ex)
         {
@@ -1051,6 +1113,13 @@
         {
             await TournamentService.CheckOutPlayerAsync(TournamentId, playerId);
             await LoadTournament();
+
+            // Broadcast atualização para Timer e outros clientes
+            if (_detail != null)
+            {
+                await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail.PrizePool, GetTotalRebuys(), GetTotalAddons());
+                await TimerService.NotifyPlayerUpdated(TournamentId);
+            }
         }
         catch (Exception ex)
         {
@@ -1220,31 +1289,107 @@
         }
     }
 
+    private async Task RestorePlayer(Guid playerId)
+    {
+        var player = _detail?.Players?.FirstOrDefault(p => p.PlayerId == playerId);
+        if (player == null) return;
+
+        var confirm = await DialogService.ShowMessageBox(
+            "Restaurar Jogador",
+            $"Restaurar {player.PlayerName} ao torneio? Ele voltará como jogador ativo.",
+            "Confirmar", "Cancelar");
+
+        if (confirm == true)
+        {
+            try
+            {
+                await TournamentService.RestoreEliminatedPlayerAsync(TournamentId, playerId);
+                await TimerService.NotifyPlayerUpdated(TournamentId);
+                await LoadTournament();
+                Snackbar.Add($"{player.PlayerName} foi restaurado ao torneio!", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
     private async Task FinishTournament()
     {
         // Pegar todas as posicoes dos eliminados
         var positions = _detail!.Players
             .Where(p => p.Position.HasValue)
-            .Select(p => (p.PlayerId, p.Position!.Value))
+            .Select(p => (PlayerId: p.PlayerId, PlayerName: p.PlayerName, Position: p.Position!.Value, IsEliminated: true))
             .ToList();
 
         // Adicionar o vencedor (ultimo jogador restante) na posicao 1
         var winner = _detail.Players.FirstOrDefault(p => IsPlayerPlaying(p));
         if (winner != null)
         {
-            positions.Add((winner.PlayerId, 1));
+            positions.Add((winner.PlayerId, winner.PlayerName, 1, false));
         }
 
-        try
+        // Ordenar por posicao
+        positions = positions.OrderBy(p => p.Position).ToList();
+
+        // Abrir dialog de confirmacao de premios
+        var playerPositions = positions.Select(p => new ConfirmPrizeDistributionDialog.PlayerPositionInfo
         {
-            await TournamentService.FinishTournamentAsync(TournamentId, positions);
-            await TimerService.NotifyTournamentFinished(TournamentId);
-            Snackbar.Add("Torneio finalizado!", Severity.Success);
-            Navigation.NavigateTo($"/torneios/{TournamentId}/pagamentos");
-        }
-        catch (Exception ex)
+            PlayerId = p.PlayerId,
+            PlayerName = p.PlayerName,
+            Position = p.Position,
+            IsEliminated = p.IsEliminated
+        }).ToList();
+
+        // Adicionar jogadores eliminados que nao tem posicao premiada (para poder adicionar depois)
+        var existingPlayerIds = playerPositions.Select(p => p.PlayerId).ToHashSet();
+        var extraEliminatedPlayers = _detail.Players
+            .Where(p => p.EliminatedAt.HasValue && !existingPlayerIds.Contains(p.PlayerId))
+            .Select(p => new ConfirmPrizeDistributionDialog.PlayerPositionInfo
+            {
+                PlayerId = p.PlayerId,
+                PlayerName = p.PlayerName,
+                Position = p.Position ?? 99,
+                IsEliminated = true
+            })
+            .ToList();
+
+        playerPositions.AddRange(extraEliminatedPlayers);
+
+        var parameters = new DialogParameters<ConfirmPrizeDistributionDialog>
         {
-            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+            { x => x.TournamentId, TournamentId },
+            { x => x.LeagueId, _detail.LeagueId },
+            { x => x.PrizePool, _detail.PrizePool },
+            { x => x.UsePrizeTable, _detail.UsePrizeTable },
+            { x => x.PrizeStructure, _detail.PrizeStructure },
+            { x => x.Positions, playerPositions }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseOnEscapeKey = true
+        };
+
+        var dialog = await DialogService.ShowAsync<ConfirmPrizeDistributionDialog>("Confirmar Premiacao", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled && result.Data is ConfirmedPrizeDistributionDto distribution)
+        {
+            try
+            {
+                await TournamentService.FinishTournamentWithCustomPrizesAsync(TournamentId, distribution);
+                await TimerService.NotifyTournamentFinished(TournamentId);
+                Snackbar.Add("Torneio finalizado!", Severity.Success);
+                Navigation.NavigateTo($"/torneios/{TournamentId}/pagamentos");
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+            }
         }
     }
 
@@ -1322,6 +1467,34 @@
             {
                 Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
             }
+        }
+    }
+
+    private async Task EditExpense(Guid expenseId)
+    {
+        var leaguePlayers = await ExpenseService.GetLeaguePlayersAsync(TournamentId);
+        var checkedInPlayers = await ExpenseService.GetEligiblePlayersForShareAsync(TournamentId);
+
+        var parameters = new DialogParameters<AddExpenseDialog>
+        {
+            { x => x.TournamentId, TournamentId },
+            { x => x.ExpenseId, expenseId },
+            { x => x.LeaguePlayers, leaguePlayers },
+            { x => x.CheckedInPlayers, checkedInPlayers }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Medium,
+            FullWidth = true
+        };
+
+        var dialog = await DialogService.ShowAsync<AddExpenseDialog>("Editar Despesa", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled)
+        {
+            _expenses = await ExpenseService.GetExpensesByTournamentAsync(TournamentId);
         }
     }
 

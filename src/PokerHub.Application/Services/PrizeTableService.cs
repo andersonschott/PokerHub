@@ -199,24 +199,28 @@ public class PrizeTableService : IPrizeTableService
     public async Task<PrizeDistributionResultDto> CalculatePrizeDistributionAsync(
         Guid leagueId,
         decimal prizePoolTotal,
-        string? fallbackPercentages)
+        string? fallbackPercentages,
+        bool usePrizeTable = true)
     {
-        // Try to find an exact match in prize tables
-        var prizeTable = await FindMatchingPrizeTableAsync(leagueId, prizePoolTotal);
-
-        if (prizeTable != null)
+        // Only try to find prize table if usePrizeTable is true
+        if (usePrizeTable)
         {
-            // Use pre-defined prize table
-            var allocations = prizeTable.Entries
-                .Select(e => new PrizeAllocationDto(e.Position, e.PrizeAmount, true))
-                .ToList();
+            var prizeTable = await FindMatchingPrizeTableAsync(leagueId, prizePoolTotal);
 
-            return new PrizeDistributionResultDto(
-                true,
-                prizeTable.Name,
-                prizeTable.JackpotAmount,
-                allocations
-            );
+            if (prizeTable != null)
+            {
+                // Use pre-defined prize table
+                var allocations = prizeTable.Entries
+                    .Select(e => new PrizeAllocationDto(e.Position, e.PrizeAmount, true))
+                    .ToList();
+
+                return new PrizeDistributionResultDto(
+                    true,
+                    prizeTable.Name,
+                    prizeTable.JackpotAmount,
+                    allocations
+                );
+            }
         }
 
         // Fallback to percentage-based calculation

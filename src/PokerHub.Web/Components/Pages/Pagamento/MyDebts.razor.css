@@ -1,0 +1,873 @@
+/* MyDebts.razor.css */
+/* Meus Debitos - Design Mobile-First */
+/* Uses MudBlazor CSS variables for light/dark theme support */
+
+/* ===== VARIABLES ===== */
+.debts-page {
+    /* Accent colors - these are fixed and work on both themes */
+    --accent-green: #22c55e;
+    --accent-red: #ef4444;
+    --accent-yellow: #eab308;
+    --accent-orange: #f97316;
+    --accent-blue: #3b82f6;
+    --accent-purple: #8b5cf6;
+    --accent-cyan: #06b6d4;
+}
+
+/* ===== PAGE CONTAINER ===== */
+.debts-page {
+    min-height: 100vh;
+    background: var(--mud-palette-background);
+    padding: 16px;
+    color: var(--mud-palette-text-primary);
+    font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+}
+
+/* ===== LOADING / EMPTY ===== */
+.loading-container,
+.empty-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    text-align: center;
+}
+
+.empty-container .empty-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+/* ===== HEADER ===== */
+.page-header {
+    margin-bottom: 16px;
+}
+
+.page-title {
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.page-subtitle {
+    font-size: 13px;
+    color: var(--mud-palette-text-secondary);
+    margin-top: 2px;
+}
+
+/* ===== SUMMARY CARDS ===== */
+.summary-row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.summary-card {
+    background: var(--mud-palette-surface);
+    border-radius: 14px;
+    padding: 14px;
+    border: 1px solid var(--mud-palette-lines-default);
+}
+
+.summary-card.debt {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, var(--mud-palette-surface) 100%);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.summary-card.credit {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, var(--mud-palette-surface) 100%);
+    border-color: rgba(34, 197, 94, 0.3);
+}
+
+.summary-label {
+    font-size: 11px;
+    color: var(--mud-palette-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+}
+
+.summary-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 800;
+}
+
+.summary-card.debt .summary-value { color: var(--accent-red); }
+.summary-card.credit .summary-value { color: var(--accent-green); }
+
+.summary-count {
+    font-size: 11px;
+    color: var(--mud-palette-text-secondary);
+    margin-top: 2px;
+}
+
+/* ===== BALANCE CARD ===== */
+.balance-card {
+    background: var(--mud-palette-surface);
+    border-radius: 14px;
+    padding: 14px 16px;
+    border: 1px solid var(--mud-palette-lines-default);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.balance-card.positive {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, var(--mud-palette-surface) 100%);
+    border-color: rgba(34, 197, 94, 0.2);
+}
+
+.balance-card.negative {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, var(--mud-palette-surface) 100%);
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+.balance-icon {
+    font-size: 28px;
+}
+
+.balance-label {
+    font-size: 12px;
+    color: var(--mud-palette-text-secondary);
+}
+
+.balance-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.balance-card.positive .balance-value { color: var(--accent-green); }
+.balance-card.negative .balance-value { color: var(--accent-red); }
+
+/* ===== TABS ===== */
+.tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--mud-palette-surface);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 16px;
+}
+
+.tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 8px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.tab:hover {
+    background: var(--mud-palette-action-default-hover);
+}
+
+.tab.active {
+    background: var(--mud-palette-background-gray);
+}
+
+.tab-icon {
+    font-size: 18px;
+    margin-bottom: 4px;
+}
+
+.tab-count {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--mud-palette-text-secondary);
+}
+
+.tab-label {
+    font-size: 11px;
+    color: var(--mud-palette-text-secondary);
+}
+
+.tab.active .tab-label {
+    color: var(--mud-palette-text-primary);
+}
+
+.tab.active.debt .tab-count { color: var(--accent-red); }
+.tab.active.credit .tab-count { color: var(--accent-green); }
+.tab.active.admin .tab-count { color: var(--accent-purple); }
+
+/* ===== FILTERS ===== */
+.filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    cursor: pointer;
+    background: var(--mud-palette-surface);
+    border: 1px solid var(--mud-palette-lines-default);
+    color: var(--mud-palette-text-secondary);
+    transition: all 0.2s ease;
+}
+
+.filter-chip.active {
+    background: var(--accent-green);
+    border-color: var(--accent-green);
+    color: white;
+}
+
+.filter-chip:hover:not(.active) {
+    border-color: var(--mud-palette-text-secondary);
+}
+
+/* ===== SECTION HEADER ===== */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.section-title {
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.section-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.section-badge.green {
+    background: var(--accent-green);
+    color: white;
+}
+
+/* ===== DEBT CARD ===== */
+.debt-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.debt-card {
+    background: var(--mud-palette-surface);
+    border-radius: 14px;
+    padding: 14px;
+    border: 1px solid var(--mud-palette-lines-default);
+    transition: all 0.2s ease;
+}
+
+.debt-card.warning {
+    border-color: rgba(234, 179, 8, 0.4);
+}
+
+.debt-card.critical {
+    border-color: rgba(239, 68, 68, 0.4);
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.05) 0%, var(--mud-palette-surface) 100%);
+}
+
+.debt-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.debt-info {
+    flex: 1;
+}
+
+.debt-tournament {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.debt-date {
+    font-size: 11px;
+    color: var(--mud-palette-text-secondary);
+}
+
+.league-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+    background: var(--mud-palette-background-gray);
+    color: var(--mud-palette-text-secondary);
+    margin-top: 4px;
+}
+
+/* ===== TYPE BADGES ===== */
+.type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.type-badge.poker {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--accent-green);
+}
+
+.type-badge.lanches {
+    background: rgba(249, 115, 22, 0.15);
+    color: var(--accent-orange);
+}
+
+.type-badge.caixinha {
+    background: rgba(234, 179, 8, 0.15);
+    color: var(--accent-yellow);
+}
+
+.type-badge-small {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.type-badge-small.poker {
+    background: rgba(34, 197, 94, 0.15);
+}
+
+.type-badge-small.lanches {
+    background: rgba(249, 115, 22, 0.15);
+}
+
+.type-badge-small.caixinha {
+    background: rgba(234, 179, 8, 0.15);
+}
+
+/* ===== DEBT BODY ===== */
+.debt-body {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+
+.debt-recipient-label {
+    font-size: 11px;
+    color: var(--accent-yellow);
+    margin-bottom: 2px;
+}
+
+.debt-recipient-name {
+    font-size: 15px;
+    font-weight: 500;
+}
+
+.debt-amount {
+    text-align: right;
+}
+
+.debt-amount-label {
+    font-size: 11px;
+    color: var(--mud-palette-text-secondary);
+    margin-bottom: 2px;
+}
+
+.debt-amount-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent-red);
+}
+
+/* ===== PIX ===== */
+.debt-pix {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: var(--mud-palette-background-gray);
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.debt-pix-label {
+    color: var(--mud-palette-text-secondary);
+}
+
+.debt-pix-value {
+    font-family: 'JetBrains Mono', monospace;
+    flex: 1;
+}
+
+.debt-pix-copy {
+    cursor: pointer;
+    padding: 4px;
+    transition: transform 0.2s;
+}
+
+.debt-pix-copy:hover {
+    transform: scale(1.1);
+}
+
+.debt-pix-copy:active {
+    transform: scale(0.95);
+}
+
+.debt-no-pix {
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: rgba(234, 179, 8, 0.1);
+    border: 1px solid rgba(234, 179, 8, 0.3);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--accent-yellow);
+}
+
+/* ===== BUTTONS ===== */
+.debt-action {
+    margin-top: 14px;
+}
+
+.btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-primary {
+    background: var(--accent-green);
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: #1ea550;
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-waiting {
+    background: rgba(234, 179, 8, 0.15);
+    border: 1px solid rgba(234, 179, 8, 0.3);
+    color: var(--accent-yellow);
+}
+
+/* ===== CREDIT LIST ===== */
+.credit-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.credit-card {
+    background: var(--mud-palette-surface);
+    border-radius: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--mud-palette-lines-default);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.credit-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.credit-tournament {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.credit-from {
+    font-size: 12px;
+    color: var(--mud-palette-text-secondary);
+    margin-top: 2px;
+}
+
+.credit-status {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.credit-amount {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent-green);
+}
+
+/* ===== STATUS BADGES ===== */
+.status-badge {
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-badge.pending {
+    background: rgba(234, 179, 8, 0.15);
+    color: var(--accent-yellow);
+}
+
+.status-badge.paid {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--accent-blue);
+}
+
+.status-badge.confirmed {
+    background: rgba(34, 197, 94, 0.15);
+    color: var(--accent-green);
+}
+
+.confirm-btn {
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--accent-green);
+    color: white;
+    border: none;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+}
+
+.confirm-btn:hover:not(:disabled) {
+    background: #1ea550;
+}
+
+.confirm-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* ===== ADMIN SECTION ===== */
+.admin-section {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, var(--mud-palette-surface) 100%);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    border-radius: 14px;
+    padding: 14px;
+}
+
+.admin-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.admin-icon {
+    font-size: 18px;
+}
+
+.admin-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent-purple);
+    flex: 1;
+}
+
+.admin-badge {
+    background: var(--accent-purple);
+    color: white;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.admin-subtitle {
+    font-size: 12px;
+    color: var(--mud-palette-text-secondary);
+    margin-bottom: 12px;
+}
+
+.admin-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.admin-card {
+    background: var(--mud-palette-surface);
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.admin-card-info {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.admin-card-tournament {
+    font-size: 11px;
+    color: var(--mud-palette-text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-card-players {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.admin-card-values {
+    text-align: right;
+    flex-shrink: 0;
+    min-width: 80px;
+}
+
+.admin-card-amount {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.admin-card-amount.caixinha {
+    color: var(--accent-yellow);
+}
+
+.admin-card-days {
+    font-size: 10px;
+    color: var(--mud-palette-text-secondary);
+    white-space: nowrap;
+}
+
+.admin-card-actions {
+    min-width: 70px;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.action-btn {
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+}
+
+.action-btn.mark-paid {
+    background: rgba(59, 130, 246, 0.15);
+    color: var(--accent-blue);
+}
+
+.action-btn.mark-paid:hover:not(:disabled) {
+    background: rgba(59, 130, 246, 0.25);
+}
+
+.action-btn.confirm {
+    background: var(--accent-green);
+    color: white;
+}
+
+.action-btn.confirm:hover:not(:disabled) {
+    background: #1ea550;
+}
+
+.action-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.status-done {
+    color: var(--accent-green);
+    font-size: 16px;
+}
+
+/* ===== EMPTY STATE ===== */
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.empty-state .empty-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.empty-state .empty-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.empty-state .empty-text {
+    font-size: 13px;
+    color: var(--mud-palette-text-secondary);
+}
+
+/* ===== RESPONSIVE ===== */
+@media (min-width: 768px) {
+    .debts-page {
+        padding: 24px;
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .page-title {
+        font-size: 28px;
+    }
+
+    .summary-value {
+        font-size: 26px;
+    }
+
+    .balance-value {
+        font-size: 24px;
+    }
+
+    .debt-card {
+        padding: 18px;
+    }
+
+    .debt-tournament {
+        font-size: 16px;
+    }
+
+    .debt-amount-value {
+        font-size: 24px;
+    }
+
+    .admin-section {
+        max-width: 100%;
+        overflow: hidden;
+    }
+
+    .admin-list {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        max-width: 100%;
+    }
+
+    .admin-card {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .admin-card-info {
+        overflow: hidden;
+    }
+
+    .admin-card-tournament {
+        max-width: 150px;
+    }
+
+    .admin-card-players {
+        max-width: 150px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+@media (min-width: 1024px) {
+    .debts-page {
+        max-width: 1100px;
+    }
+
+    .admin-list {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .admin-card-tournament,
+    .admin-card-players {
+        max-width: 180px;
+    }
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.summary-card,
+.balance-card,
+.tabs,
+.debt-card,
+.credit-card,
+.admin-section {
+    animation: fadeIn 0.3s ease-out;
+}
+
+.debt-card:nth-child(1) { animation-delay: 0.05s; }
+.debt-card:nth-child(2) { animation-delay: 0.1s; }
+.debt-card:nth-child(3) { animation-delay: 0.15s; }
+.debt-card:nth-child(4) { animation-delay: 0.2s; }

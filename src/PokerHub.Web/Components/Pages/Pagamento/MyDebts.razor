@@ -12,275 +12,341 @@
 
 <PageTitle>Meus Debitos - PokerHub</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    <MudText Typo="Typo.h4" Class="mb-4">Meus Debitos</MudText>
-
+<div class="debts-page">
     @if (_loading)
     {
-        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+        <div class="loading-container">
+            <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+            <MudText Typo="Typo.body1" Class="mt-3">Carregando debitos...</MudText>
+        </div>
     }
-    else if (_noPlayerAssociated)
+    else if (_noPlayerAssociated && (_organizerPayments == null || !_organizerPayments.Any()))
     {
-        <MudAlert Severity="Severity.Info" Icon="@Icons.Material.Filled.Info">
-            Voce nao possui um jogador vinculado a sua conta. Para ver seus debitos, peca ao administrador da liga para vincular seu jogador.
-        </MudAlert>
-    }
-    else if (_debts == null || !_debts.Any())
-    {
-        <MudAlert Severity="Severity.Success" Icon="@Icons.Material.Filled.CheckCircle">
-            Voce nao tem debitos pendentes. Parabens!
-        </MudAlert>
+        <div class="empty-container">
+            <div class="empty-icon">👤</div>
+            <MudText Typo="Typo.h6">Nenhum jogador vinculado</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                Peca ao organizador da liga para vincular seu jogador a sua conta.
+            </MudText>
+        </div>
     }
     else
     {
-        <MudAlert Severity="Severity.Warning" Class="mb-4">
-            Voce tem @_debts.Count debito(s) pendente(s) no total de R$ @_debts.Sum(d => d.Amount).ToString("N2")
-        </MudAlert>
+        @* ===== HEADER ===== *@
+        <div class="page-header">
+            <div class="page-title">💳 Meus Debitos</div>
+            <div class="page-subtitle">Todas as ligas • Atualizado agora</div>
+        </div>
 
-        <MudGrid>
-            @foreach (var debt in _debts)
+        @* ===== SUMMARY CARDS ===== *@
+        <div class="summary-row">
+            <div class="summary-card debt">
+                <div class="summary-label">A Pagar</div>
+                <div class="summary-value">@_totalDebt.ToString("C")</div>
+                <div class="summary-count">@_debtCount pendente@(_debtCount != 1 ? "s" : "")</div>
+            </div>
+            <div class="summary-card credit">
+                <div class="summary-label">A Receber</div>
+                <div class="summary-value">@_totalCredit.ToString("C")</div>
+                <div class="summary-count">@_creditCount pendente@(_creditCount != 1 ? "s" : "")</div>
+            </div>
+        </div>
+
+        @* ===== BALANCE CARD ===== *@
+        <div class="balance-card @(_netBalance >= 0 ? "positive" : "negative")">
+            <div class="balance-icon">📊</div>
+            <div class="balance-info">
+                <div class="balance-label">Saldo Liquido</div>
+                <div class="balance-value">@(_netBalance >= 0 ? "+" : "")@_netBalance.ToString("C")</div>
+            </div>
+        </div>
+
+        @* ===== TABS ===== *@
+        <div class="tabs">
+            <div class="tab @(_activeTab == 0 ? "active debt" : "")" @onclick="@(() => _activeTab = 0)">
+                <div class="tab-icon">💸</div>
+                <div class="tab-count">@_totalDebt.ToString("C0")</div>
+                <div class="tab-label">A Pagar</div>
+            </div>
+            <div class="tab @(_activeTab == 1 ? "active credit" : "")" @onclick="@(() => _activeTab = 1)">
+                <div class="tab-icon">💰</div>
+                <div class="tab-count">@_totalCredit.ToString("C0")</div>
+                <div class="tab-label">A Receber</div>
+            </div>
+            @if (_organizerPayments?.Any() == true)
             {
-                <MudItem xs="12" sm="6" md="4">
-                    <MudCard Elevation="2" Class="@GetDebtCardClass(debt.DaysOpen)">
-                        <MudCardHeader>
-                            <CardHeaderContent>
-                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
-                                    <MudText Typo="Typo.h6">@debt.TournamentName</MudText>
-                                    @switch (debt.Type)
-                                    {
-                                        case PaymentType.Poker:
-                                            <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.Casino">Poker</MudChip>
-                                            break;
-                                        case PaymentType.Expense:
-                                            <MudChip T="string" Color="Color.Warning" Size="Size.Small" Icon="@Icons.Material.Filled.Receipt">@debt.Description</MudChip>
-                                            break;
-                                    }
-                                </MudStack>
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                    @debt.TournamentDate.ToString("dd/MM/yyyy")
-                                </MudText>
-                            </CardHeaderContent>
-                            <CardHeaderActions>
-                                @if (debt.DaysOpen > 7)
-                                {
-                                    <MudChip T="string" Color="Color.Error" Size="Size.Small">@debt.DaysOpen dias</MudChip>
-                                }
-                                else if (debt.DaysOpen > 3)
-                                {
-                                    <MudChip T="string" Color="Color.Warning" Size="Size.Small">@debt.DaysOpen dias</MudChip>
-                                }
-                            </CardHeaderActions>
-                        </MudCardHeader>
-                        <MudCardContent>
-                            <MudStack>
-                                <div>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Pagar para:</MudText>
-                                    <MudText Typo="Typo.body1">@debt.CreditorPlayerName</MudText>
-                                </div>
-                                <div>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Valor:</MudText>
-                                    <MudText Typo="Typo.h5" Color="Color.Primary">R$ @debt.Amount.ToString("N2")</MudText>
-                                </div>
-                                @if (!string.IsNullOrEmpty(debt.CreditorPixKey))
-                                {
-                                    <div>
-                                        <MudText Typo="Typo.caption" Color="Color.Secondary">Chave PIX:</MudText>
-                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                                            <MudText Typo="Typo.body2" Style="word-break: break-all;">@debt.CreditorPixKey</MudText>
-                                            <MudIconButton Icon="@Icons.Material.Filled.ContentCopy"
-                                                          Size="Size.Small"
-                                                          OnClick="@(() => CopyToClipboard(debt.CreditorPixKey))" />
-                                        </MudStack>
-                                    </div>
-                                }
-                                else
-                                {
-                                    <MudAlert Severity="Severity.Info" Dense="true">
-                                        Credor nao cadastrou chave PIX. Entre em contato diretamente.
-                                    </MudAlert>
-                                }
-                            </MudStack>
-                        </MudCardContent>
-                        <MudCardActions>
-                            <MudButton Variant="Variant.Filled"
-                                      Color="Color.Success"
-                                      FullWidth="true"
-                                      OnClick="@(() => MarkAsPaid(debt))"
-                                      Disabled="_processing">
-                                Marcar como Pago
-                            </MudButton>
-                        </MudCardActions>
-                    </MudCard>
-                </MudItem>
+                <div class="tab @(_activeTab == 2 ? "active admin" : "")" @onclick="@(() => _activeTab = 2)">
+                    <div class="tab-icon">👑</div>
+                    <div class="tab-count">@_organizerPayments.Count</div>
+                    <div class="tab-label">Admin</div>
+                </div>
             }
-        </MudGrid>
+        </div>
+
+        @* ===== TAB CONTENT ===== *@
+        @if (_activeTab == 0)
+        {
+            @* ----- A PAGAR ----- *@
+            @if (_debts == null || !_debts.Any())
+            {
+                <div class="empty-state">
+                    <div class="empty-icon">🎉</div>
+                    <div class="empty-title">Nenhum debito pendente!</div>
+                    <div class="empty-text">Voce esta em dia com todos os pagamentos.</div>
+                </div>
+            }
+            else
+            {
+                @* Filters *@
+                <div class="filters">
+                    <div class="filter-chip @(_debtFilter == "all" ? "active" : "")" @onclick="@(() => _debtFilter = "all")">
+                        Todos
+                    </div>
+                    <div class="filter-chip @(_debtFilter == "poker" ? "active" : "")" @onclick="@(() => _debtFilter = "poker")">
+                        🎰 Poker
+                    </div>
+                    <div class="filter-chip @(_debtFilter == "lanches" ? "active" : "")" @onclick="@(() => _debtFilter = "lanches")">
+                        🍔 Lanches
+                    </div>
+                    <div class="filter-chip @(_debtFilter == "caixinha" ? "active" : "")" @onclick="@(() => _debtFilter = "caixinha")">
+                        🐷 Caixinha
+                    </div>
+                </div>
+
+                @* Debt Cards *@
+                <div class="debt-list">
+                    @foreach (var debt in FilteredDebts)
+                    {
+                        <div class="debt-card @GetDebtCardClass(debt.DaysOpen)">
+                            <div class="debt-header">
+                                <div class="debt-info">
+                                    <div class="debt-tournament">@debt.TournamentName</div>
+                                    <div class="debt-date">@debt.TournamentDate.ToString("dd/MM/yyyy")</div>
+                                </div>
+                                <div class="type-badge @GetTypeBadgeClass(debt)">
+                                    @GetTypeIcon(debt) @GetTypeLabel(debt)
+                                </div>
+                            </div>
+
+                            <div class="debt-body">
+                                <div class="debt-recipient">
+                                    <div class="debt-recipient-label">Pagar para:</div>
+                                    <div class="debt-recipient-name">@debt.CreditorPlayerName</div>
+                                </div>
+                                <div class="debt-amount">
+                                    <div class="debt-amount-label">Valor:</div>
+                                    <div class="debt-amount-value">@debt.Amount.ToString("C")</div>
+                                </div>
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(debt.CreditorPixKey))
+                            {
+                                <div class="debt-pix">
+                                    <span class="debt-pix-label">PIX:</span>
+                                    <span class="debt-pix-value">@debt.CreditorPixKey</span>
+                                    <span class="debt-pix-copy" @onclick="@(() => CopyToClipboard(debt.CreditorPixKey))">📋</span>
+                                </div>
+                            }
+                            else if (debt.Type != PaymentType.Jackpot)
+                            {
+                                <div class="debt-no-pix">
+                                    ⚠️ Credor nao cadastrou chave PIX. Entre em contato diretamente.
+                                </div>
+                            }
+
+                            <div class="debt-action">
+                                <button class="btn btn-primary"
+                                        @onclick="@(() => MarkAsPaid(debt))"
+                                        disabled="@(_processingPaymentId == debt.PaymentId)">
+                                    @if (_processingPaymentId == debt.PaymentId)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                    }
+                                    ✓ Marcar como Pago
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+        else if (_activeTab == 1)
+        {
+            @* ----- A RECEBER ----- *@
+            @if (_toReceive == null || !_toReceive.Any())
+            {
+                <div class="empty-state">
+                    <div class="empty-icon">💰</div>
+                    <div class="empty-title">Nenhum pagamento a receber</div>
+                    <div class="empty-text">Voce nao tem valores pendentes para receber.</div>
+                </div>
+            }
+            else
+            {
+                <div class="section-header">
+                    <div class="section-title">
+                        💰 Pagamentos a Receber
+                        <span class="section-badge green">@_toReceive.Count</span>
+                    </div>
+                </div>
+
+                <div class="credit-list">
+                    @foreach (var payment in _toReceive)
+                    {
+                        <div class="credit-card">
+                            <div class="type-badge-small @GetTypeBadgeClassFromPayment(payment)">
+                                @GetTypeIconFromPayment(payment)
+                            </div>
+                            <div class="credit-info">
+                                <div class="credit-tournament">@payment.TournamentName</div>
+                                <div class="credit-from">
+                                    de <strong>@payment.FromPlayerName</strong>
+                                </div>
+                            </div>
+                            <div class="credit-status">
+                                <div class="credit-amount">@payment.Amount.ToString("C")</div>
+                                <div class="status-badge @GetStatusClass(payment.Status)">
+                                    @GetStatusText(payment.Status)
+                                </div>
+                                @if (payment.Status == PaymentStatus.Paid)
+                                {
+                                    <button class="confirm-btn"
+                                            @onclick="@(() => ConfirmPayment(payment))"
+                                            disabled="@(_processingPaymentId == payment.Id)">
+                                        Confirmar
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+        else if (_activeTab == 2)
+        {
+            @* ----- ADMIN ----- *@
+            <div class="admin-section">
+                <div class="admin-header">
+                    <span class="admin-icon">👑</span>
+                    <span class="admin-title">Gerenciar Pagamentos</span>
+                    <span class="admin-badge">@_organizerPayments?.Count</span>
+                </div>
+
+                <div class="admin-subtitle">
+                    Como organizador, confirme os pagamentos das suas ligas.
+                </div>
+
+                @* Filters *@
+                <div class="filters">
+                    <div class="filter-chip @(_adminFilter == "pending" ? "active" : "")" @onclick="@(() => _adminFilter = "pending")">
+                        Pendentes
+                    </div>
+                    <div class="filter-chip @(_adminFilter == "paid" ? "active" : "")" @onclick="@(() => _adminFilter = "paid")">
+                        Aguardando
+                    </div>
+                    <div class="filter-chip @(_adminFilter == "all" ? "active" : "")" @onclick="@(() => _adminFilter = "all")">
+                        Todos
+                    </div>
+                </div>
+
+                @if (FilteredOrganizerPayments?.Any() != true)
+                {
+                    <div class="empty-state" style="padding: 20px;">
+                        <div class="empty-icon">✅</div>
+                        <div class="empty-title">Nenhum pagamento pendente</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="admin-list">
+                        @foreach (var payment in FilteredOrganizerPayments)
+                        {
+                            <div class="admin-card">
+                                <div class="type-badge-small @GetTypeBadgeClassFromPayment(payment)">
+                                    @GetTypeIconFromPayment(payment)
+                                </div>
+                                <div class="admin-card-info">
+                                    <div class="admin-card-tournament">@payment.TournamentName</div>
+                                    <div class="admin-card-players">
+                                        @payment.FromPlayerName → @payment.ToPlayerName
+                                    </div>
+                                </div>
+                                <div class="admin-card-values">
+                                    <div class="admin-card-amount @(payment.IsJackpotContribution ? "caixinha" : "")">
+                                        @payment.Amount.ToString("C")
+                                    </div>
+                                    <div class="admin-card-days">@payment.DaysOpen dia@(payment.DaysOpen != 1 ? "s" : "")</div>
+                                </div>
+                                <div class="admin-card-actions">
+                                    @if (payment.Status == PaymentStatus.Pending)
+                                    {
+                                        <button class="action-btn mark-paid"
+                                                @onclick="@(() => AdminMarkPaid(payment.Id))"
+                                                disabled="@(_processingPaymentId == payment.Id)">
+                                            Pago
+                                        </button>
+                                    }
+                                    else if (payment.Status == PaymentStatus.Paid)
+                                    {
+                                        <button class="action-btn confirm"
+                                                @onclick="@(() => AdminConfirm(payment.Id))"
+                                                disabled="@(_processingPaymentId == payment.Id)">
+                                            Confirmar
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="status-done">✓</span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
     }
-
-    <!-- Payments to Receive -->
-    @if (_toReceive != null && _toReceive.Any())
-    {
-        <MudDivider Class="my-6" />
-
-        <MudText Typo="Typo.h5" Class="mb-4">Pagamentos a Receber</MudText>
-
-        <MudAlert Severity="Severity.Info" Class="mb-4">
-            Voce tem @_toReceive.Count pagamento(s) a receber no total de R$ @_toReceive.Sum(p => p.Amount).ToString("N2")
-        </MudAlert>
-
-        <MudTable Items="_toReceive" Dense="true" Hover="true">
-            <HeaderContent>
-                <MudTh>Torneio</MudTh>
-                <MudTh>Tipo</MudTh>
-                <MudTh>De</MudTh>
-                <MudTh Style="text-align: right;">Valor</MudTh>
-                <MudTh>Status</MudTh>
-                <MudTh>Acao</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd>@context.TournamentName</MudTd>
-                <MudTd>
-                    @switch (context.Type)
-                    {
-                        case PaymentType.Poker:
-                            <MudChip T="string" Color="Color.Success" Size="Size.Small">Poker</MudChip>
-                            break;
-                        case PaymentType.Expense:
-                            <MudChip T="string" Color="Color.Warning" Size="Size.Small">@context.Description</MudChip>
-                            break;
-                        case PaymentType.Jackpot:
-                            <MudChip T="string" Color="Color.Info" Size="Size.Small">Caixinha</MudChip>
-                            break;
-                    }
-                </MudTd>
-                <MudTd>@context.FromPlayerName</MudTd>
-                <MudTd Style="text-align: right;">R$ @context.Amount.ToString("N2")</MudTd>
-                <MudTd>
-                    <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)">
-                        @GetStatusText(context.Status)
-                    </MudChip>
-                </MudTd>
-                <MudTd>
-                    @if (context.Status == PaymentStatus.Paid)
-                    {
-                        <MudButton Variant="Variant.Text"
-                                  Color="Color.Success"
-                                  Size="Size.Small"
-                                  OnClick="@(() => ConfirmPayment(context))"
-                                  Disabled="_processing">
-                            Confirmar Recebimento
-                        </MudButton>
-                    }
-                </MudTd>
-            </RowTemplate>
-        </MudTable>
-    }
-
-    <!-- Organizer Payments Section -->
-    @if (_organizerPayments != null && _organizerPayments.Any())
-    {
-        <MudDivider Class="my-6" />
-
-        <MudText Typo="Typo.h5" Class="mb-4">Pagamentos das Minhas Ligas (Admin)</MudText>
-
-        <MudAlert Severity="Severity.Info" Class="mb-4">
-            Como organizador, voce pode gerenciar @_organizerPayments.Count pagamento(s) pendente(s).
-        </MudAlert>
-
-        <MudTable Items="_organizerPayments" Dense="true" Hover="true">
-            <HeaderContent>
-                <MudTh>Torneio</MudTh>
-                <MudTh>Tipo</MudTh>
-                <MudTh>De</MudTh>
-                <MudTh>Para</MudTh>
-                <MudTh Style="text-align: right;">Valor</MudTh>
-                <MudTh>Status</MudTh>
-                <MudTh>Dias</MudTh>
-                <MudTh>Acoes</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd>@context.TournamentName</MudTd>
-                <MudTd>
-                    @switch (context.Type)
-                    {
-                        case PaymentType.Poker:
-                            <MudChip T="string" Color="Color.Success" Size="Size.Small">Poker</MudChip>
-                            break;
-                        case PaymentType.Expense:
-                            <MudChip T="string" Color="Color.Warning" Size="Size.Small">@context.Description</MudChip>
-                            break;
-                        case PaymentType.Jackpot:
-                            <MudChip T="string" Color="Color.Info" Size="Size.Small">Caixinha</MudChip>
-                            break;
-                    }
-                </MudTd>
-                <MudTd>@context.FromPlayerName</MudTd>
-                <MudTd>@context.ToPlayerName</MudTd>
-                <MudTd Style="text-align: right;">
-                    <MudText Style="font-weight: 600;" Color="@(context.IsJackpotContribution ? Color.Warning : Color.Default)">
-                        R$ @context.Amount.ToString("N0")
-                    </MudText>
-                </MudTd>
-                <MudTd>
-                    <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(context.Status)">
-                        @GetStatusText(context.Status)
-                    </MudChip>
-                </MudTd>
-                <MudTd>
-                    @if (context.Status == PaymentStatus.Pending)
-                    {
-                        <MudText Color="@(context.DaysOpen > 7 ? Color.Error : (context.DaysOpen > 3 ? Color.Warning : Color.Default))">
-                            @context.DaysOpen d
-                        </MudText>
-                    }
-                    else
-                    {
-                        <text>-</text>
-                    }
-                </MudTd>
-                <MudTd>
-                    @if (context.Status == PaymentStatus.Pending)
-                    {
-                        <MudButton Size="Size.Small"
-                                   Variant="Variant.Text"
-                                   Color="Color.Primary"
-                                   OnClick="@(() => AdminMarkPaid(context.Id))"
-                                   Disabled="_processingPaymentId == context.Id">
-                            Marcar Pago
-                        </MudButton>
-                    }
-                    else if (context.Status == PaymentStatus.Paid)
-                    {
-                        <MudButton Size="Size.Small"
-                                   Variant="Variant.Text"
-                                   Color="Color.Success"
-                                   OnClick="@(() => AdminConfirm(context.Id))"
-                                   Disabled="_processingPaymentId == context.Id">
-                            Confirmar
-                        </MudButton>
-                    }
-                    else
-                    {
-                        <MudIcon Icon="@Icons.Material.Filled.Check" Color="Color.Success" Size="Size.Small" />
-                    }
-                </MudTd>
-            </RowTemplate>
-        </MudTable>
-    }
-</MudContainer>
+</div>
 
 @code {
     [Parameter] public Guid? PlayerId { get; set; }
-    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     private IReadOnlyList<PendingDebtDto>? _debts;
     private IReadOnlyList<PaymentDto>? _toReceive;
     private IReadOnlyList<PaymentDto>? _organizerPayments;
     private bool _loading = true;
-    private bool _processing;
     private bool _noPlayerAssociated;
     private Guid _currentPlayerId;
     private string? _currentUserId;
     private Guid? _processingPaymentId;
+
+    // UI State
+    private int _activeTab = 0;
+    private string _debtFilter = "all";
+    private string _adminFilter = "pending";
+
+    // Calculated values
+    private decimal _totalDebt => _debts?.Sum(d => d.Amount) ?? 0;
+    private decimal _totalCredit => _toReceive?.Where(p => p.Status != PaymentStatus.Confirmed).Sum(p => p.Amount) ?? 0;
+    private decimal _netBalance => _totalCredit - _totalDebt;
+    private int _debtCount => _debts?.Count ?? 0;
+    private int _creditCount => _toReceive?.Count(p => p.Status != PaymentStatus.Confirmed) ?? 0;
+
+    // Filtered lists
+    private IEnumerable<PendingDebtDto> FilteredDebts => _debtFilter switch
+    {
+        "poker" => _debts?.Where(d => d.Type == PaymentType.Poker && string.IsNullOrEmpty(d.Description)) ?? Enumerable.Empty<PendingDebtDto>(),
+        "lanches" => _debts?.Where(d => d.Type == PaymentType.Expense || (!string.IsNullOrEmpty(d.Description) && d.Description.Contains("Lanche", StringComparison.OrdinalIgnoreCase))) ?? Enumerable.Empty<PendingDebtDto>(),
+        "caixinha" => _debts?.Where(d => d.Type == PaymentType.Jackpot) ?? Enumerable.Empty<PendingDebtDto>(),
+        _ => _debts ?? Enumerable.Empty<PendingDebtDto>()
+    };
+
+    private IEnumerable<PaymentDto>? FilteredOrganizerPayments => _adminFilter switch
+    {
+        "pending" => _organizerPayments?.Where(p => p.Status == PaymentStatus.Pending),
+        "paid" => _organizerPayments?.Where(p => p.Status == PaymentStatus.Paid),
+        _ => _organizerPayments
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -291,17 +357,14 @@
     {
         _loading = true;
 
-        // Get current user ID
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         _currentUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
 
-        // Load organizer payments (for leagues the user organizes)
         if (!string.IsNullOrEmpty(_currentUserId))
         {
             _organizerPayments = await PaymentService.GetPaymentsForOrganizerAsync(_currentUserId);
         }
 
-        // Get current player ID (from route or logged-in user)
         if (PlayerId.HasValue)
         {
             _currentPlayerId = PlayerId.Value;
@@ -310,15 +373,12 @@
         }
         else
         {
-            // Try to get player from current user
             if (!string.IsNullOrEmpty(_currentUserId))
             {
-                // Get all players associated with this user
                 var players = await PlayerService.GetAllPlayersByUserAsync(_currentUserId);
 
                 if (players.Any())
                 {
-                    // Aggregate debts from all players
                     var allDebts = new List<PendingDebtDto>();
                     var allToReceive = new List<PaymentDto>();
 
@@ -333,13 +393,10 @@
 
                     _debts = allDebts;
                     _toReceive = allToReceive;
-
-                    // Use first player ID for payment operations
                     _currentPlayerId = players.First().Id;
                 }
                 else
                 {
-                    // User has no linked player, but may still be an organizer
                     _noPlayerAssociated = _organizerPayments == null || !_organizerPayments.Any();
                 }
             }
@@ -354,10 +411,61 @@
 
     private string GetDebtCardClass(int daysOpen)
     {
-        if (daysOpen > 7) return "debt-card-critical";
-        if (daysOpen > 3) return "debt-card-warning";
+        if (daysOpen > 7) return "critical";
+        if (daysOpen > 3) return "warning";
         return "";
     }
+
+    private string GetTypeBadgeClass(PendingDebtDto debt)
+    {
+        if (debt.Type == PaymentType.Jackpot) return "caixinha";
+        if (debt.Type == PaymentType.Expense || (!string.IsNullOrEmpty(debt.Description) && debt.Description.Contains("Lanche", StringComparison.OrdinalIgnoreCase))) return "lanches";
+        return "poker";
+    }
+
+    private string GetTypeIcon(PendingDebtDto debt)
+    {
+        if (debt.Type == PaymentType.Jackpot) return "🐷";
+        if (debt.Type == PaymentType.Expense || (!string.IsNullOrEmpty(debt.Description) && debt.Description.Contains("Lanche", StringComparison.OrdinalIgnoreCase))) return "🍔";
+        return "🎰";
+    }
+
+    private string GetTypeLabel(PendingDebtDto debt)
+    {
+        if (debt.Type == PaymentType.Jackpot) return "Caixinha";
+        if (debt.Type == PaymentType.Expense || (!string.IsNullOrEmpty(debt.Description) && debt.Description.Contains("Lanche", StringComparison.OrdinalIgnoreCase))) return "Lanches";
+        return "Poker";
+    }
+
+    private string GetTypeBadgeClassFromPayment(PaymentDto payment)
+    {
+        if (payment.IsJackpotContribution) return "caixinha";
+        if (!string.IsNullOrEmpty(payment.Description) && payment.Description.Contains("Lanche", StringComparison.OrdinalIgnoreCase)) return "lanches";
+        return "poker";
+    }
+
+    private string GetTypeIconFromPayment(PaymentDto payment)
+    {
+        if (payment.IsJackpotContribution) return "🐷";
+        if (!string.IsNullOrEmpty(payment.Description) && payment.Description.Contains("Lanche", StringComparison.OrdinalIgnoreCase)) return "🍔";
+        return "🎰";
+    }
+
+    private string GetStatusClass(PaymentStatus status) => status switch
+    {
+        PaymentStatus.Pending => "pending",
+        PaymentStatus.Paid => "paid",
+        PaymentStatus.Confirmed => "confirmed",
+        _ => ""
+    };
+
+    private string GetStatusText(PaymentStatus status) => status switch
+    {
+        PaymentStatus.Pending => "Pendente",
+        PaymentStatus.Paid => "Pago",
+        PaymentStatus.Confirmed => "Confirmado",
+        _ => status.ToString()
+    };
 
     private async Task CopyToClipboard(string text)
     {
@@ -376,16 +484,16 @@
     {
         var confirm = await DialogService.ShowMessageBox(
             "Confirmar Pagamento",
-            $"Voce confirma que pagou R$ {debt.Amount:N2} para {debt.CreditorPlayerName}?",
+            $"Voce confirma que pagou {debt.Amount:C} para {debt.CreditorPlayerName}?",
             "Sim, Paguei", "Cancelar");
 
         if (confirm == true)
         {
-            _processing = true;
+            _processingPaymentId = debt.PaymentId;
             try
             {
                 await PaymentService.MarkAsPaidAsync(debt.PaymentId, _currentPlayerId);
-                Snackbar.Add("Pagamento marcado como pago. Aguardando confirmacao do credor.", Severity.Success);
+                Snackbar.Add("Pagamento marcado como pago. Aguardando confirmacao.", Severity.Success);
                 await LoadData();
             }
             catch (Exception ex)
@@ -394,7 +502,7 @@
             }
             finally
             {
-                _processing = false;
+                _processingPaymentId = null;
             }
         }
     }
@@ -403,12 +511,12 @@
     {
         var confirm = await DialogService.ShowMessageBox(
             "Confirmar Recebimento",
-            $"Voce confirma que recebeu R$ {payment.Amount:N2} de {payment.FromPlayerName}?",
+            $"Voce confirma que recebeu {payment.Amount:C} de {payment.FromPlayerName}?",
             "Sim, Recebi", "Cancelar");
 
         if (confirm == true)
         {
-            _processing = true;
+            _processingPaymentId = payment.Id;
             try
             {
                 await PaymentService.ConfirmPaymentAsync(payment.Id, _currentPlayerId);
@@ -421,26 +529,10 @@
             }
             finally
             {
-                _processing = false;
+                _processingPaymentId = null;
             }
         }
     }
-
-    private Color GetStatusColor(PaymentStatus status) => status switch
-    {
-        PaymentStatus.Pending => Color.Warning,
-        PaymentStatus.Paid => Color.Info,
-        PaymentStatus.Confirmed => Color.Success,
-        _ => Color.Default
-    };
-
-    private string GetStatusText(PaymentStatus status) => status switch
-    {
-        PaymentStatus.Pending => "Pendente",
-        PaymentStatus.Paid => "Pago",
-        PaymentStatus.Confirmed => "Confirmado",
-        _ => status.ToString()
-    };
 
     private async Task AdminMarkPaid(Guid paymentId)
     {
@@ -461,10 +553,6 @@
             {
                 Snackbar.Add("Pagamento marcado como pago!", Severity.Success);
                 await LoadData();
-            }
-            else
-            {
-                Snackbar.Add("Erro ao marcar pagamento", Severity.Error);
             }
         }
         catch (Exception ex)
@@ -496,10 +584,6 @@
             {
                 Snackbar.Add("Pagamento confirmado!", Severity.Success);
                 await LoadData();
-            }
-            else
-            {
-                Snackbar.Add("Erro ao confirmar pagamento", Severity.Error);
             }
         }
         catch (Exception ex)

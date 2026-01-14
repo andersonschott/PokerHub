@@ -12,26 +12,26 @@
     var isMobile = _screenWidth < 900;
     var isSmallMobile = _screenWidth < 480;
 
-    // Main container style
+    // Main container style - desktop sizes increased 130% for TV visibility
     var containerStyle = "display: grid; min-height: 100vh; color: #fff; font-family: 'Space Grotesk', 'Segoe UI', sans-serif; cursor: pointer; user-select: none; overflow: hidden; " +
-        $"padding: {(isMobile ? "16px" : "24px")}; gap: {(isMobile ? "12px" : "24px")}; " +
+        $"padding: {(isMobile ? "16px" : "32px")}; gap: {(isMobile ? "12px" : "32px")}; " +
         $"background: linear-gradient(135deg, {(_isBreak ? "#1a2a1a 0%, #1a3320 50%, #0d1f15" : "#0a0f1a 0%, #0d1420 50%, #101820")} 100%); " +
-        (isMobile ? "grid-template-columns: 1fr; grid-template-rows: auto auto 1fr auto;" : "grid-template-columns: 300px 1fr 340px; grid-template-rows: auto 1fr auto;");
+        (isMobile ? "grid-template-columns: 1fr; grid-template-rows: auto auto 1fr auto;" : "grid-template-columns: 390px 1fr 442px; grid-template-rows: auto 1fr auto;");
 
     if (_isFullscreen)
     {
         containerStyle = "position: fixed; top: 0; left: 0; right: 0; bottom: 0; width: 100vw; height: 100vh; z-index: 99999; display: grid; color: #fff; font-family: 'Space Grotesk', 'Segoe UI', sans-serif; cursor: pointer; user-select: none; overflow: hidden; " +
-            $"padding: 24px; gap: 24px; " +
+            $"padding: {(isMobile ? "16px" : "32px")}; gap: {(isMobile ? "12px" : "32px")}; " +
             $"background: linear-gradient(135deg, {(_isBreak ? "#1a2a1a 0%, #1a3320 50%, #0d1f15" : "#0a0f1a 0%, #0d1420 50%, #101820")} 100%); " +
-            (isMobile ? "grid-template-columns: 1fr; grid-template-rows: auto 1fr;" : "grid-template-columns: 300px 1fr 340px; grid-template-rows: 1fr;");
+            (isMobile ? "grid-template-columns: 1fr; grid-template-rows: auto 1fr;" : "grid-template-columns: 390px 1fr 442px; grid-template-rows: 1fr;");
     }
 
-    // Font sizes based on screen
-    var levelFontSize = isSmallMobile ? "16px" : isMobile ? "20px" : "28px";
-    var blindFontSize = isSmallMobile ? "40px" : isMobile ? "56px" : "110px";
-    var separatorFontSize = isSmallMobile ? "28px" : isMobile ? "36px" : "70px";
-    var timerFontSize = isSmallMobile ? "48px" : isMobile ? "64px" : "140px";
-    var timerPadding = isSmallMobile ? "12px 20px" : isMobile ? "16px 32px" : "28px 56px";
+    // Font sizes based on screen - desktop increased 130%
+    var levelFontSize = isSmallMobile ? "16px" : isMobile ? "20px" : "36px";
+    var blindFontSize = isSmallMobile ? "40px" : isMobile ? "56px" : "143px";
+    var separatorFontSize = isSmallMobile ? "28px" : isMobile ? "36px" : "91px";
+    var timerFontSize = isSmallMobile ? "48px" : isMobile ? "64px" : "182px";
+    var timerPadding = isSmallMobile ? "12px 20px" : isMobile ? "16px 32px" : "36px 73px";
 }
 
 <div style="@containerStyle" @onclick="ToggleFullscreen">
@@ -54,24 +54,24 @@
         @* ===== HEADER ===== *@
         @if (!_isFullscreen)
         {
-            <header style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; padding-bottom: 16px; border-bottom: 1px solid #1f2937; @(isMobile ? "flex-direction: column; gap: 8px; align-items: flex-start;" : "")">
-                <h1 style="font-size: @(isMobile ? "18px" : "24px"); font-weight: 700; letter-spacing: -0.5px; margin: 0;">@_tournamentName</h1>
-                <div style="display: flex; align-items: center; gap: @(isMobile ? "12px" : "24px"); @(isMobile ? "width: 100%; justify-content: space-between;" : "")">
+            <header style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 1px solid #1f2937; @(isMobile ? "flex-direction: column; gap: 8px; align-items: flex-start;" : "")">
+                <h1 style="font-size: @(isMobile ? "18px" : "31px"); font-weight: 700; letter-spacing: -0.5px; margin: 0;">@_tournamentName</h1>
+                <div style="display: flex; align-items: center; gap: @(isMobile ? "12px" : "32px"); @(isMobile ? "width: 100%; justify-content: space-between;" : "")">
                     @if (_isPaused)
                     {
-                        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 24px; font-size: 14px; font-weight: 600; background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.3); color: #eab308;">
-                            <span style="width: 8px; height: 8px; border-radius: 50%; background: currentColor;"></span>
+                        <div style="display: flex; align-items: center; gap: 10px; padding: 10px 21px; border-radius: 31px; font-size: @(isMobile ? "14px" : "18px"); font-weight: 600; background: rgba(234, 179, 8, 0.15); border: 1px solid rgba(234, 179, 8, 0.3); color: #eab308;">
+                            <span style="width: 10px; height: 10px; border-radius: 50%; background: currentColor;"></span>
                             PAUSADO
                         </div>
                     }
                     else if (!_isFinished)
                     {
-                        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 24px; font-size: 14px; font-weight: 600; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.3); color: #22c55e;">
-                            <span style="width: 8px; height: 8px; border-radius: 50%; background: currentColor;"></span>
+                        <div style="display: flex; align-items: center; gap: 10px; padding: 10px 21px; border-radius: 31px; font-size: @(isMobile ? "14px" : "18px"); font-weight: 600; background: rgba(34, 197, 94, 0.15); border: 1px solid rgba(34, 197, 94, 0.3); color: #22c55e;">
+                            <span style="width: 10px; height: 10px; border-radius: 50%; background: currentColor;"></span>
                             AO VIVO
                         </div>
                     }
-                    <span style="font-family: 'JetBrains Mono', monospace; font-size: @(isMobile ? "14px" : "18px"); color: #9ca3af;">@DateTime.Now.ToString("HH:mm")</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: @(isMobile ? "14px" : "24px"); color: #9ca3af;">@DateTime.Now.ToString("HH:mm")</span>
                 </div>
             </header>
         }
@@ -106,28 +106,28 @@
         @* ===== PAINEL ESQUERDO - PREMIAÇÃO ===== *@
         @if (!isMobile)
         {
-            <aside style="display: flex; flex-direction: column; gap: 16px; overflow: hidden;">
-                <div style="font-size: 14px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 2px; padding-bottom: 8px; border-bottom: 1px solid #1f2937;">🏆 Premiação</div>
-                <div style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, #111827 100%); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 16px; padding: 20px; text-align: center;">
-                    <div style="font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px;">Prize Pool</div>
-                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 32px; font-weight: 800; color: #22c55e; text-shadow: 0 0 30px rgba(34, 197, 94, 0.3);">@_prizePool.ToString("C")</div>
+            <aside style="display: flex; flex-direction: column; gap: 21px; overflow: hidden;">
+                <div style="font-size: 18px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 3px; padding-bottom: 10px; border-bottom: 1px solid #1f2937;">🏆 Premiação</div>
+                <div style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, #111827 100%); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 21px; padding: 26px; text-align: center;">
+                    <div style="font-size: 16px; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;">Prize Pool</div>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 42px; font-weight: 800; color: #22c55e; text-shadow: 0 0 40px rgba(34, 197, 94, 0.3);">@_prizePool.ToString("C")</div>
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto;">
+                <div style="display: flex; flex-direction: column; gap: 10px; flex: 1; overflow-y: auto;">
                     @foreach (var prize in _prizeDistribution.Take(5))
                     {
                         var bgGradient = prize.Position switch { 1 => "linear-gradient(135deg, rgba(255, 215, 0, 0.1) 0%, #111827 100%)", 2 => "linear-gradient(135deg, rgba(192, 192, 192, 0.08) 0%, #111827 100%)", 3 => "linear-gradient(135deg, rgba(205, 127, 50, 0.08) 0%, #111827 100%)", _ => "#111827" };
                         var borderColor = prize.Position switch { 1 => "rgba(255, 215, 0, 0.3)", 2 => "rgba(192, 192, 192, 0.2)", 3 => "rgba(205, 127, 50, 0.2)", _ => "#1f2937" };
                         var valueColor = prize.Position switch { 1 => "#ffd700", 2 => "#c0c0c0", 3 => "#cd7f32", _ => "#ffffff" };
                         var emoji = prize.Position switch { 1 => "🥇", 2 => "🥈", 3 => "🥉", _ => $"{prize.Position}º" };
-                        <div style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: @bgGradient; border-radius: 12px; border: 1px solid @borderColor;">
-                            <span style="font-size: 24px; width: 36px; text-align: center;">@emoji</span>
+                        <div style="display: flex; align-items: center; gap: 16px; padding: 18px 21px; background: @bgGradient; border-radius: 16px; border: 1px solid @borderColor;">
+                            <span style="font-size: 31px; width: 47px; text-align: center;">@emoji</span>
                             <div style="flex: 1;">
-                                <div style="font-size: 12px; color: #6b7280;">@prize.Position º Lugar</div>
-                                <div style="font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; color: @valueColor;">@prize.Amount.ToString("C")</div>
+                                <div style="font-size: 16px; color: #6b7280;">@prize.Position º Lugar</div>
+                                <div style="font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 700; color: @valueColor;">@prize.Amount.ToString("C")</div>
                             </div>
                             @if (prize.Percentage.HasValue)
                             {
-                                <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #6b7280; padding: 4px 10px; background: #0a0f1a; border-radius: 8px;">@prize.Percentage.Value.ToString("0")%</span>
+                                <span style="font-family: 'JetBrains Mono', monospace; font-size: 17px; color: #6b7280; padding: 5px 13px; background: #0a0f1a; border-radius: 10px;">@prize.Percentage.Value.ToString("0")%</span>
                             }
                         </div>
                     }
@@ -136,53 +136,53 @@
         }
 
         @* ===== CENTRO - TIMER ===== *@
-        <main style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;">
+        <main style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: @(isMobile ? "12px" : "16px");">
             @if (_isFinished)
             {
                 <div style="text-align: center;">
-                    <div style="font-size: @(isMobile ? "80px" : "120px"); margin-bottom: 16px;">🏆</div>
-                    <div style="font-size: @(isSmallMobile ? "24px" : isMobile ? "32px" : "48px"); font-weight: 800; color: #ffd700; text-shadow: 0 0 40px rgba(255, 215, 0, 0.4);">TORNEIO FINALIZADO</div>
-                    <div style="font-size: @(isMobile ? "16px" : "24px"); color: #9ca3af; margin-top: 8px;">Parabéns ao campeão!</div>
+                    <div style="font-size: @(isMobile ? "80px" : "156px"); margin-bottom: 21px;">🏆</div>
+                    <div style="font-size: @(isSmallMobile ? "24px" : isMobile ? "32px" : "62px"); font-weight: 800; color: #ffd700; text-shadow: 0 0 52px rgba(255, 215, 0, 0.4);">TORNEIO FINALIZADO</div>
+                    <div style="font-size: @(isMobile ? "16px" : "31px"); color: #9ca3af; margin-top: 10px;">Parabéns ao campeão!</div>
                 </div>
             }
             else if (_isBreak)
             {
-                <div style="font-size: @levelFontSize; font-weight: 700; color: #eab308; text-transform: uppercase; letter-spacing: @(isMobile ? "4px" : "6px"); text-shadow: 0 0 40px rgba(234, 179, 8, 0.4);">☕ INTERVALO</div>
+                <div style="font-size: @levelFontSize; font-weight: 700; color: #eab308; text-transform: uppercase; letter-spacing: @(isMobile ? "4px" : "8px"); text-shadow: 0 0 52px rgba(234, 179, 8, 0.4);">☕ INTERVALO</div>
                 @if (!string.IsNullOrEmpty(_breakDescription))
                 {
-                    <div style="font-size: @(isMobile ? "14px" : "18px"); color: #9ca3af;">@_breakDescription</div>
+                    <div style="font-size: @(isMobile ? "14px" : "24px"); color: #9ca3af;">@_breakDescription</div>
                 }
-                <div style="background: #111827; border: 3px solid @GetTimerBorderColor(); border-radius: 24px; padding: @timerPadding; margin: @(isMobile ? "12px 0" : "20px 0"); box-shadow: 0 0 60px @GetTimerGlowColor();">
-                    <div style="font-family: 'JetBrains Mono', monospace; font-size: @timerFontSize; font-weight: 800; letter-spacing: @(isSmallMobile ? "2px" : isMobile ? "4px" : "8px"); line-height: 1; color: @GetTimerTextColor(); text-shadow: 0 0 60px rgba(255, 255, 255, 0.2);">@FormatTime(_secondsRemaining)</div>
+                <div style="background: #111827; border: 4px solid @GetTimerBorderColor(); border-radius: 31px; padding: @timerPadding; margin: @(isMobile ? "12px 0" : "26px 0"); box-shadow: 0 0 78px @GetTimerGlowColor();">
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: @timerFontSize; font-weight: 800; letter-spacing: @(isSmallMobile ? "2px" : isMobile ? "4px" : "10px"); line-height: 1; color: @GetTimerTextColor(); text-shadow: 0 0 78px rgba(255, 255, 255, 0.2);">@FormatTime(_secondsRemaining)</div>
                 </div>
                 @if (_nextLevel != null)
                 {
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: @(isMobile ? "10px 20px" : "14px 28px"); background: #1a2332; border-radius: 16px; border: 1px solid #1f2937;">
-                        <span style="font-size: @(isMobile ? "11px" : "13px"); color: #22c55e; text-transform: uppercase; letter-spacing: 2px;">Próximo Nível</span>
-                        <span style="font-family: 'JetBrains Mono', monospace; font-size: @(isMobile ? "16px" : "20px"); font-weight: 600;">@FormatChips(_nextLevel.SmallBlind) / @FormatChips(_nextLevel.BigBlind)@(_nextLevel.Ante > 0 ? $" (Ante: {FormatChips(_nextLevel.Ante)})" : "")</span>
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: @(isMobile ? "10px 20px" : "18px 36px"); background: #1a2332; border-radius: 21px; border: 1px solid #1f2937;">
+                        <span style="font-size: @(isMobile ? "11px" : "17px"); color: #22c55e; text-transform: uppercase; letter-spacing: 3px;">Próximo Nível</span>
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: @(isMobile ? "16px" : "26px"); font-weight: 600;">@FormatChips(_nextLevel.SmallBlind) / @FormatChips(_nextLevel.BigBlind)@(_nextLevel.Ante > 0 ? $" (Ante: {FormatChips(_nextLevel.Ante)})" : "")</span>
                     </div>
                 }
             }
             else
             {
-                <div style="font-size: @levelFontSize; font-weight: 700; color: #22c55e; text-transform: uppercase; letter-spacing: @(isMobile ? "4px" : "6px"); text-shadow: 0 0 40px rgba(34, 197, 94, 0.4);">NÍVEL @_currentLevel</div>
-                <div style="display: flex; align-items: baseline; gap: 8px;">
+                <div style="font-size: @levelFontSize; font-weight: 700; color: #22c55e; text-transform: uppercase; letter-spacing: @(isMobile ? "4px" : "8px"); text-shadow: 0 0 52px rgba(34, 197, 94, 0.4);">NÍVEL @_currentLevel</div>
+                <div style="display: flex; align-items: baseline; gap: @(isMobile ? "8px" : "10px");">
                     <span style="font-family: 'JetBrains Mono', monospace; font-size: @blindFontSize; font-weight: 800; line-height: 1; background: linear-gradient(180deg, #ffffff 0%, #a0a0a0 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">@FormatChips(_smallBlind)</span>
-                    <span style="font-family: 'JetBrains Mono', monospace; font-size: @separatorFontSize; font-weight: 300; color: #6b7280; margin: 0 -8px;">/</span>
+                    <span style="font-family: 'JetBrains Mono', monospace; font-size: @separatorFontSize; font-weight: 300; color: #6b7280; margin: 0 -10px;">/</span>
                     <span style="font-family: 'JetBrains Mono', monospace; font-size: @blindFontSize; font-weight: 800; line-height: 1; background: linear-gradient(180deg, #ffffff 0%, #a0a0a0 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">@FormatChips(_bigBlind)</span>
                 </div>
                 @if (_ante > 0)
                 {
-                    <div style="font-family: 'JetBrains Mono', monospace; font-size: @(isSmallMobile ? "14px" : isMobile ? "18px" : "24px"); color: #9ca3af; margin-top: 4px;">ANTE: @FormatChips(_ante)</div>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: @(isSmallMobile ? "14px" : isMobile ? "18px" : "31px"); color: #9ca3af; margin-top: 5px;">ANTE: @FormatChips(_ante)</div>
                 }
-                <div style="background: #111827; border: 3px solid @GetTimerBorderColor(); border-radius: 24px; padding: @timerPadding; margin: @(isMobile ? "12px 0" : "20px 0"); box-shadow: 0 0 60px @GetTimerGlowColor();">
-                    <div style="font-family: 'JetBrains Mono', monospace; font-size: @timerFontSize; font-weight: 800; letter-spacing: @(isSmallMobile ? "2px" : isMobile ? "4px" : "8px"); line-height: 1; color: @GetTimerTextColor(); text-shadow: 0 0 60px rgba(255, 255, 255, 0.2);">@FormatTime(_secondsRemaining)</div>
+                <div style="background: #111827; border: 4px solid @GetTimerBorderColor(); border-radius: 31px; padding: @timerPadding; margin: @(isMobile ? "12px 0" : "26px 0"); box-shadow: 0 0 78px @GetTimerGlowColor();">
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: @timerFontSize; font-weight: 800; letter-spacing: @(isSmallMobile ? "2px" : isMobile ? "4px" : "10px"); line-height: 1; color: @GetTimerTextColor(); text-shadow: 0 0 78px rgba(255, 255, 255, 0.2);">@FormatTime(_secondsRemaining)</div>
                 </div>
                 @if (_nextLevel != null)
                 {
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: @(isMobile ? "10px 20px" : "14px 28px"); background: #1a2332; border-radius: 16px; border: 1px solid #1f2937;">
-                        <span style="font-size: @(isMobile ? "11px" : "13px"); color: #22c55e; text-transform: uppercase; letter-spacing: 2px;">Próximo Nível</span>
-                        <span style="font-family: 'JetBrains Mono', monospace; font-size: @(isMobile ? "16px" : "20px"); font-weight: 600;">
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 5px; padding: @(isMobile ? "10px 20px" : "18px 36px"); background: #1a2332; border-radius: 21px; border: 1px solid #1f2937;">
+                        <span style="font-size: @(isMobile ? "11px" : "17px"); color: #22c55e; text-transform: uppercase; letter-spacing: 3px;">Próximo Nível</span>
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: @(isMobile ? "16px" : "26px"); font-weight: 600;">
                             @if (_nextLevel.IsBreak)
                             {
                                 <text>Intervalo @(!string.IsNullOrEmpty(_nextLevel.BreakDescription) ? $"({_nextLevel.BreakDescription})" : "")</text>
@@ -200,36 +200,36 @@
         @* ===== PAINEL DIREITO - JOGADORES ===== *@
         @if (!isMobile)
         {
-            <aside style="display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
-                <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid #1f2937;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700;">@_playersRemaining</span>
-                        <span style="font-size: 14px; color: #6b7280;">/ @_totalPlayers jogadores</span>
+            <aside style="display: flex; flex-direction: column; gap: 16px; overflow: hidden;">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: 10px; border-bottom: 1px solid #1f2937;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size: 31px; font-weight: 700;">@_playersRemaining</span>
+                        <span style="font-size: 18px; color: #6b7280;">/ @_totalPlayers jogadores</span>
                     </div>
-                    <div style="display: flex; gap: 16px;">
-                        <span style="font-size: 13px; color: #9ca3af;">🔄 <b>@_totalRebuys</b></span>
-                        <span style="font-size: 13px; color: #9ca3af;">➕ <b>@_totalAddons</b></span>
+                    <div style="display: flex; gap: 21px;">
+                        <span style="font-size: 17px; color: #9ca3af;">🔄 <b>@_totalRebuys</b></span>
+                        <span style="font-size: 17px; color: #9ca3af;">➕ <b>@_totalAddons</b></span>
                     </div>
                 </div>
-                <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 8px;">
+                <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; padding-right: 10px;">
                     @foreach (var player in _players.OrderBy(p => p.IsEliminated ? 1 : 0).ThenBy(p => p.Name))
                     {
-                        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: #111827; border-radius: 10px; border: 1px solid #1f2937; @(player.IsEliminated ? "opacity: 0.4;" : "")">
+                        <div style="display: flex; align-items: center; gap: 16px; padding: 13px 18px; background: #111827; border-radius: 13px; border: 1px solid #1f2937; @(player.IsEliminated ? "opacity: 0.4;" : "")">
                             <div style="flex: 1; min-width: 0;">
-                                <div style="font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@GetDisplayName(player)</div>
+                                <div style="font-size: 20px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@GetDisplayName(player)</div>
                             </div>
-                            <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                            <div style="display: flex; gap: 8px; flex-shrink: 0;">
                                 @if (player.IsEliminated && player.Position.HasValue)
                                 {
-                                    <span style="padding: 4px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">@player.Position º</span>
+                                    <span style="padding: 5px 10px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">@player.Position º</span>
                                 }
                                 @if (player.RebuyCount > 0)
                                 {
-                                    <span style="padding: 4px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.3);">R×@player.RebuyCount</span>
+                                    <span style="padding: 5px 10px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600; background: rgba(234, 179, 8, 0.15); color: #eab308; border: 1px solid rgba(234, 179, 8, 0.3);">R×@player.RebuyCount</span>
                                 }
                                 @if (player.HasAddon)
                                 {
-                                    <span style="padding: 4px 8px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; background: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.3);">A</span>
+                                    <span style="padding: 5px 10px; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600; background: rgba(139, 92, 246, 0.15); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.3);">A</span>
                                 }
                             </div>
                         </div>
@@ -239,15 +239,15 @@
         }
 
         @* ===== FOOTER ===== *@
-        <footer style="@(_isFullscreen ? "position: absolute; bottom: 16px; left: 0; right: 0;" : "grid-column: 1 / -1; padding-top: 16px; border-top: 1px solid #1f2937;") display: flex; justify-content: center; align-items: center; gap: @(isMobile ? "8px" : "32px"); @(isMobile && !_isFullscreen ? "flex-direction: column;" : "")">
+        <footer style="@(_isFullscreen ? "position: absolute; bottom: 21px; left: 0; right: 0;" : "grid-column: 1 / -1; padding-top: 21px; border-top: 1px solid #1f2937;") display: flex; justify-content: center; align-items: center; gap: @(isMobile ? "8px" : "42px"); @(isMobile && !_isFullscreen ? "flex-direction: column;" : "")">
             @if (!_isFullscreen)
             {
-                <span style="font-size: @(isMobile ? "11px" : "13px"); color: #6b7280;">Clique para tela cheia</span>
+                <span style="font-size: @(isMobile ? "11px" : "17px"); color: #6b7280;">Clique para tela cheia</span>
             }
-            <div style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+            <div style="display: flex; align-items: center; gap: 10px; font-size: @(isMobile ? "13px" : "17px");">
                 @if (_isReconnecting)
                 {
-                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Style="width: 16px; height: 16px;" />
+                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Style="@($"width: {(isMobile ? "16px" : "21px")}; height: {(isMobile ? "16px" : "21px")};")" />
                     <span style="color: #eab308;">Reconectando...</span>
                 }
                 else if (_isDisconnected)
@@ -261,7 +261,7 @@
             </div>
             @if (_isFullscreen)
             {
-                <span style="font-size: 11px; color: #6b7280;">ESC para sair</span>
+                <span style="font-size: @(isMobile ? "11px" : "14px"); color: #6b7280;">ESC para sair</span>
             }
         </footer>
     }
@@ -304,6 +304,7 @@
     private int _totalAddons;
     private string? _prizeStructure;
     private Guid _leagueId;
+    private bool _usePrizeTable;
 
     // Timer state
     private int _secondsRemaining;
@@ -355,6 +356,7 @@
                 _isPaused = detail.Status == TournamentStatus.Paused;
                 _prizeStructure = detail.PrizeStructure;
                 _leagueId = detail.LeagueId;
+                _usePrizeTable = detail.UsePrizeTable;
                 _currentLevel = detail.CurrentLevel;
                 _secondsRemaining = detail.TimeRemainingSeconds ?? 0;
 
@@ -421,7 +423,7 @@
     {
         try
         {
-            var result = await PrizeTableService.CalculatePrizeDistributionAsync(_leagueId, _prizePool, _prizeStructure);
+            var result = await PrizeTableService.CalculatePrizeDistributionAsync(_leagueId, _prizePool, _prizeStructure, _usePrizeTable);
             _prizeDistribution = result.Allocations.Select(a => new PrizeInfo { Position = a.Position, Amount = a.Amount, Percentage = _prizePool > 0 ? (a.Amount / _prizePool) * 100 : null }).ToList();
         }
         catch
@@ -529,8 +531,10 @@
         {
             try
             {
+                Console.WriteLine($"[Timer] NivelAlterado event received: {System.Text.Json.JsonSerializer.Serialize(data)}");
                 var json = System.Text.Json.JsonSerializer.Serialize(data);
                 var levelData = System.Text.Json.JsonSerializer.Deserialize<LevelChangedData>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                Console.WriteLine($"[Timer] NivelAlterado deserialized: NewLevel={levelData?.NewLevel?.Order}, IsBreak={levelData?.NewLevel?.IsBreak}");
                 if (levelData?.NewLevel != null)
                 {
                     _currentLevel = levelData.NewLevel.Order;
@@ -539,17 +543,28 @@
                     _ante = levelData.NewLevel.Ante;
                     _isBreak = levelData.NewLevel.IsBreak;
                     _breakDescription = levelData.NewLevel.BreakDescription;
-                    _nextLevel = levelData.NextLevel;
+                    _nextLevel = levelData.NextLevel != null
+                        ? new BlindLevelDto(levelData.NextLevel.Id, levelData.NextLevel.Order, levelData.NextLevel.SmallBlind, levelData.NextLevel.BigBlind, levelData.NextLevel.Ante, levelData.NextLevel.DurationMinutes, levelData.NextLevel.IsBreak, levelData.NextLevel.BreakDescription)
+                        : null;
+                    Console.WriteLine($"[Timer] NivelAlterado updated state: Level={_currentLevel}, IsBreak={_isBreak}, SB={_smallBlind}, BB={_bigBlind}");
                     await PlayLevelChangeSound();
                     await InvokeAsync(StateHasChanged);
                 }
+                else
+                {
+                    Console.WriteLine("[Timer] NivelAlterado: NewLevel is null after deserialization!");
+                }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Timer] NivelAlterado ERROR: {ex.GetType().Name}: {ex.Message}");
+            }
         });
 
-        _pausedHandler = _hubConnection.On("TorneioPausado", async () =>
+        _pausedHandler = _hubConnection.On<int>("TorneioPausado", async (timeRemainingSeconds) =>
         {
             _isPaused = true;
+            _secondsRemaining = timeRemainingSeconds;
             await InvokeAsync(StateHasChanged);
         });
 
@@ -754,6 +769,7 @@
     private class PrizeInfo { public int Position { get; set; } public decimal Amount { get; set; } public decimal? Percentage { get; set; } }
     private class PlayerInfo { public Guid Id { get; set; } public string Name { get; set; } = ""; public string? Nickname { get; set; } public int RebuyCount { get; set; } public bool HasAddon { get; set; } public bool IsEliminated { get; set; } public int? Position { get; set; } }
     private class TimerTickData { public int SecondsRemaining { get; set; } public int CurrentLevel { get; set; } public decimal SmallBlind { get; set; } public decimal BigBlind { get; set; } public decimal Ante { get; set; } public bool IsBreak { get; set; } public string? BreakDescription { get; set; } }
-    private class LevelChangedData { public BlindLevelDto? NewLevel { get; set; } public BlindLevelDto? NextLevel { get; set; } }
+    private class LevelChangedData { public BlindLevelInfo? NewLevel { get; set; } public BlindLevelInfo? NextLevel { get; set; } }
+    private class BlindLevelInfo { public Guid Id { get; set; } public int Order { get; set; } public int SmallBlind { get; set; } public int BigBlind { get; set; } public int Ante { get; set; } public int DurationMinutes { get; set; } public bool IsBreak { get; set; } public string? BreakDescription { get; set; } }
     private class PrizePoolData { public decimal PrizePool { get; set; } public int TotalRebuys { get; set; } public int TotalAddons { get; set; } }
 }

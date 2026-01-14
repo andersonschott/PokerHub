@@ -310,12 +310,22 @@ public class TournamentTimerService : BackgroundService
 
     #region Public methods for manual control
 
-    public void PauseTournament(Guid tournamentId)
+    public async Task PauseTournamentAsync(Guid tournamentId)
     {
         if (_activeTimers.TryGetValue(tournamentId, out var state))
         {
+            // Set paused FIRST to stop the tick loop immediately
+            // This prevents race condition where tick loop persists a "round" value
             state.IsPaused = true;
-            _ = TorneioHub.BroadcastTournamentPaused(_hubContext, tournamentId);
+
+            // Now persist the current time state safely
+            await PersistTimerState(tournamentId, state, CancellationToken.None);
+
+            // Broadcast with the exact time remaining so all clients sync
+            await TorneioHub.BroadcastTournamentPaused(_hubContext, tournamentId, state.TimeRemainingSeconds);
+
+            _logger.LogInformation("Tournament {TournamentId} paused at {TimeRemaining} seconds remaining",
+                tournamentId, state.TimeRemainingSeconds);
         }
     }
 
@@ -408,6 +418,15 @@ public class TournamentTimerService : BackgroundService
         {
             lockObj.Release();
         }
+    }
+
+    /// <summary>
+    /// Sync timer state after manual level revert (called after TournamentService.GoToPreviousLevelAsync)
+    /// </summary>
+    public async Task ManualGoToPreviousLevel(Guid tournamentId)
+    {
+        // Reuses same logic as ManualAdvanceLevel - reads current state from DB and broadcasts
+        await ManualAdvanceLevel(tournamentId);
     }
 
     #endregion

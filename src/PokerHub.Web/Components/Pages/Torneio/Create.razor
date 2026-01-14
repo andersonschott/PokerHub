@@ -308,7 +308,21 @@
                     </MudItem>
 
                     <MudItem xs="12">
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">Tipo de distribuição:</MudText>
+                        <MudSwitch @bind-Value="_usePrizeTable" Label="Usar tabela de premiacao da liga (prioritario)" Color="Color.Primary" />
+                        @if (_usePrizeTable)
+                        {
+                            <MudAlert Severity="Severity.Info" Class="mt-2">
+                                A tabela de premiacao sera aplicada automaticamente. Se nao houver tabela para o prize pool final, os percentuais abaixo serao usados como fallback.
+                            </MudAlert>
+                        }
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                            @(_usePrizeTable ? "Percentuais de fallback (usados se nao houver tabela compativel):" : "Tipo de distribuicao:")
+                        </MudText>
+                        @if (!_usePrizeTable)
+                        {
                         <MudButtonGroup Color="Color.Primary" Variant="Variant.Outlined" Class="mb-4">
                             <MudButton OnClick="@(() => _prizeDistributionType = PrizeDistributionType.Percentage)"
                                       Variant="@(_prizeDistributionType == PrizeDistributionType.Percentage ? Variant.Filled : Variant.Outlined)">
@@ -319,58 +333,59 @@
                                 Valor Fixo (R$)
                             </MudButton>
                         </MudButtonGroup>
+                        }
                     </MudItem>
 
-                    @if (_prizeDistributionType == PrizeDistributionType.Percentage)
+                    @if (_usePrizeTable || _prizeDistributionType == PrizeDistributionType.Percentage)
                     {
-                        <MudItem xs="12">
-                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
-                                Defina o percentual do prize pool para cada posição:
-                            </MudText>
-                        </MudItem>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+                            Defina o percentual do prize pool para cada posicao:
+                        </MudText>
+                    </MudItem>
 
-                        @for (var i = 0; i < _payoutStructure.Count; i++)
-                        {
-                            var index = i;
-                            <MudItem xs="12" sm="6" md="3">
-                                <MudNumericField @bind-Value="_payoutStructure[index]"
-                                                Label="@($"{index + 1}o Lugar (%)")"
-                                                Variant="Variant.Outlined"
-                                                Min="0"
-                                                Max="100"
-                                                Format="N0" />
-                            </MudItem>
-                        }
-
-                        <MudItem xs="12">
-                            <MudStack Row="true" Spacing="2">
-                                <MudButton Variant="Variant.Outlined"
-                                          Size="Size.Small"
-                                          OnClick="AddPayoutPosition"
-                                          Disabled="_payoutStructure.Count >= 10">
-                                    + Posicao
-                                </MudButton>
-                                <MudButton Variant="Variant.Outlined"
-                                          Size="Size.Small"
-                                          Color="Color.Error"
-                                          OnClick="RemovePayoutPosition"
-                                          Disabled="_payoutStructure.Count <= 1">
-                                    - Posicao
-                                </MudButton>
-                            </MudStack>
-                        </MudItem>
-
-                        <MudItem xs="12">
-                            @{
-                                var total = _payoutStructure.Sum();
-                                var isValid = Math.Abs(total - 100) < 1;
-                            }
-                            <MudAlert Severity="@(isValid ? Severity.Success : Severity.Warning)">
-                                Total: @total% @(isValid ? "(OK)" : "- deve somar 100%")
-                            </MudAlert>
+                    @for (var i = 0; i < _payoutStructure.Count; i++)
+                    {
+                        var index = i;
+                        <MudItem xs="12" sm="6" md="3">
+                            <MudNumericField @bind-Value="_payoutStructure[index]"
+                                            Label="@($"{index + 1}o Lugar (%)")"
+                                            Variant="Variant.Outlined"
+                                            Min="0"
+                                            Max="100"
+                                            Format="N0" />
                         </MudItem>
                     }
-                    else
+
+                    <MudItem xs="12">
+                        <MudStack Row="true" Spacing="2">
+                            <MudButton Variant="Variant.Outlined"
+                                      Size="Size.Small"
+                                      OnClick="AddPayoutPosition"
+                                      Disabled="_payoutStructure.Count >= 10">
+                                + Posicao
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined"
+                                      Size="Size.Small"
+                                      Color="Color.Error"
+                                      OnClick="RemovePayoutPosition"
+                                      Disabled="_payoutStructure.Count <= 1">
+                                - Posicao
+                            </MudButton>
+                        </MudStack>
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        @{
+                            var total = _payoutStructure.Sum();
+                            var isValid = Math.Abs(total - 100) < 1;
+                        }
+                        <MudAlert Severity="@(isValid ? Severity.Success : Severity.Warning)">
+                            Total: @total% @(isValid ? "(OK)" : "- deve somar 100%")
+                        </MudAlert>
+                    </MudItem>
+                    }
+                    @if (!_usePrizeTable && _prizeDistributionType == PrizeDistributionType.Fixed)
                     {
                         <MudItem xs="12">
                             <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
@@ -455,7 +470,11 @@
                             <tr>
                                 <td><strong>Premiacao</strong></td>
                                 <td>
-                                    @if (_prizeDistributionType == PrizeDistributionType.Percentage)
+                                    @if (_usePrizeTable)
+                                    {
+                                        <text>Tabela de premiação da liga (automático)</text>
+                                    }
+                                    else if (_prizeDistributionType == PrizeDistributionType.Percentage)
                                     {
                                         @string.Join(", ", _payoutStructure.Select((p, i) => $"{i+1}o: {p}%"))
                                     }
@@ -465,23 +484,6 @@
                                     }
                                 </td>
                             </tr>
-                            @if (_usePrizeTable)
-                            {
-                                <tr>
-                                    <td><strong>Tabela de Premiacao</strong></td>
-                                    <td>
-                                        @if (_selectedPrizeTableId.HasValue)
-                                        {
-                                            var table = _prizeTables.FirstOrDefault(t => t.Id == _selectedPrizeTableId.Value);
-                                            @(table != null ? $"{table.Name} ({table.PrizePoolTotal:C})" : "Selecionada")
-                                        }
-                                        else
-                                        {
-                                            <text>Automatica (busca por prize pool)</text>
-                                        }
-                                    </td>
-                                </tr>
-                            }
                         </tbody>
                     </MudSimpleTable>
                 </MudCard>

@@ -93,12 +93,12 @@ public class TorneioHub : Hub
     }
 
     /// <summary>
-    /// Broadcast tournament paused
+    /// Broadcast tournament paused with current time remaining
     /// </summary>
-    public static async Task BroadcastTournamentPaused(IHubContext<TorneioHub> hubContext, Guid torneioId)
+    public static async Task BroadcastTournamentPaused(IHubContext<TorneioHub> hubContext, Guid torneioId, int timeRemainingSeconds)
     {
         var groupName = GetGroupName(torneioId);
-        await hubContext.Clients.Group(groupName).SendAsync("TorneioPausado");
+        await hubContext.Clients.Group(groupName).SendAsync("TorneioPausado", timeRemainingSeconds);
     }
 
     /// <summary>

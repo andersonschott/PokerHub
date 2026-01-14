@@ -8,145 +8,280 @@
 @inject IDialogService DialogService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
-<PageTitle>Caixinha - PokerHub</PageTitle>
+<PageTitle>Caixinha - @(_league?.Name ?? "PokerHub")</PageTitle>
 
-@if (_loading)
-{
-    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
-}
-else if (_league == null)
-{
-    <MudAlert Severity="Severity.Error">Liga nao encontrada</MudAlert>
-}
-else
-{
-    <MudContainer MaxWidth="MaxWidth.Large">
-        <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
-            <MudStack Spacing="0">
-                <MudText Typo="Typo.h5">Caixinha (Jackpot)</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">@_league.Name</MudText>
-            </MudStack>
-            <MudButton Variant="Variant.Text"
-                      Color="Color.Default"
-                      StartIcon="@Icons.Material.Filled.ArrowBack"
-                      Href="@($"/ligas/{LeagueId}")">
+<div class="jackpot-page">
+    @if (_loading)
+    {
+        <div class="loading-container">
+            <MudProgressCircular Color="Color.Warning" Size="Size.Large" Indeterminate="true" />
+            <MudText Typo="Typo.body1" Class="mt-3">Carregando caixinha...</MudText>
+        </div>
+    }
+    else if (_league == null)
+    {
+        <div class="error-container">
+            <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Large" Color="Color.Error" />
+            <MudText Typo="Typo.h6" Class="mt-3">Liga nao encontrada</MudText>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-4" Href="/">
                 Voltar
             </MudButton>
-        </MudStack>
+        </div>
+    }
+    else
+    {
+        @* ===== HEADER ===== *@
+        <div class="page-header">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                           Color="Color.Default"
+                           OnClick="@(() => Navigation.NavigateTo($"/ligas/{LeagueId}"))" />
+            <div class="page-title">
+                <h1>Caixinha</h1>
+                <span class="subtitle">@_league.Name</span>
+            </div>
+            @if (_isOrganizer)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                               Color="Color.Default"
+                               OnClick="OpenSettingsDialog"
+                               Class="desktop-only" />
+            }
+        </div>
 
-        <MudGrid>
-            <MudItem xs="12" md="4">
-                <MudCard Elevation="3" Class="jackpot-card">
-                    <MudCardContent Class="text-center">
-                        <MudIcon Icon="@Icons.Material.Filled.Savings" Size="Size.Large" Color="Color.Warning" Class="mb-2" />
-                        <MudText Typo="Typo.h6" Color="Color.Secondary">Saldo Acumulado</MudText>
-                        <MudText Typo="Typo.h3" Color="Color.Warning" Class="my-2">
-                            @_jackpotStatus?.AccumulatedPrizePool.ToString("C")
-                        </MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">
-                            Percentual configurado: @_jackpotStatus?.JackpotPercentage.ToString("F0")%
-                        </MudText>
-                    </MudCardContent>
+        @* ===== HERO CARD ===== *@
+        <div class="jackpot-hero">
+            <div class="jackpot-icon">💰</div>
+            <div class="jackpot-label">Saldo Acumulado</div>
+            <div class="jackpot-value">@_jackpotStatus?.AccumulatedPrizePool.ToString("C")</div>
+            <div class="jackpot-config">
+                <span>⚙️</span>
+                <span>Percentual:</span>
+                <span class="percent">@_jackpotStatus?.JackpotPercentage.ToString("F0")%</span>
+                <span>do prize pool</span>
+            </div>
+        </div>
+
+        @* ===== QUICK STATS ===== *@
+        <div class="quick-stats">
+            <div class="quick-stat">
+                <div class="quick-stat-value stat-positive">+@_totalEntries.ToString("C0")</div>
+                <div class="quick-stat-label">Total Entradas</div>
+            </div>
+            <div class="quick-stat">
+                <div class="quick-stat-value stat-negative">-@_totalExits.ToString("C0")</div>
+                <div class="quick-stat-label">Total Saidas</div>
+            </div>
+            <div class="quick-stat">
+                <div class="quick-stat-value">@_contributions.Count</div>
+                <div class="quick-stat-label">Torneios</div>
+            </div>
+        </div>
+
+        @* ===== TABS ===== *@
+        <div class="tabs">
+            <div class="tab @(_activeTab == 0 ? "active entries" : "")" @onclick="@(() => _activeTab = 0)">
+                <span>📈</span>
+                <span>Entradas</span>
+                <span class="tab-badge">@_contributions.Count</span>
+            </div>
+            <div class="tab @(_activeTab == 1 ? "active exits" : "")" @onclick="@(() => _activeTab = 1)">
+                <span>📉</span>
+                <span>Saidas</span>
+                <span class="tab-badge">@_usages.Count</span>
+            </div>
+        </div>
+
+        @* ===== TAB CONTENT ===== *@
+        @if (_activeTab == 0)
+        {
+            @* ENTRADAS *@
+            @if (_contributions.Count == 0)
+            {
+                <div class="empty-state">
+                    <div class="empty-icon">📈</div>
+                    <div class="empty-title">Nenhuma entrada ainda</div>
+                    <div class="empty-text">Quando torneios forem finalizados, as contribuicoes aparecerao aqui.</div>
+                </div>
+            }
+            else
+            {
+                @* Mobile: Cards *@
+                <div class="transaction-list mobile-only">
+                    @foreach (var contribution in _contributions)
+                    {
+                        <div class="transaction-item" @onclick="@(() => NavigateToTournament(contribution.TournamentId))">
+                            <div class="transaction-header">
+                                <div>
+                                    <div class="transaction-title">@contribution.TournamentName</div>
+                                    <div class="transaction-date">@contribution.TournamentDate.ToString("dd/MM/yyyy")</div>
+                                </div>
+                                <div class="transaction-amount positive">+@contribution.Amount.ToString("C")</div>
+                            </div>
+                            <div class="transaction-details">
+                                <div class="transaction-detail">
+                                    <span class="label">Prize Pool:</span>
+                                    <span>@contribution.TournamentPrizePool.ToString("C0")</span>
+                                </div>
+                                <div class="transaction-detail">
+                                    <span class="label">%:</span>
+                                    <span>@contribution.PercentageApplied.ToString("F0")%</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @* Desktop: Table *@
+                <div class="history-table desktop-only">
+                    <MudTable Items="@_contributions" Hover="true" Dense="true" Elevation="0" Class="jackpot-table">
+                        <HeaderContent>
+                            <MudTh>Torneio</MudTh>
+                            <MudTh Style="text-align: right;">Prize Pool</MudTh>
+                            <MudTh Style="text-align: center;">%</MudTh>
+                            <MudTh Style="text-align: right;">Valor</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Torneio">
+                                <div>
+                                    <MudLink Href="@($"/torneio/{context.TournamentId}")" Color="Color.Success">
+                                        @context.TournamentName
+                                    </MudLink>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @context.TournamentDate.ToString("dd/MM/yyyy")
+                                    </MudText>
+                                </div>
+                            </MudTd>
+                            <MudTd DataLabel="Prize Pool" Style="text-align: right;">
+                                <span class="mono-font">@context.TournamentPrizePool.ToString("C")</span>
+                            </MudTd>
+                            <MudTd DataLabel="%" Style="text-align: center;">
+                                <span class="mono-font">@context.PercentageApplied.ToString("F0")%</span>
+                            </MudTd>
+                            <MudTd DataLabel="Valor" Style="text-align: right;">
+                                <span class="mono-font positive">+@context.Amount.ToString("C")</span>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </div>
+            }
+        }
+        else
+        {
+            @* SAIDAS *@
+            @if (_usages.Count == 0)
+            {
+                <div class="empty-state">
+                    <div class="empty-icon">📉</div>
+                    <div class="empty-title">Nenhuma saida ainda</div>
+                    <div class="empty-text">Quando a caixinha for utilizada, os registros aparecerao aqui.</div>
+                </div>
+            }
+            else
+            {
+                @* Mobile: Cards *@
+                <div class="transaction-list mobile-only">
+                    @foreach (var usage in _usages)
+                    {
+                        <div class="exit-item">
+                            <div class="transaction-header">
+                                <div>
+                                    <div class="transaction-title">@(usage.Description ?? "Uso da Caixinha")</div>
+                                    <div class="transaction-date">@usage.CreatedAt.ToString("dd/MM/yyyy")</div>
+                                </div>
+                                <div class="transaction-amount negative">-@usage.Amount.ToString("C")</div>
+                            </div>
+                            <div class="transaction-details">
+                                <div class="transaction-detail">
+                                    <span class="label">Saldo apos:</span>
+                                    <span>@usage.BalanceAfter.ToString("C")</span>
+                                </div>
+                            </div>
+                            <div class="exit-reason @GetUsageTypeClass(usage.Description)">
+                                @GetUsageTypeIcon(usage.Description) @GetUsageTypeLabel(usage.Description)
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @* Desktop: Table *@
+                <div class="history-table desktop-only">
+                    <MudTable Items="@_usages" Hover="true" Dense="true" Elevation="0" Class="jackpot-table">
+                        <HeaderContent>
+                            <MudTh>Descricao</MudTh>
+                            <MudTh>Data</MudTh>
+                            <MudTh>Tipo</MudTh>
+                            <MudTh Style="text-align: right;">Valor</MudTh>
+                            <MudTh Style="text-align: right;">Saldo Apos</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Descricao">
+                                <MudText Typo="Typo.body2">@(context.Description ?? "Uso da Caixinha")</MudText>
+                            </MudTd>
+                            <MudTd DataLabel="Data">
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    @context.CreatedAt.ToString("dd/MM/yyyy HH:mm")
+                                </MudText>
+                            </MudTd>
+                            <MudTd DataLabel="Tipo">
+                                <MudChip T="string" Size="Size.Small"
+                                         Color="@GetUsageTypeColor(context.Description)"
+                                         Variant="Variant.Filled">
+                                    @GetUsageTypeLabel(context.Description)
+                                </MudChip>
+                            </MudTd>
+                            <MudTd DataLabel="Valor" Style="text-align: right;">
+                                <span class="mono-font negative">-@context.Amount.ToString("C")</span>
+                            </MudTd>
+                            <MudTd DataLabel="Saldo Apos" Style="text-align: right;">
+                                <span class="mono-font">@context.BalanceAfter.ToString("C")</span>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </div>
+            }
+
+            @* Action Buttons (Organizador) *@
+            @if (_isOrganizer && _jackpotStatus?.AccumulatedPrizePool > 0)
+            {
+                <div class="action-buttons">
+                    <MudButton Variant="Variant.Filled"
+                               Class="action-btn-tournament"
+                               StartIcon="@Icons.Material.Filled.EmojiEvents"
+                               OnClick="OpenUseTournamentDialog"
+                               FullWidth="true">
+                        Usar em Torneio
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Default"
+                               StartIcon="@Icons.Material.Filled.ShoppingCart"
+                               OnClick="OpenExpenseDialog"
+                               FullWidth="true">
+                        Registrar Gasto
+                    </MudButton>
+                </div>
+            }
+        }
+
+        @* ===== INFO CARD ===== *@
+        <div class="info-card">
+            <div class="info-icon">ℹ️</div>
+            <div class="info-content">
+                <div class="info-title">Como funciona?</div>
+                <div class="info-text">
+                    A caixinha acumula @_jackpotStatus?.JackpotPercentage.ToString("F0")% de cada prize pool.
                     @if (_isOrganizer)
                     {
-                        <MudCardActions Class="justify-center pb-4">
-                            <MudButton Variant="Variant.Filled"
-                                      Color="Color.Warning"
-                                      StartIcon="@Icons.Material.Filled.MonetizationOn"
-                                      OnClick="OpenUseJackpotDialog"
-                                      Disabled="@(_jackpotStatus?.AccumulatedPrizePool <= 0)">
-                                Usar Caixinha
-                            </MudButton>
-                        </MudCardActions>
+                        <text>Use para torneios especiais ou gastos da liga (baralhos, fichas, sistema, etc).</text>
                     }
-                </MudCard>
-            </MudItem>
-
-            <MudItem xs="12" md="8">
-                <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" PanelClass="pa-4">
-                    <MudTabPanel Text="Entradas" Icon="@Icons.Material.Filled.TrendingUp" BadgeData="@_contributions.Count" BadgeColor="Color.Success">
-                        @if (_contributions.Count == 0)
-                        {
-                            <MudAlert Severity="Severity.Info" Dense="true">
-                                Nenhuma contribuicao registrada ainda. Quando torneios forem finalizados com jackpot configurado, as contribuicoes aparecerao aqui.
-                            </MudAlert>
-                        }
-                        else
-                        {
-                            <MudTable Items="_contributions" Dense="true" Hover="true">
-                                <HeaderContent>
-                                    <MudTh>Data</MudTh>
-                                    <MudTh>Torneio</MudTh>
-                                    <MudTh Style="text-align: right;">Prize Pool</MudTh>
-                                    <MudTh Style="text-align: center;">%</MudTh>
-                                    <MudTh Style="text-align: right;">Valor</MudTh>
-                                </HeaderContent>
-                                <RowTemplate>
-                                    <MudTd DataLabel="Data">@context.TournamentDate.ToString("dd/MM/yyyy")</MudTd>
-                                    <MudTd DataLabel="Torneio">@context.TournamentName</MudTd>
-                                    <MudTd DataLabel="Prize Pool" Style="text-align: right;">@context.TournamentPrizePool.ToString("C")</MudTd>
-                                    <MudTd DataLabel="%" Style="text-align: center;">@context.PercentageApplied.ToString("F0")%</MudTd>
-                                    <MudTd DataLabel="Valor" Style="text-align: right;">
-                                        <MudText Color="Color.Success">+@context.Amount.ToString("C")</MudText>
-                                    </MudTd>
-                                </RowTemplate>
-                            </MudTable>
-                        }
-                    </MudTabPanel>
-
-                    <MudTabPanel Text="Saidas" Icon="@Icons.Material.Filled.TrendingDown" BadgeData="@_usages.Count" BadgeColor="Color.Error">
-                        @if (_usages.Count == 0)
-                        {
-                            <MudAlert Severity="Severity.Info" Dense="true">
-                                Nenhum uso registrado ainda. Quando o organizador utilizar a caixinha, os registros aparecerao aqui.
-                            </MudAlert>
-                        }
-                        else
-                        {
-                            <MudTable Items="_usages" Dense="true" Hover="true">
-                                <HeaderContent>
-                                    <MudTh>Data</MudTh>
-                                    <MudTh>Descricao</MudTh>
-                                    <MudTh Style="text-align: right;">Valor</MudTh>
-                                    <MudTh Style="text-align: right;">Saldo Apos</MudTh>
-                                </HeaderContent>
-                                <RowTemplate>
-                                    <MudTd DataLabel="Data">@context.CreatedAt.ToString("dd/MM/yyyy HH:mm")</MudTd>
-                                    <MudTd DataLabel="Descricao">@context.Description</MudTd>
-                                    <MudTd DataLabel="Valor" Style="text-align: right;">
-                                        <MudText Color="Color.Error">-@context.Amount.ToString("C")</MudText>
-                                    </MudTd>
-                                    <MudTd DataLabel="Saldo Apos" Style="text-align: right;">
-                                        @context.BalanceAfter.ToString("C")
-                                    </MudTd>
-                                </RowTemplate>
-                            </MudTable>
-                        }
-                    </MudTabPanel>
-                </MudTabs>
-            </MudItem>
-        </MudGrid>
-
-        <MudPaper Elevation="2" Class="pa-4 mt-4">
-            <MudStack Row AlignItems="AlignItems.Center" Spacing="4">
-                <MudIcon Icon="@Icons.Material.Filled.Info" Color="Color.Info" />
-                <MudStack Spacing="0">
-                    <MudText Typo="Typo.body2">
-                        <strong>Como funciona:</strong> A caixinha acumula um percentual de cada torneio finalizado.
-                        O organizador pode usar o saldo acumulado para criar torneios especiais ou distribui-lo como preferir.
-                    </MudText>
-                    @if (_isOrganizer)
+                    else
                     {
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">
-                            Para alterar o percentual da caixinha, acesse as configuracoes da liga em
-                            <MudLink Href="@($"/ligas/{LeagueId}/editar")">Editar Liga</MudLink>.
-                        </MudText>
+                        <text>O organizador pode usar para torneios especiais ou gastos da liga.</text>
                     }
-                </MudStack>
-            </MudStack>
-        </MudPaper>
-    </MudContainer>
-}
+                </div>
+            </div>
+        </div>
+    }
+</div>
 
 @code {
     [Parameter] public Guid LeagueId { get; set; }
@@ -158,6 +293,9 @@ else
     private bool _loading = true;
     private bool _isOrganizer;
     private string? _currentUserId;
+    private int _activeTab = 0;
+    private decimal _totalEntries => _contributions.Sum(c => c.Amount);
+    private decimal _totalExits => _usages.Sum(u => u.Amount);
 
     protected override async Task OnInitializedAsync()
     {
@@ -175,7 +313,6 @@ else
             _league = await LeagueService.GetLeagueByIdAsync(LeagueId);
             if (_league != null)
             {
-                // Check if user is organizer
                 if (!string.IsNullOrEmpty(_currentUserId))
                 {
                     _isOrganizer = await LeagueService.IsUserOrganizerAsync(LeagueId, _currentUserId);
@@ -192,35 +329,91 @@ else
         }
     }
 
-    private async Task OpenUseJackpotDialog()
+    private void NavigateToTournament(Guid tournamentId)
+    {
+        Navigation.NavigateTo($"/torneio/{tournamentId}");
+    }
+
+    private async Task OpenUseTournamentDialog()
     {
         var parameters = new DialogParameters<UseJackpotDialog>
         {
             { x => x.MaxAmount, _jackpotStatus?.AccumulatedPrizePool ?? 0 }
         };
 
-        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small };
-        var dialog = await DialogService.ShowAsync<UseJackpotDialog>("Usar Caixinha", parameters, options);
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<UseJackpotDialog>("Usar em Torneio Especial", parameters, options);
         var result = await dialog.Result;
 
         if (result is { Canceled: false, Data: UseJackpotDto dto })
         {
-            try
-            {
-                await JackpotService.UseJackpotAsync(LeagueId, dto);
-                Snackbar.Add($"Caixinha utilizada: {dto.Amount:C}", Severity.Success);
-                await LoadData();
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
-            }
+            await ProcessUsage(dto);
         }
     }
-}
 
-<style>
-    .jackpot-card {
-        border-top: 4px solid var(--mud-palette-warning);
+    private async Task OpenExpenseDialog()
+    {
+        var parameters = new DialogParameters<UseJackpotDialog>
+        {
+            { x => x.MaxAmount, _jackpotStatus?.AccumulatedPrizePool ?? 0 }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<UseJackpotDialog>("Registrar Gasto da Liga", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is { Canceled: false, Data: UseJackpotDto dto })
+        {
+            await ProcessUsage(dto);
+        }
     }
-</style>
+
+    private async Task OpenSettingsDialog()
+    {
+        Snackbar.Add("Configuracoes: acesse Editar Liga para alterar o percentual", Severity.Info);
+    }
+
+    private async Task ProcessUsage(UseJackpotDto dto)
+    {
+        try
+        {
+            await JackpotService.UseJackpotAsync(LeagueId, dto);
+            Snackbar.Add($"Caixinha utilizada: {dto.Amount:C}", Severity.Success);
+            await LoadData();
+            _activeTab = 1; // Switch to exits tab
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string GetUsageTypeClass(string? description)
+    {
+        if (string.IsNullOrEmpty(description)) return "expense";
+
+        var lower = description.ToLower();
+        if (lower.Contains("torneio") || lower.Contains("prize") || lower.Contains("especial"))
+            return "tournament";
+
+        return "expense";
+    }
+
+    private string GetUsageTypeIcon(string? description)
+    {
+        var type = GetUsageTypeClass(description);
+        return type == "tournament" ? "🏆" : "🛒";
+    }
+
+    private string GetUsageTypeLabel(string? description)
+    {
+        var type = GetUsageTypeClass(description);
+        return type == "tournament" ? "Torneio Especial" : "Gasto da Liga";
+    }
+
+    private Color GetUsageTypeColor(string? description)
+    {
+        var type = GetUsageTypeClass(description);
+        return type == "tournament" ? Color.Secondary : Color.Warning;
+    }
+}

@@ -19,6 +19,7 @@ public record TournamentDetailDto(
     decimal? AddonValue,
     int? AddonStack,
     string? PrizeStructure,
+    bool UsePrizeTable,
     string InviteCode,
     int? AllowCheckInUntilLevel,
     TournamentStatus Status,

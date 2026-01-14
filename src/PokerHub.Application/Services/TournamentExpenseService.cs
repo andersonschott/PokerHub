@@ -165,14 +165,19 @@ public class TournamentExpenseService : ITournamentExpenseService
         if (sharePlayerIds.Any(id => !checkedInPlayerIds.Contains(id)))
             throw new InvalidOperationException("Todos os jogadores da divisao devem estar com check-in no torneio");
 
-        // Update expense
+        // Update expense basic fields
         expense.PaidByPlayerId = dto.PaidByPlayerId;
         expense.Description = dto.Description;
         expense.TotalAmount = dto.TotalAmount;
         expense.SplitType = dto.SplitType;
 
-        // Remove old shares and add new ones
-        _context.TournamentExpenseShares.RemoveRange(expense.Shares);
+        // Delete old shares directly from database
+        await _context.TournamentExpenseShares
+            .Where(s => s.ExpenseId == expenseId)
+            .ExecuteDeleteAsync();
+
+        // Create new shares list
+        var newShares = new List<TournamentExpenseShare>();
 
         if (dto.SplitType == ExpenseSplitType.Equal)
         {
@@ -189,10 +194,10 @@ public class TournamentExpenseService : ITournamentExpenseService
                     isFirst = false;
                 }
 
-                expense.Shares.Add(new TournamentExpenseShare
+                newShares.Add(new TournamentExpenseShare
                 {
                     Id = Guid.NewGuid(),
-                    ExpenseId = expense.Id,
+                    ExpenseId = expenseId,
                     PlayerId = shareInput.PlayerId,
                     Amount = amount
                 });
@@ -206,15 +211,18 @@ public class TournamentExpenseService : ITournamentExpenseService
 
             foreach (var shareInput in dto.Shares)
             {
-                expense.Shares.Add(new TournamentExpenseShare
+                newShares.Add(new TournamentExpenseShare
                 {
                     Id = Guid.NewGuid(),
-                    ExpenseId = expense.Id,
+                    ExpenseId = expenseId,
                     PlayerId = shareInput.PlayerId,
                     Amount = shareInput.Amount
                 });
             }
         }
+
+        // Add new shares
+        _context.TournamentExpenseShares.AddRange(newShares);
 
         await _context.SaveChangesAsync();
         return true;

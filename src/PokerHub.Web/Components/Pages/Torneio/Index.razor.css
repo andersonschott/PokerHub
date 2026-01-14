@@ -1,0 +1,391 @@
+/* Torneio/Index.razor.css */
+/* Tournament List Page - Visual Identity Compliant */
+
+/* ===== PAGE CONTAINER ===== */
+.tournaments-page {
+    font-family: 'Space Grotesk', sans-serif;
+    color: var(--mud-palette-text-primary);
+}
+
+/* ===== LOADING / EMPTY STATES ===== */
+.loading-container,
+.empty-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    text-align: center;
+    padding: 24px;
+}
+
+/* ===== PAGE HEADER ===== */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.page-title {
+    font-size: 24px;
+    font-weight: 700;
+    font-family: 'Space Grotesk', sans-serif;
+}
+
+/* ===== HERO STATS ===== */
+.hero-stats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.hero-stats.desktop {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.hero-stat {
+    background: var(--mud-palette-surface);
+    border-radius: 16px;
+    padding: 16px;
+    border: 1px solid var(--mud-palette-lines-default);
+    text-align: center;
+    animation: fadeIn 0.3s ease-out backwards;
+}
+
+.hero-stat.active-stat {
+    background: linear-gradient(135deg, rgba(76, 175, 80, 0.1) 0%, var(--mud-palette-surface) 100%);
+    border-color: rgba(76, 175, 80, 0.3);
+}
+
+.hero-stat-icon {
+    font-size: 20px;
+    margin-bottom: 4px;
+}
+
+.hero-stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 1.1;
+    color: var(--mud-palette-text-primary);
+}
+
+.hero-stat-label {
+    font-size: 11px;
+    color: var(--mud-palette-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 4px;
+}
+
+/* Hero stats animation delays */
+.hero-stat:nth-child(1) { animation-delay: 0.05s; }
+.hero-stat:nth-child(2) { animation-delay: 0.1s; }
+.hero-stat:nth-child(3) { animation-delay: 0.15s; }
+.hero-stat:nth-child(4) { animation-delay: 0.2s; }
+
+/* ===== SEGMENTED TABS ===== */
+.tab-segment-container {
+    display: flex;
+    background: var(--mud-palette-background);
+    border-radius: 12px;
+    padding: 4px;
+    gap: 4px;
+    margin-bottom: 16px;
+    border: 1px solid var(--mud-palette-lines-default);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.tab-segment {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 12px;
+    border: none;
+    background: transparent;
+    border-radius: 10px;
+    color: var(--mud-palette-text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    font-family: 'Space Grotesk', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.tab-segment:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.tab-segment.active {
+    background: var(--mud-palette-primary);
+    color: white;
+}
+
+.tab-segment-badge {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+}
+
+.tab-segment.active .tab-segment-badge {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* ===== TOURNAMENT GRID (DESKTOP) ===== */
+.tournament-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+/* ===== TOURNAMENT CARD ===== */
+.tournament-card {
+    background: var(--mud-palette-surface);
+    border-radius: 14px;
+    padding: 16px;
+    border: 1px solid var(--mud-palette-lines-default);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    animation: fadeIn 0.3s ease-out backwards;
+    transition: all 0.2s ease;
+}
+
+.tournament-card:hover {
+    border-color: var(--mud-palette-primary);
+    transform: translateY(-2px);
+}
+
+.tournament-card.status-inprogress {
+    border-left: 4px solid var(--mud-palette-success);
+}
+
+.tournament-card.status-paused {
+    border-left: 4px solid var(--mud-palette-warning);
+}
+
+.tournament-card.status-scheduled {
+    border-left: 4px solid var(--mud-palette-info);
+}
+
+.tournament-card.status-finished {
+    border-left: 4px solid var(--mud-palette-text-disabled);
+}
+
+.tournament-card.status-cancelled {
+    border-left: 4px solid var(--mud-palette-error);
+}
+
+/* Card animation delays */
+.tournament-card:nth-child(1) { animation-delay: 0.1s; }
+.tournament-card:nth-child(2) { animation-delay: 0.15s; }
+.tournament-card:nth-child(3) { animation-delay: 0.2s; }
+.tournament-card:nth-child(4) { animation-delay: 0.25s; }
+.tournament-card:nth-child(5) { animation-delay: 0.3s; }
+.tournament-card:nth-child(6) { animation-delay: 0.35s; }
+
+.tournament-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.status-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-chip.scheduled {
+    background: rgba(33, 150, 243, 0.15);
+    color: #2196f3;
+}
+
+.status-chip.inprogress {
+    background: rgba(76, 175, 80, 0.15);
+    color: #4caf50;
+}
+
+.status-chip.paused {
+    background: rgba(255, 152, 0, 0.15);
+    color: #ff9800;
+}
+
+.status-chip.finished {
+    background: rgba(158, 158, 158, 0.15);
+    color: #9e9e9e;
+}
+
+.status-chip.cancelled {
+    background: rgba(244, 67, 54, 0.15);
+    color: #f44336;
+}
+
+.tournament-card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--mud-palette-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tournament-card-date {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--mud-palette-text-secondary);
+}
+
+.tournament-card-stats {
+    display: flex;
+    gap: 10px;
+}
+
+.stat-box {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+}
+
+.stat-box-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--mud-palette-text-primary);
+}
+
+.stat-box-label {
+    font-size: 10px;
+    color: var(--mud-palette-text-secondary);
+    text-transform: uppercase;
+    margin-top: 2px;
+}
+
+.tournament-card-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+    padding-top: 8px;
+    border-top: 1px solid var(--mud-palette-lines-default);
+}
+
+/* ===== MOBILE LIST VIEW ===== */
+.tournament-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.tournament-list-item {
+    background: var(--mud-palette-surface);
+    border-radius: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--mud-palette-lines-default);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    animation: fadeIn 0.3s ease-out backwards;
+}
+
+.tournament-list-item:hover {
+    border-color: var(--mud-palette-primary);
+}
+
+.tournament-list-item:active {
+    transform: scale(0.98);
+}
+
+/* List item animation delays */
+.tournament-list-item:nth-child(1) { animation-delay: 0.05s; }
+.tournament-list-item:nth-child(2) { animation-delay: 0.1s; }
+.tournament-list-item:nth-child(3) { animation-delay: 0.15s; }
+.tournament-list-item:nth-child(4) { animation-delay: 0.2s; }
+.tournament-list-item:nth-child(5) { animation-delay: 0.25s; }
+.tournament-list-item:nth-child(6) { animation-delay: 0.3s; }
+
+.tournament-list-status {
+    width: 4px;
+    height: 40px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.tournament-list-status.scheduled { background: var(--mud-palette-info); }
+.tournament-list-status.inprogress { background: var(--mud-palette-success); }
+.tournament-list-status.paused { background: var(--mud-palette-warning); }
+.tournament-list-status.finished { background: var(--mud-palette-text-disabled); }
+.tournament-list-status.cancelled { background: var(--mud-palette-error); }
+
+.tournament-list-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.tournament-list-name {
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tournament-list-meta {
+    display: flex;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--mud-palette-text-secondary);
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.tournament-list-meta span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.tournament-list-chevron {
+    flex-shrink: 0;
+    color: var(--mud-palette-text-secondary);
+}
+
+/* ===== UTILITY CLASSES ===== */
+.mono-font {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

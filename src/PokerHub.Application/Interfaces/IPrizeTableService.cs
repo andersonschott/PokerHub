@@ -10,5 +10,5 @@ public interface IPrizeTableService
     Task<LeaguePrizeTableDto> CreatePrizeTableAsync(Guid leagueId, CreatePrizeTableDto dto);
     Task<LeaguePrizeTableDto?> UpdatePrizeTableAsync(Guid prizeTableId, UpdatePrizeTableDto dto);
     Task<bool> DeletePrizeTableAsync(Guid prizeTableId);
-    Task<PrizeDistributionResultDto> CalculatePrizeDistributionAsync(Guid leagueId, decimal prizePoolTotal, string? fallbackPercentages);
+    Task<PrizeDistributionResultDto> CalculatePrizeDistributionAsync(Guid leagueId, decimal prizePoolTotal, string? fallbackPercentages, bool usePrizeTable = true);
 }

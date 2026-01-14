@@ -3,11 +3,12 @@
 /* ===== CONTAINER PRINCIPAL ===== */
 .timer-container {
     display: grid;
-    grid-template-columns: 300px 1fr 340px;
+    /* Painéis responsivos - tamanhos aumentados 130% para TV */
+    grid-template-columns: clamp(24rem, 24vw, 55rem) 1fr clamp(28rem, 27vw, 60rem);
     grid-template-rows: auto 1fr auto;
     min-height: 100vh;
-    padding: 24px;
-    gap: 24px;
+    padding: 2rem;
+    gap: 2rem;
     background: linear-gradient(135deg, #0a0f1a 0%, #0d1420 50%, #101820 100%);
     color: #ffffff;
     font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
@@ -31,7 +32,7 @@
     height: 100vh;
     z-index: 99999;
     margin: 0;
-    padding: 24px;
+    padding: 1.5rem;
 }
 
 .timer-container.fullscreen .timer-header,
@@ -119,28 +120,28 @@
 }
 
 .level-display {
-    font-size: 28px;
+    font-size: 2.25rem;
     font-weight: 700;
     color: #22c55e;
     text-transform: uppercase;
-    letter-spacing: 6px;
-    text-shadow: 0 0 40px rgba(34, 197, 94, 0.4);
+    letter-spacing: 0.5rem;
+    text-shadow: 0 0 3.25rem rgba(34, 197, 94, 0.4);
 }
 
 .level-display.break {
     color: #eab308;
-    text-shadow: 0 0 40px rgba(234, 179, 8, 0.4);
+    text-shadow: 0 0 52px rgba(234, 179, 8, 0.4);
 }
 
 .blinds-display {
     display: flex;
     align-items: baseline;
-    gap: 8px;
+    gap: 10px;
 }
 
 .blind-value {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 110px;
+    font-size: 8.9375rem;
     font-weight: 800;
     line-height: 1;
     background: linear-gradient(180deg, #ffffff 0%, #a0a0a0 100%);
@@ -151,76 +152,76 @@
 
 .blind-separator {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 70px;
+    font-size: 5.6875rem;
     font-weight: 300;
     color: #6b7280;
-    margin: 0 -8px;
+    margin: 0 -0.625rem;
 }
 
 .ante-display {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 24px;
+    font-size: 1.9375rem;
     color: #9ca3af;
-    margin-top: 4px;
+    margin-top: 0.3125rem;
 }
 
 .timer-box {
     background: #111827;
-    border: 3px solid #22c55e;
-    border-radius: 24px;
-    padding: 28px 56px;
-    margin: 20px 0;
+    border: 0.25rem solid #22c55e;
+    border-radius: 1.9375rem;
+    padding: 2.25rem 4.5625rem;
+    margin: 1.625rem 0;
 }
 
 .timer-countdown {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 140px;
+    font-size: 11.375rem;
     font-weight: 800;
-    letter-spacing: 8px;
+    letter-spacing: 0.625rem;
     line-height: 1;
-    text-shadow: 0 0 60px rgba(255, 255, 255, 0.2);
+    text-shadow: 0 0 4.875rem rgba(255, 255, 255, 0.2);
 }
 
 .next-level-box {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
-    padding: 14px 28px;
+    gap: 0.3125rem;
+    padding: 1.125rem 2.25rem;
     background: #1a2332;
-    border-radius: 16px;
+    border-radius: 1.3125rem;
     border: 1px solid #1f2937;
 }
 
 .finished-title {
-    font-size: 48px;
+    font-size: 3.875rem;
     font-weight: 800;
     color: #ffd700;
-    text-shadow: 0 0 40px rgba(255, 215, 0, 0.4);
+    text-shadow: 0 0 3.25rem rgba(255, 215, 0, 0.4);
 }
 
 /* ===== RESPONSIVO - TABLET (< 1200px) ===== */
 @media (max-width: 1200px) {
     .timer-container {
-        grid-template-columns: 260px 1fr 280px;
-        padding: 16px;
-        gap: 16px;
+        /* clamp() já escala automaticamente, só ajustamos padding/gap */
+        padding: 1rem;
+        gap: 1rem;
     }
 
     .blind-value {
-        font-size: 80px;
+        font-size: 6.25rem;
     }
 
     .blind-separator {
-        font-size: 50px;
+        font-size: 4rem;
     }
 
     .timer-countdown {
-        font-size: 100px;
+        font-size: 8rem;
     }
 
     .timer-box {
-        padding: 20px 40px;
+        padding: 1.5rem 3rem;
     }
 }
 
@@ -229,8 +230,8 @@
     .timer-container {
         grid-template-columns: 1fr;
         grid-template-rows: auto auto 1fr auto;
-        padding: 16px;
-        gap: 12px;
+        padding: 1rem;
+        gap: 0.75rem;
     }
 
     .prizes-panel,
@@ -244,116 +245,116 @@
 
     .timer-header {
         flex-direction: column;
-        gap: 8px;
+        gap: 0.5rem;
         align-items: flex-start;
     }
 
     .timer-header h1 {
-        font-size: 18px;
+        font-size: 1.125rem;
     }
 
     .timer-footer {
         flex-direction: column;
-        gap: 8px;
+        gap: 0.5rem;
     }
 
     .level-display {
-        font-size: 20px;
-        letter-spacing: 4px;
+        font-size: 1.25rem;
+        letter-spacing: 0.25rem;
     }
 
     .blind-value {
-        font-size: 56px;
+        font-size: 3.5rem;
     }
 
     .blind-separator {
-        font-size: 36px;
+        font-size: 2.25rem;
     }
 
     .ante-display {
-        font-size: 18px;
+        font-size: 1.125rem;
     }
 
     .timer-box {
-        padding: 16px 32px;
-        margin: 12px 0;
+        padding: 1rem 2rem;
+        margin: 0.75rem 0;
     }
 
     .timer-countdown {
-        font-size: 64px;
-        letter-spacing: 4px;
+        font-size: 4rem;
+        letter-spacing: 0.25rem;
     }
 
     .next-level-box {
-        padding: 10px 20px;
+        padding: 0.625rem 1.25rem;
     }
 
     .finished-title {
-        font-size: 32px;
+        font-size: 2rem;
     }
 }
 
 /* ===== RESPONSIVO - MOBILE PEQUENO (< 480px) ===== */
 @media (max-width: 480px) {
     .timer-container {
-        padding: 12px;
-        gap: 10px;
+        padding: 0.75rem;
+        gap: 0.625rem;
     }
 
     .stats-row-mobile {
         grid-template-columns: repeat(2, 1fr);
-        gap: 8px;
+        gap: 0.5rem;
     }
 
     .stat-pill {
-        padding: 6px 4px;
+        padding: 0.375rem 0.25rem;
     }
 
     .stat-value {
-        font-size: 14px;
+        font-size: 0.875rem;
     }
 
     .level-display {
-        font-size: 16px;
-        letter-spacing: 3px;
+        font-size: 1rem;
+        letter-spacing: 0.1875rem;
     }
 
     .blind-value {
-        font-size: 40px;
+        font-size: 2.5rem;
     }
 
     .blind-separator {
-        font-size: 28px;
+        font-size: 1.75rem;
     }
 
     .ante-display {
-        font-size: 14px;
+        font-size: 0.875rem;
     }
 
     .timer-box {
-        padding: 12px 20px;
-        border-width: 2px;
-        border-radius: 16px;
+        padding: 0.75rem 1.25rem;
+        border-width: 0.125rem;
+        border-radius: 1rem;
     }
 
     .timer-countdown {
-        font-size: 48px;
-        letter-spacing: 2px;
+        font-size: 3rem;
+        letter-spacing: 0.125rem;
     }
 
     .next-level-box {
-        padding: 8px 16px;
-        border-radius: 12px;
+        padding: 0.5rem 1rem;
+        border-radius: 0.75rem;
     }
 
     .finished-title {
-        font-size: 24px;
+        font-size: 1.5rem;
     }
 }
 
 /* ===== FULLSCREEN RESPONSIVO ===== */
 .timer-container.fullscreen {
-    grid-template-columns: 300px 1fr 340px;
+    grid-template-columns: clamp(22rem, 20vw, 50rem) 1fr clamp(25rem, 22vw, 55rem);
     grid-template-rows: 1fr;
 }
 
@@ -361,7 +362,7 @@
     .timer-container.fullscreen {
         grid-template-columns: 1fr;
         grid-template-rows: auto 1fr;
-        padding: 12px;
+        padding: 0.75rem;
     }
 
     .timer-container.fullscreen .stats-row-mobile {

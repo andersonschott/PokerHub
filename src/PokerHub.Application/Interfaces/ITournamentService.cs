@@ -17,6 +17,7 @@ public interface ITournamentService
     Task<bool> PauseTournamentAsync(Guid tournamentId);
     Task<bool> ResumeTournamentAsync(Guid tournamentId);
     Task<bool> FinishTournamentAsync(Guid tournamentId, IList<(Guid playerId, int position)> positions);
+    Task<bool> FinishTournamentWithCustomPrizesAsync(Guid tournamentId, ConfirmedPrizeDistributionDto distribution);
     Task<bool> CancelTournamentAsync(Guid tournamentId);
 
     // Player Management
@@ -33,10 +34,12 @@ public interface ITournamentService
 
     // Elimination
     Task<bool> EliminatePlayerAsync(Guid tournamentId, Guid playerId, Guid? eliminatedByPlayerId, int? position = null);
+    Task<bool> RestoreEliminatedPlayerAsync(Guid tournamentId, Guid playerId);
 
     // Timer State
     Task<TimerStateDto?> GetTimerStateAsync(Guid tournamentId);
     Task<bool> AdvanceToNextLevelAsync(Guid tournamentId);
+    Task<bool> GoToPreviousLevelAsync(Guid tournamentId);
     Task<bool> UpdateTimeRemainingAsync(Guid tournamentId, int secondsRemaining);
 
     // Blind Templates

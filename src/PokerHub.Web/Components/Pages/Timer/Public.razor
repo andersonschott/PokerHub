@@ -501,9 +501,10 @@
             }
         });
 
-        _hubConnection.On("TorneioPausado", async () =>
+        _hubConnection.On<int>("TorneioPausado", async (timeRemainingSeconds) =>
         {
             _isPaused = true;
+            _secondsRemaining = timeRemainingSeconds;
             await InvokeAsync(StateHasChanged);
         });
 
