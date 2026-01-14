@@ -7,6 +7,7 @@ public record PendingDebtDto(
     Guid TournamentId,
     string TournamentName,
     DateTime TournamentDate,
+    Guid DebtorPlayerId,
     Guid CreditorPlayerId,
     string CreditorPlayerName,
     string? CreditorPixKey,

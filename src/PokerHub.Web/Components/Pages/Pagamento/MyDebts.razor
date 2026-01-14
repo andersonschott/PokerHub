@@ -492,9 +492,16 @@
             _processingPaymentId = debt.PaymentId;
             try
             {
-                await PaymentService.MarkAsPaidAsync(debt.PaymentId, _currentPlayerId);
-                Snackbar.Add("Pagamento marcado como pago. Aguardando confirmacao.", Severity.Success);
-                await LoadData();
+                var success = await PaymentService.MarkAsPaidAsync(debt.PaymentId, debt.DebtorPlayerId);
+                if (success)
+                {
+                    Snackbar.Add("Pagamento marcado como pago. Aguardando confirmacao.", Severity.Success);
+                    await LoadData();
+                }
+                else
+                {
+                    Snackbar.Add("Erro ao marcar pagamento. Verifique se o status esta correto.", Severity.Error);
+                }
             }
             catch (Exception ex)
             {
@@ -509,6 +516,12 @@
 
     private async Task ConfirmPayment(PaymentDto payment)
     {
+        if (!payment.ToPlayerId.HasValue)
+        {
+            Snackbar.Add("Erro: Pagamento sem destinatario definido.", Severity.Error);
+            return;
+        }
+
         var confirm = await DialogService.ShowMessageBox(
             "Confirmar Recebimento",
             $"Voce confirma que recebeu {payment.Amount:C} de {payment.FromPlayerName}?",
@@ -519,9 +532,16 @@
             _processingPaymentId = payment.Id;
             try
             {
-                await PaymentService.ConfirmPaymentAsync(payment.Id, _currentPlayerId);
-                Snackbar.Add("Pagamento confirmado!", Severity.Success);
-                await LoadData();
+                var success = await PaymentService.ConfirmPaymentAsync(payment.Id, payment.ToPlayerId.Value);
+                if (success)
+                {
+                    Snackbar.Add("Pagamento confirmado!", Severity.Success);
+                    await LoadData();
+                }
+                else
+                {
+                    Snackbar.Add("Erro ao confirmar pagamento. Verifique se o status esta correto.", Severity.Error);
+                }
             }
             catch (Exception ex)
             {

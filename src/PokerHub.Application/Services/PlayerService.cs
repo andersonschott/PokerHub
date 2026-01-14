@@ -228,11 +228,14 @@ public class PlayerService : IPlayerService
                 p.TournamentId,
                 p.Tournament.Name,
                 p.Tournament.ScheduledDateTime,
+                p.FromPlayerId,
                 p.ToPlayerId!.Value,
                 p.ToPlayer!.Name,
                 p.ToPlayer!.PixKey,
                 p.Amount,
-                (DateTime.UtcNow - p.CreatedAt).Days
+                (DateTime.UtcNow - p.CreatedAt).Days,
+                p.Type,
+                p.Description
             ))
             .ToListAsync();
 

@@ -52,6 +52,7 @@ public class PaymentService : IPaymentService
                 p.TournamentId,
                 p.Tournament.Name,
                 p.Tournament.ScheduledDateTime,
+                p.FromPlayerId,
                 p.ToPlayerId!.Value,
                 p.ToPlayer!.Name,
                 p.ToPlayer!.PixKey,
