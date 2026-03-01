@@ -1,0 +1,16 @@
+@* Shared error state component *@
+
+<MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="error-state">
+    <MudText>@Message</MudText>
+    @if (OnRetry.HasDelegate)
+    {
+        <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="OnRetry" Class="mt-2">
+            Tentar novamente
+        </MudButton>
+    }
+</MudAlert>
+
+@code {
+    [Parameter] public string Message { get; set; } = "Ocorreu um erro ao carregar os dados.";
+    [Parameter] public EventCallback OnRetry { get; set; }
+}

@@ -5,6 +5,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject IJSRuntime JS
 
 <PageTitle>Minhas Ligas - PokerHub</PageTitle>
 
@@ -191,8 +192,15 @@
     {
         if (_selectedLeague != null)
         {
-            // Note: Clipboard API requires JavaScript interop
-            Snackbar.Add($"Codigo copiado: {_selectedLeague.InviteCode}", Severity.Success);
+            try
+            {
+                await JS.InvokeVoidAsync("navigator.clipboard.writeText", _selectedLeague.InviteCode);
+                Snackbar.Add("Codigo copiado!", Severity.Success);
+            }
+            catch
+            {
+                Snackbar.Add($"Codigo: {_selectedLeague.InviteCode}", Severity.Info);
+            }
             _inviteDialogVisible = false;
         }
     }

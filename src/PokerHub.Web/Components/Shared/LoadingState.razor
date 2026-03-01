@@ -1,0 +1,14 @@
+@* Shared loading state component *@
+
+<div class="loading-state">
+    <MudProgressCircular Color="Color.Primary" Indeterminate="true" Size="@Size" />
+    @if (!string.IsNullOrEmpty(Text))
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">@Text</MudText>
+    }
+</div>
+
+@code {
+    [Parameter] public string? Text { get; set; } = "Carregando...";
+    [Parameter] public Size Size { get; set; } = Size.Large;
+}

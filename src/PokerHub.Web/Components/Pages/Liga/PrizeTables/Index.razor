@@ -80,7 +80,7 @@ else
                     <RowTemplate>
                         <MudTd DataLabel="Prize Pool">
                             <MudText Typo="Typo.body2" Style="font-weight: 600;">
-                                @context.PrizePoolTotal.ToString("C")
+                                @context.PrizePoolTotal.ToBrl()
                             </MudText>
                             @if (context.Entries.Count > 4)
                             {
@@ -99,7 +99,7 @@ else
                             @if (context.JackpotAmount > 0)
                             {
                                 <MudText Typo="Typo.body2" Color="Color.Warning">
-                                    @context.JackpotAmount.ToString("C")
+                                    @context.JackpotAmount.ToBrl()
                                 </MudText>
                             }
                             else
@@ -158,7 +158,7 @@ else
     private string GetPrize(LeaguePrizeTableDto table, int position)
     {
         var entry = table.Entries.FirstOrDefault(e => e.Position == position);
-        return entry != null ? entry.PrizeAmount.ToString("C") : "-";
+        return entry != null ? entry.PrizeAmount.ToBrl() : "-";
     }
 
     private string GetAllPositionsText(LeaguePrizeTableDto table)

@@ -83,6 +83,18 @@
             </div>
         </div>
 
+        @* Search *@
+        <MudTextField @bind-Value="_searchTerm"
+                      Placeholder="Buscar torneio..."
+                      Immediate="true"
+                      DebounceInterval="300"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Clearable="true"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Class="mb-3" />
+
         @* Segmented Tabs *@
         <div class="tab-segment-container">
             <button class="tab-segment @(_activeTab == 0 ? "active" : "")"
@@ -118,6 +130,7 @@
     private bool _duplicating;
     private bool _isMobile;
     private int _activeTab = 0;
+    private string? _searchTerm;
     private List<BreadcrumbItem> _breadcrumbs = new();
 
     // Computed counts
@@ -185,17 +198,25 @@
         _activeTab = tab;
     }
 
-    private IEnumerable<TournamentDto> GetFilteredTournaments() => _activeTab switch
+    private IEnumerable<TournamentDto> GetFilteredTournaments()
     {
-        0 => _tournaments!.Where(t => t.Status == TournamentStatus.Scheduled)
-                         .OrderByDescending(t => t.ScheduledDateTime),
-        1 => _tournaments!.Where(t => t.Status == TournamentStatus.InProgress ||
-                                      t.Status == TournamentStatus.Paused)
-                         .OrderByDescending(t => t.ScheduledDateTime),
-        2 => _tournaments!.Where(t => t.Status == TournamentStatus.Finished)
-                         .OrderByDescending(t => t.ScheduledDateTime),
-        _ => _tournaments!
-    };
+        var filtered = _activeTab switch
+        {
+            0 => _tournaments!.Where(t => t.Status == TournamentStatus.Scheduled),
+            1 => _tournaments!.Where(t => t.Status == TournamentStatus.InProgress ||
+                                          t.Status == TournamentStatus.Paused),
+            2 => _tournaments!.Where(t => t.Status == TournamentStatus.Finished),
+            _ => _tournaments!.AsEnumerable()
+        };
+
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            filtered = filtered.Where(t =>
+                t.Name.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return filtered.OrderByDescending(t => t.ScheduledDateTime);
+    }
 
     private RenderFragment RenderTournamentContent() => @<text>
         @{

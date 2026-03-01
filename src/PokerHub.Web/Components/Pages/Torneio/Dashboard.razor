@@ -42,6 +42,15 @@
                             </MudChip>
                         </div>
                         <div class="d-flex flex-wrap gap-2 justify-end">
+                            @if (_isOrganizer)
+                            {
+                                <MudButton Variant="Variant.Outlined"
+                                          Color="Color.Default"
+                                          StartIcon="@Icons.Material.Filled.Shield"
+                                          OnClick="ShowDelegatesDialog">
+                                    Delegados
+                                </MudButton>
+                            }
                             @if (_canManage && _tournament.Status == TournamentStatus.Scheduled)
                             {
                                 <MudButton Variant="Variant.Outlined"
@@ -174,7 +183,8 @@
                         OnSelfRegisterClick="SelfRegister"
                         OnCancelSelfRegistrationClick="CancelSelfRegistration"
                         OnPreviousLevelClick="GoToPreviousLevel"
-                        OnNextLevelClick="AdvanceLevel" />
+                        OnNextLevelClick="AdvanceLevel"
+                        OnDelegatesClick="ShowDelegatesDialog" />
                 </MudItem>
             }
             else
@@ -303,15 +313,28 @@
                                     ((_tournament.Status == TournamentStatus.InProgress || _tournament.Status == TournamentStatus.Paused) &&
                                      (_isOrganizer || _detail?.IsCheckInAllowed == true)));
                             }
-                            @if (canAddPlayer)
-                            {
-                                <MudButton Variant="Variant.Outlined"
-                                          Color="Color.Primary"
-                                          StartIcon="@Icons.Material.Filled.PersonAdd"
-                                          OnClick="OpenAddPlayerDialog">
-                                    Adicionar
-                                </MudButton>
-                            }
+                            <div class="d-flex gap-2 align-center">
+                                @if (_canManage && _tournament.Status == TournamentStatus.Scheduled && _selectedPlayers.Any(p => !p.IsCheckedIn))
+                                {
+                                    <MudButton Variant="Variant.Filled"
+                                              Color="Color.Success"
+                                              Size="Size.Small"
+                                              StartIcon="@Icons.Material.Filled.HowToReg"
+                                              OnClick="BulkCheckIn"
+                                              Disabled="_processing">
+                                        Check-in (@_selectedPlayers.Count(p => !p.IsCheckedIn))
+                                    </MudButton>
+                                }
+                                @if (canAddPlayer)
+                                {
+                                    <MudButton Variant="Variant.Outlined"
+                                              Color="Color.Primary"
+                                              StartIcon="@Icons.Material.Filled.PersonAdd"
+                                              OnClick="OpenAddPlayerDialog">
+                                        Adicionar
+                                    </MudButton>
+                                }
+                            </div>
                         </CardHeaderActions>
                     </MudCardHeader>
                     <MudCardContent>
@@ -391,7 +414,9 @@
                         {
                             <!-- Desktop Table View -->
                             <div style="overflow-x: auto;">
-                                <MudTable Items="@GetSortedPlayers()" Dense="true" Hover="true" Breakpoint="Breakpoint.None">
+                                <MudTable Items="@GetSortedPlayers()" Dense="true" Hover="true" Breakpoint="Breakpoint.None"
+                                          MultiSelection="@(_canManage && _tournament.Status == TournamentStatus.Scheduled)"
+                                          @bind-SelectedItems="_selectedPlayers">
                                     <HeaderContent>
                                         <MudTh>Jogador</MudTh>
                                         <MudTh>Status</MudTh>
@@ -676,6 +701,9 @@
     // Connection state
     private bool _isReconnecting;
     private bool _isDisconnected;
+
+    // Bulk selection
+    private HashSet<TournamentPlayerDto> _selectedPlayers = new();
 
     // Mobile detection
     private bool _isSmallScreen;
@@ -1277,7 +1305,12 @@
         {
             try
             {
-                await TournamentService.EliminatePlayerAsync(TournamentId, player.PlayerId, null, position);
+                var (success, message) = await TournamentService.EliminatePlayerAsync(TournamentId, player.PlayerId, null, position);
+                if (!success)
+                {
+                    Snackbar.Add(message, Severity.Error);
+                    return;
+                }
                 await TimerService.NotifyPlayerEliminated(TournamentId, player.PlayerId, player.PlayerName, position);
                 await TimerService.NotifyPlayerUpdated(TournamentId);
                 await LoadTournament();
@@ -1381,7 +1414,12 @@
         {
             try
             {
-                await TournamentService.FinishTournamentWithCustomPrizesAsync(TournamentId, distribution);
+                var (finishSuccess, finishMessage) = await TournamentService.FinishTournamentWithCustomPrizesAsync(TournamentId, distribution);
+                if (!finishSuccess)
+                {
+                    Snackbar.Add(finishMessage, Severity.Error);
+                    return;
+                }
                 await TimerService.NotifyTournamentFinished(TournamentId);
                 Snackbar.Add("Torneio finalizado!", Severity.Success);
                 Navigation.NavigateTo($"/torneios/{TournamentId}/pagamentos");
@@ -1673,5 +1711,63 @@
     {
         public BlindLevelDto? NewLevel { get; set; }
         public BlindLevelDto? NextLevel { get; set; }
+    }
+
+    private async Task BulkCheckIn()
+    {
+        var playersToCheckIn = _selectedPlayers.Where(p => !p.IsCheckedIn).ToList();
+        if (!playersToCheckIn.Any()) return;
+
+        var confirm = await DialogService.ShowMessageBox(
+            "Check-in em Massa",
+            $"Fazer check-in de {playersToCheckIn.Count} jogador(es)?",
+            "Confirmar", "Cancelar");
+
+        if (confirm != true) return;
+
+        _processing = true;
+        try
+        {
+            var count = await TournamentService.BulkCheckInAsync(
+                TournamentId, playersToCheckIn.Select(p => p.PlayerId).ToList());
+            Snackbar.Add($"Check-in realizado para {count} jogador(es)", Severity.Success);
+            _selectedPlayers.Clear();
+            await LoadTournament();
+
+            if (_detail != null)
+            {
+                await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail.PrizePool, GetTotalRebuys(), GetTotalAddons());
+                await TimerService.NotifyPlayerUpdated(TournamentId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private async Task ShowDelegatesDialog()
+    {
+        if (_tournament == null || _currentUserId == null) return;
+
+        var parameters = new DialogParameters<ManageDelegatesDialog>
+        {
+            { x => x.TournamentId, TournamentId },
+            { x => x.LeagueId, _tournament.LeagueId },
+            { x => x.AssignedBy, _currentUserId }
+        };
+
+        var options = new DialogOptions
+        {
+            MaxWidth = MaxWidth.Small,
+            FullWidth = true,
+            CloseOnEscapeKey = true
+        };
+
+        await DialogService.ShowAsync<ManageDelegatesDialog>("Delegados", parameters, options);
     }
 }

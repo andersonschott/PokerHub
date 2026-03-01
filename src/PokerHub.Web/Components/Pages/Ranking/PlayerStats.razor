@@ -123,30 +123,30 @@
             <div class="stats-list">
                 <div class="stat-row">
                     <span class="stat-row-label">Total Investido</span>
-                    <span class="stat-row-value">@_stats.TotalBuyIns.ToString("C")</span>
+                    <span class="stat-row-value">@_stats.TotalBuyIns.ToBrl()</span>
                 </div>
                 <div class="stat-row">
                     <span class="stat-row-label">Total em Premios</span>
-                    <span class="stat-row-value">@_stats.TotalPrizes.ToString("C")</span>
+                    <span class="stat-row-value">@_stats.TotalPrizes.ToBrl()</span>
                 </div>
                 <div class="stat-row">
                     <span class="stat-row-label">Lucro/Prejuizo</span>
                     <span class="stat-row-value @(_stats.Profit >= 0 ? "positive" : "negative")">
-                        @(_stats.Profit >= 0 ? "+" : "")@_stats.Profit.ToString("C")
+                        @(_stats.Profit >= 0 ? "+" : "")@_stats.Profit.ToBrl()
                     </span>
                 </div>
                 @if (_stats.BestResult.HasValue)
                 {
                     <div class="stat-row">
                         <span class="stat-row-label">Melhor Resultado</span>
-                        <span class="stat-row-value positive">+@_stats.BestResult.Value.ToString("C")</span>
+                        <span class="stat-row-value positive">+@_stats.BestResult.Value.ToBrl()</span>
                     </div>
                 }
                 @if (_stats.WorstResult.HasValue)
                 {
                     <div class="stat-row">
                         <span class="stat-row-label">Pior Resultado</span>
-                        <span class="stat-row-value negative">@_stats.WorstResult.Value.ToString("C")</span>
+                        <span class="stat-row-value negative">@_stats.WorstResult.Value.ToBrl()</span>
                     </div>
                 }
             </div>
@@ -165,7 +165,7 @@
                                     <div class="history-date">@result.Date.ToString("dd/MM/yyyy")</div>
                                 </div>
                                 <div class="history-result @(result.Profit >= 0 ? "positive" : "negative")">
-                                    @(result.Profit >= 0 ? "+" : "")@result.Profit.ToString("C")
+                                    @(result.Profit >= 0 ? "+" : "")@result.Profit.ToBrl()
                                 </div>
                             </div>
                             <div class="history-details">
@@ -255,30 +255,30 @@
                     <div class="stats-list">
                         <div class="stat-row">
                             <span class="stat-row-label">Total em Buy-ins</span>
-                            <span class="stat-row-value">@_stats.TotalBuyIns.ToString("C")</span>
+                            <span class="stat-row-value">@_stats.TotalBuyIns.ToBrl()</span>
                         </div>
                         <div class="stat-row">
                             <span class="stat-row-label">Total em Premios</span>
-                            <span class="stat-row-value">@_stats.TotalPrizes.ToString("C")</span>
+                            <span class="stat-row-value">@_stats.TotalPrizes.ToBrl()</span>
                         </div>
                         <div class="stat-row">
                             <span class="stat-row-label">Lucro/Prejuizo</span>
                             <span class="stat-row-value @(_stats.Profit >= 0 ? "positive" : "negative")">
-                                @(_stats.Profit >= 0 ? "+" : "")@_stats.Profit.ToString("C")
+                                @(_stats.Profit >= 0 ? "+" : "")@_stats.Profit.ToBrl()
                             </span>
                         </div>
                         @if (_stats.BestResult.HasValue)
                         {
                             <div class="stat-row">
                                 <span class="stat-row-label">Melhor Resultado</span>
-                                <span class="stat-row-value positive">+@_stats.BestResult.Value.ToString("C")</span>
+                                <span class="stat-row-value positive">+@_stats.BestResult.Value.ToBrl()</span>
                             </div>
                         }
                         @if (_stats.WorstResult.HasValue)
                         {
                             <div class="stat-row">
                                 <span class="stat-row-label">Pior Resultado</span>
-                                <span class="stat-row-value negative">@_stats.WorstResult.Value.ToString("C")</span>
+                                <span class="stat-row-value negative">@_stats.WorstResult.Value.ToBrl()</span>
                             </div>
                         }
                     </div>
@@ -395,19 +395,19 @@
                             </MudTd>
                             <MudTd DataLabel="Investimento" Style="text-align: right;">
                                 <MudText Typo="Typo.body2" Class="mono-font">
-                                    @context.Investment.ToString("C")
+                                    @context.Investment.ToBrl()
                                 </MudText>
                             </MudTd>
                             <MudTd DataLabel="Premio" Style="text-align: right;">
                                 <MudText Typo="Typo.body2" Class="mono-font">
-                                    @context.Prize.ToString("C")
+                                    @context.Prize.ToBrl()
                                 </MudText>
                             </MudTd>
                             <MudTd DataLabel="Resultado" Style="text-align: right;">
                                 <MudText Typo="Typo.body2"
                                          Class="mono-font font-weight-bold"
                                          Color="@(context.Profit >= 0 ? Color.Success : Color.Error)">
-                                    @(context.Profit >= 0 ? "+" : "")@context.Profit.ToString("C")
+                                    @(context.Profit >= 0 ? "+" : "")@context.Profit.ToBrl()
                                 </MudText>
                             </MudTd>
                         </RowTemplate>

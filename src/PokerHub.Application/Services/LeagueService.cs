@@ -11,10 +11,12 @@ namespace PokerHub.Application.Services;
 public class LeagueService : ILeagueService
 {
     private readonly PokerHubDbContext _context;
+    private readonly IPaymentService _paymentService;
 
-    public LeagueService(PokerHubDbContext context)
+    public LeagueService(PokerHubDbContext context, IPaymentService paymentService)
     {
         _context = context;
+        _paymentService = paymentService;
     }
 
     public async Task<IReadOnlyList<LeagueDto>> GetLeaguesByUserAsync(string userId)
@@ -384,18 +386,12 @@ public class LeagueService : ILeagueService
         if (player == null)
             return (false, "Você não é membro desta liga.");
 
-        // Check for pending debts (as debtor)
-        var hasPendingDebts = await _context.Payments
-            .AnyAsync(p => p.FromPlayerId == player.Id && p.Status == PaymentStatus.Pending);
+        // Check for unconfirmed debts (as debtor, excludes jackpot)
+        if (await _paymentService.HasPendingDebtsAsync(player.Id))
+            return (false, "Não é possível sair da liga. Você possui débitos não confirmados.");
 
-        if (hasPendingDebts)
-            return (false, "Não é possível sair da liga. Você possui débitos pendentes.");
-
-        // Check for pending credits (as creditor)
-        var hasPendingCredits = await _context.Payments
-            .AnyAsync(p => p.ToPlayerId == player.Id && p.Status == PaymentStatus.Pending);
-
-        if (hasPendingCredits)
+        // Check for unconfirmed credits (as creditor)
+        if (await _paymentService.HasPendingCreditsAsync(player.Id))
             return (false, "Não é possível sair da liga. Você possui créditos pendentes a receber.");
 
         // Soft delete - keep the record for history/rankings

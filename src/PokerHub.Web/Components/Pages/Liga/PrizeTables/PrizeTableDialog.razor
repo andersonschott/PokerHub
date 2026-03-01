@@ -81,12 +81,12 @@
 
             <MudStack Row AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
                 <MudText Typo="Typo.body2" Color="Color.Secondary">
-                    Total: @GetTotal().ToString("C")
+                    Total: @GetTotal().ToBrl()
                 </MudText>
                 @if (Math.Abs(GetTotal() - _model.PrizePoolTotal) > 0.01m)
                 {
                     <MudText Typo="Typo.body2" Color="Color.Warning">
-                        Diferenca: @((_model.PrizePoolTotal - GetTotal()).ToString("C"))
+                        Diferenca: @((_model.PrizePoolTotal - GetTotal()).ToBrl())
                     </MudText>
                 }
                 else

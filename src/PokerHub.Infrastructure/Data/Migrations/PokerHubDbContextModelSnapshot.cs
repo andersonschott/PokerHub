@@ -681,6 +681,41 @@ namespace PokerHub.Infrastructure.Data.Migrations
                     b.ToTable("Tournaments");
                 });
 
+            modelBuilder.Entity("PokerHub.Domain.Entities.TournamentDelegate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("AssignedBy")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<int>("Permissions")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("TournamentId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("TournamentId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("TournamentDelegates");
+                });
+
             modelBuilder.Entity("PokerHub.Domain.Entities.TournamentExpense", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1094,6 +1129,25 @@ namespace PokerHub.Infrastructure.Data.Migrations
                     b.Navigation("PrizeTable");
                 });
 
+            modelBuilder.Entity("PokerHub.Domain.Entities.TournamentDelegate", b =>
+                {
+                    b.HasOne("PokerHub.Domain.Entities.Tournament", "Tournament")
+                        .WithMany("Delegates")
+                        .HasForeignKey("TournamentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PokerHub.Domain.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Tournament");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("PokerHub.Domain.Entities.TournamentExpense", b =>
                 {
                     b.HasOne("PokerHub.Domain.Entities.Player", "PaidByPlayer")
@@ -1201,6 +1255,8 @@ namespace PokerHub.Infrastructure.Data.Migrations
             modelBuilder.Entity("PokerHub.Domain.Entities.Tournament", b =>
                 {
                     b.Navigation("BlindLevels");
+
+                    b.Navigation("Delegates");
 
                     b.Navigation("Expenses");
 

@@ -38,6 +38,7 @@ public class Payment
 
     public void Confirm()
     {
+        PaidAt ??= DateTime.UtcNow;
         Status = PaymentStatus.Confirmed;
         ConfirmedAt = DateTime.UtcNow;
     }

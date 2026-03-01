@@ -52,7 +52,7 @@
         <div class="jackpot-hero">
             <div class="jackpot-icon">💰</div>
             <div class="jackpot-label">Saldo Acumulado</div>
-            <div class="jackpot-value">@_jackpotStatus?.AccumulatedPrizePool.ToString("C")</div>
+            <div class="jackpot-value">@_jackpotStatus?.AccumulatedPrizePool.ToBrl()</div>
             <div class="jackpot-config">
                 <span>⚙️</span>
                 <span>Percentual:</span>
@@ -115,7 +115,7 @@
                                     <div class="transaction-title">@contribution.TournamentName</div>
                                     <div class="transaction-date">@contribution.TournamentDate.ToString("dd/MM/yyyy")</div>
                                 </div>
-                                <div class="transaction-amount positive">+@contribution.Amount.ToString("C")</div>
+                                <div class="transaction-amount positive">+@contribution.Amount.ToBrl()</div>
                             </div>
                             <div class="transaction-details">
                                 <div class="transaction-detail">
@@ -152,13 +152,13 @@
                                 </div>
                             </MudTd>
                             <MudTd DataLabel="Prize Pool" Style="text-align: right;">
-                                <span class="mono-font">@context.TournamentPrizePool.ToString("C")</span>
+                                <span class="mono-font">@context.TournamentPrizePool.ToBrl()</span>
                             </MudTd>
                             <MudTd DataLabel="%" Style="text-align: center;">
                                 <span class="mono-font">@context.PercentageApplied.ToString("F0")%</span>
                             </MudTd>
                             <MudTd DataLabel="Valor" Style="text-align: right;">
-                                <span class="mono-font positive">+@context.Amount.ToString("C")</span>
+                                <span class="mono-font positive">+@context.Amount.ToBrl()</span>
                             </MudTd>
                         </RowTemplate>
                     </MudTable>
@@ -188,12 +188,12 @@
                                     <div class="transaction-title">@(usage.Description ?? "Uso da Caixinha")</div>
                                     <div class="transaction-date">@usage.CreatedAt.ToString("dd/MM/yyyy")</div>
                                 </div>
-                                <div class="transaction-amount negative">-@usage.Amount.ToString("C")</div>
+                                <div class="transaction-amount negative">-@usage.Amount.ToBrl()</div>
                             </div>
                             <div class="transaction-details">
                                 <div class="transaction-detail">
                                     <span class="label">Saldo apos:</span>
-                                    <span>@usage.BalanceAfter.ToString("C")</span>
+                                    <span>@usage.BalanceAfter.ToBrl()</span>
                                 </div>
                             </div>
                             <div class="exit-reason @GetUsageTypeClass(usage.Description)">
@@ -230,10 +230,10 @@
                                 </MudChip>
                             </MudTd>
                             <MudTd DataLabel="Valor" Style="text-align: right;">
-                                <span class="mono-font negative">-@context.Amount.ToString("C")</span>
+                                <span class="mono-font negative">-@context.Amount.ToBrl()</span>
                             </MudTd>
                             <MudTd DataLabel="Saldo Apos" Style="text-align: right;">
-                                <span class="mono-font">@context.BalanceAfter.ToString("C")</span>
+                                <span class="mono-font">@context.BalanceAfter.ToBrl()</span>
                             </MudTd>
                         </RowTemplate>
                     </MudTable>

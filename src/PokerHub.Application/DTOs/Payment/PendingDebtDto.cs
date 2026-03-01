@@ -14,5 +14,6 @@ public record PendingDebtDto(
     decimal Amount,
     int DaysOpen,
     PaymentType Type = PaymentType.Poker,
-    string? Description = null
+    string? Description = null,
+    PaymentStatus Status = PaymentStatus.Pending
 );

@@ -44,9 +44,46 @@ jobs:
           name: .net-app
           path: ./publish
 
-  deploy:
+  migrate:
     runs-on: ubuntu-latest
     needs: build
+    environment: production
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+          dotnet-quality: 'preview'
+
+      - name: Install EF Core tools
+        run: dotnet tool install --global dotnet-ef
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Generate idempotent migration script
+        run: >
+          dotnet ef migrations script --idempotent
+          --project src/PokerHub.Infrastructure
+          --startup-project src/PokerHub.Web
+          --output migrations.sql
+
+      - name: Apply migration
+        run: >
+          sqlcmd -S ${{ secrets.AZURE_SQL_SERVER }}
+          -d ${{ secrets.AZURE_SQL_DATABASE }}
+          -U ${{ secrets.AZURE_SQL_USER }}
+          -P ${{ secrets.AZURE_SQL_PASSWORD }}
+          -i migrations.sql
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build, migrate]
     permissions:
       id-token: write
       contents: read

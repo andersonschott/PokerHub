@@ -10,6 +10,7 @@ using PokerHub.Infrastructure.Data;
 using PokerHub.Web.Components;
 using PokerHub.Web.Components.Account;
 using PokerHub.Web.Hubs;
+using PokerHub.Application.Interfaces;
 using PokerHub.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -63,6 +64,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<TournamentTimerSer
 
 // Application Services
 builder.Services.AddApplicationServices();
+builder.Services.AddScoped<IExportService, ExportService>();
 
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityRedirectManager>();

@@ -1,4 +1,5 @@
 using PokerHub.Application.DTOs.Tournament;
+using PokerHub.Domain.Enums;
 
 namespace PokerHub.Application.Interfaces;
 
@@ -16,8 +17,8 @@ public interface ITournamentService
     Task<bool> StartTournamentAsync(Guid tournamentId);
     Task<bool> PauseTournamentAsync(Guid tournamentId);
     Task<bool> ResumeTournamentAsync(Guid tournamentId);
-    Task<bool> FinishTournamentAsync(Guid tournamentId, IList<(Guid playerId, int position)> positions);
-    Task<bool> FinishTournamentWithCustomPrizesAsync(Guid tournamentId, ConfirmedPrizeDistributionDto distribution);
+    Task<(bool Success, string Message)> FinishTournamentAsync(Guid tournamentId, IList<(Guid playerId, int position)> positions);
+    Task<(bool Success, string Message)> FinishTournamentWithCustomPrizesAsync(Guid tournamentId, ConfirmedPrizeDistributionDto distribution);
     Task<bool> CancelTournamentAsync(Guid tournamentId);
 
     // Player Management
@@ -33,7 +34,7 @@ public interface ITournamentService
     Task<bool> IsRebuyAllowedAsync(Guid tournamentId);
 
     // Elimination
-    Task<bool> EliminatePlayerAsync(Guid tournamentId, Guid playerId, Guid? eliminatedByPlayerId, int? position = null);
+    Task<(bool Success, string Message)> EliminatePlayerAsync(Guid tournamentId, Guid playerId, Guid? eliminatedByPlayerId, int? position = null);
     Task<bool> RestoreEliminatedPlayerAsync(Guid tournamentId, Guid playerId);
 
     // Timer State
@@ -85,4 +86,28 @@ public interface ITournamentService
     /// Checks if a user is registered (as player) in a tournament.
     /// </summary>
     Task<bool> IsUserRegisteredInTournamentAsync(Guid tournamentId, string userId);
+
+    // Delegate Management
+    /// <summary>
+    /// Assigns a user as a delegate for a tournament with the specified permissions.
+    /// Returns false if the user is already a delegate for this tournament.
+    /// </summary>
+    Task<bool> AddDelegateAsync(Guid tournamentId, string userId, string assignedBy, DelegatePermissions permissions = DelegatePermissions.All);
+
+    /// <summary>
+    /// Removes a delegate assignment from a tournament.
+    /// Returns false if the delegate record does not exist.
+    /// </summary>
+    Task<bool> RemoveDelegateAsync(Guid tournamentId, string userId);
+
+    /// <summary>
+    /// Returns all delegates assigned to a tournament.
+    /// </summary>
+    Task<IReadOnlyList<TournamentDelegateDto>> GetDelegatesAsync(Guid tournamentId);
+
+    /// <summary>
+    /// Bulk check-in multiple players at once (admin action, skips debt check).
+    /// Returns the count of newly checked-in players.
+    /// </summary>
+    Task<int> BulkCheckInAsync(Guid tournamentId, IList<Guid> playerIds);
 }

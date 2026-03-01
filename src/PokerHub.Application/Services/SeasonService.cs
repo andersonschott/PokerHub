@@ -202,6 +202,12 @@ public class SeasonService : ISeasonService
         var season = await _context.Seasons.FindAsync(seasonId);
         if (season == null) return [];
 
+        var totalFinished = await _context.Tournaments
+            .CountAsync(t => t.LeagueId == season.LeagueId &&
+                            t.Status == TournamentStatus.Finished &&
+                            t.ScheduledDateTime.Date >= season.StartDate.Date &&
+                            t.ScheduledDateTime.Date <= season.EndDate.Date);
+
         // Verificar se existem dados legados (PlayerSeasonStats) para esta temporada
         var legacyStats = await _context.PlayerSeasonStats
             .Where(pss => pss.SeasonId == seasonId)
@@ -215,7 +221,6 @@ public class SeasonService : ISeasonService
             return legacyStats
                 .Select(pss =>
                 {
-                    // Para dados legados: ITM = soma de posicoes premiadas (1o+2o+3o)
                     var itmCount = pss.FirstPlaces + pss.SecondPlaces + pss.ThirdPlaces;
                     var itmRate = pss.GamesPlayed > 0 ? ((decimal)itmCount / pss.GamesPlayed) * 100 : 0;
                     var roi = pss.TotalCost > 0 ? (pss.Balance / pss.TotalCost) * 100 : 0;
@@ -234,7 +239,9 @@ public class SeasonService : ISeasonService
                         pss.TotalPrize,
                         pss.Balance,
                         roi,
-                        itmRate
+                        itmRate,
+                        totalFinished,
+                        totalFinished > 0 ? (int)Math.Round((decimal)pss.GamesPlayed / totalFinished * 100) : 0
                     );
                 })
                 .ToList();
@@ -266,11 +273,12 @@ public class SeasonService : ISeasonService
                 var secondPlaces = seasonParticipations.Count(tp => tp.Position == 2);
                 var thirdPlaces = seasonParticipations.Count(tp => tp.Position == 3);
                 var itmCount = seasonParticipations.Count(tp => tp.Prize > 0);
+                var played = seasonParticipations.Count;
 
                 return new
                 {
                     Player = p,
-                    TournamentsPlayed = seasonParticipations.Count,
+                    TournamentsPlayed = played,
                     Wins = wins,
                     SecondPlaces = secondPlaces,
                     ThirdPlaces = thirdPlaces,
@@ -278,7 +286,7 @@ public class SeasonService : ISeasonService
                     TotalPrizes = totalPrizes,
                     Profit = profit,
                     ROI = totalBuyIns > 0 ? (profit / totalBuyIns) * 100 : 0,
-                    ITMRate = seasonParticipations.Count > 0 ? ((decimal)itmCount / seasonParticipations.Count) * 100 : 0
+                    ITMRate = played > 0 ? ((decimal)itmCount / played) * 100 : 0
                 };
             })
             .Where(x => x != null)
@@ -297,7 +305,9 @@ public class SeasonService : ISeasonService
                 x.TotalPrizes,
                 x.Profit,
                 x.ROI,
-                x.ITMRate
+                x.ITMRate,
+                totalFinished,
+                totalFinished > 0 ? (int)Math.Round((decimal)x.TournamentsPlayed / totalFinished * 100) : 0
             ))
             .ToList();
 

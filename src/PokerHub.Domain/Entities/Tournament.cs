@@ -62,6 +62,7 @@ public class Tournament
     public ICollection<TournamentPlayer> Players { get; set; } = new List<TournamentPlayer>();
     public ICollection<Payment> Payments { get; set; } = new List<Payment>();
     public ICollection<TournamentExpense> Expenses { get; set; } = new List<TournamentExpense>();
+    public ICollection<TournamentDelegate> Delegates { get; set; } = new List<TournamentDelegate>();
 
     public bool IsRebuyAllowed(int currentLevel, int minutesElapsed)
     {

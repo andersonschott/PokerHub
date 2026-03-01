@@ -285,6 +285,12 @@ else
                                                                        Disabled="_processingPayment == payment.Id">
                                                                 PAGO
                                                             </MudButton>
+                                                            <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                                                       Color="Color.Success"
+                                                                       OnClick="@(() => AdminConfirm(payment.Id))"
+                                                                       Disabled="_processingPayment == payment.Id">
+                                                                Confirmar
+                                                            </MudButton>
                                                         }
                                                         else if (_isOrganizer && payment.Status == PaymentStatus.Paid)
                                                         {
@@ -346,11 +352,8 @@ else
                         {
                             <MudButton Variant="Variant.Filled" Color="Color.Primary"
                                        StartIcon="@Icons.Material.Filled.Calculate"
-                                       OnClick="CalculatePayments" Disabled="_processing">
-                                @if (_processing)
-                                {
-                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                                }
+                                       OnClick="CalculatePayments"
+                                       Disabled="_processing">
                                 Calcular Pagamentos
                             </MudButton>
                         }
@@ -436,7 +439,18 @@ else
                             <div class="desktop-card">
                                 <div class="desktop-card-header">
                                     <span class="desktop-card-title">Lista de Pagamentos</span>
-                                    <div class="d-flex gap-2">
+                                    <div class="d-flex gap-2 align-center">
+                                        @if (_isOrganizer && _selectedPayments.Any(p => p.Status != PaymentStatus.Confirmed))
+                                        {
+                                            <MudButton Variant="Variant.Filled"
+                                                      Color="Color.Success"
+                                                      Size="Size.Small"
+                                                      StartIcon="@Icons.Material.Filled.DoneAll"
+                                                      OnClick="BulkConfirmPayments"
+                                                      Disabled="_processing">
+                                                Confirmar (@_selectedPayments.Count(p => p.Status != PaymentStatus.Confirmed))
+                                            </MudButton>
+                                        }
                                         <MudChip T="string" Color="Color.Warning" Size="Size.Small"
                                                  Variant="@(_paymentFilter == "pendente" ? Variant.Filled : Variant.Outlined)"
                                                  OnClick="@(() => _paymentFilter = _paymentFilter == "pendente" ? "todos" : "pendente")">
@@ -450,7 +464,8 @@ else
                                     </div>
                                 </div>
 
-                                <MudTable Items="@FilteredPayments" Hover="true" Elevation="0" Breakpoint="Breakpoint.None" Class="payments-table">
+                                <MudTable Items="@FilteredPayments" Hover="true" Elevation="0" Breakpoint="Breakpoint.None" Class="payments-table" RowsPerPage="15"
+                                          MultiSelection="@_isOrganizer" @bind-SelectedItems="_selectedPayments">
                                     <HeaderContent>
                                         <MudTh>Tipo</MudTh>
                                         <MudTh>De</MudTh>
@@ -537,6 +552,11 @@ else
                                                                Disabled="_processingPayment == context.Id">
                                                         PAGO
                                                     </MudButton>
+                                                    <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Success"
+                                                               OnClick="@(() => AdminConfirm(context.Id))"
+                                                               Disabled="_processingPayment == context.Id">
+                                                        Confirmar
+                                                    </MudButton>
                                                 }
                                                 else if (context.Status == PaymentStatus.Paid)
                                                 {
@@ -553,6 +573,9 @@ else
                                             </MudTd>
                                         }
                                     </RowTemplate>
+                                    <PagerContent>
+                                        <MudTablePager />
+                                    </PagerContent>
                                 </MudTable>
                             </div>
                         }
@@ -651,6 +674,9 @@ else
     // Mobile state
     private string _mobileTab = "saldo";
     private string _paymentFilter = "todos";
+
+    // Bulk selection
+    private HashSet<PaymentDto> _selectedPayments = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -794,7 +820,7 @@ else
         _processingPayment = paymentId;
         try
         {
-            var success = await PaymentService.AdminMarkAsPaidAsync(paymentId, _currentUserId);
+            var (success, message) = await PaymentService.AdminMarkAsPaidAsync(paymentId, _currentUserId);
             if (success)
             {
                 Snackbar.Add("Pagamento marcado como pago!", Severity.Success);
@@ -802,7 +828,7 @@ else
             }
             else
             {
-                Snackbar.Add("Erro ao marcar pagamento", Severity.Error);
+                Snackbar.Add(message, Severity.Error);
             }
         }
         catch (Exception ex)
@@ -812,6 +838,39 @@ else
         finally
         {
             _processingPayment = null;
+        }
+    }
+
+    private async Task BulkConfirmPayments()
+    {
+        if (string.IsNullOrEmpty(_currentUserId)) return;
+
+        var toConfirm = _selectedPayments.Where(p => p.Status != PaymentStatus.Confirmed).ToList();
+        if (!toConfirm.Any()) return;
+
+        var confirmed = await DialogService.ShowMessageBox(
+            "Confirmar em Massa",
+            $"Confirmar {toConfirm.Count} pagamento(s) selecionado(s)?",
+            yesText: "Confirmar", cancelText: "Cancelar");
+
+        if (confirmed != true) return;
+
+        _processing = true;
+        try
+        {
+            var count = await PaymentService.BulkConfirmPaymentsAsync(
+                toConfirm.Select(p => p.Id).ToList(), _currentUserId);
+            Snackbar.Add($"{count} pagamento(s) confirmado(s)", Severity.Success);
+            _selectedPayments.Clear();
+            _payments = await PaymentService.GetPaymentsByTournamentAsync(TournamentId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
         }
     }
 
@@ -829,7 +888,7 @@ else
         _processingPayment = paymentId;
         try
         {
-            var success = await PaymentService.AdminConfirmPaymentAsync(paymentId, _currentUserId);
+            var (success, message) = await PaymentService.AdminConfirmPaymentAsync(paymentId, _currentUserId);
             if (success)
             {
                 Snackbar.Add("Pagamento confirmado!", Severity.Success);
@@ -837,7 +896,7 @@ else
             }
             else
             {
-                Snackbar.Add("Erro ao confirmar pagamento", Severity.Error);
+                Snackbar.Add(message, Severity.Error);
             }
         }
         catch (Exception ex)

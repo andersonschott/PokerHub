@@ -14,12 +14,22 @@
         <div style="font-size: 20px; font-weight: 700; color: var(--mud-palette-text-primary); margin-bottom: 8px;">
             @Tournament?.Name
         </div>
-        <MudChip T="string"
-                 Size="Size.Small"
-                 Color="@GetStatusColor(Tournament?.Status ?? TournamentStatus.Scheduled)"
-                 Style="font-size: 11px; height: 26px;">
-            @GetStatusIcon(Tournament?.Status ?? TournamentStatus.Scheduled) @GetStatusText(Tournament?.Status ?? TournamentStatus.Scheduled)
-        </MudChip>
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <MudChip T="string"
+                     Size="Size.Small"
+                     Color="@GetStatusColor(Tournament?.Status ?? TournamentStatus.Scheduled)"
+                     Style="font-size: 11px; height: 26px;">
+                @GetStatusIcon(Tournament?.Status ?? TournamentStatus.Scheduled) @GetStatusText(Tournament?.Status ?? TournamentStatus.Scheduled)
+            </MudChip>
+            @if (IsOrganizer)
+            {
+                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true" AnchorOrigin="Origin.BottomRight">
+                    <MudMenuItem Icon="@Icons.Material.Filled.Shield" OnClick="OnDelegatesClick">
+                        Delegados
+                    </MudMenuItem>
+                </MudMenu>
+            }
+        </div>
     </div>
 
     @* ===== ACTION BUTTONS ===== *@
@@ -508,7 +518,7 @@
                 @if (Expenses?.Any() == true)
                 {
                     <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #ef4444;">
-                        @Expenses.Sum(e => e.TotalAmount).ToString("C")
+                        @Expenses.Sum(e => e.TotalAmount).ToBrl()
                     </span>
                 }
                 @if (CanManage && Tournament?.Status != TournamentStatus.Finished)
@@ -534,7 +544,7 @@
                         </MudTooltip>
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; color: var(--mud-palette-text-primary);">
-                                @expense.TotalAmount.ToString("C")
+                                @expense.TotalAmount.ToBrl()
                             </span>
                             @if (CanManage && Tournament?.Status != TournamentStatus.Finished)
                             {
@@ -654,6 +664,9 @@
     // Callbacks - Level Controls
     [Parameter] public EventCallback OnPreviousLevelClick { get; set; }
     [Parameter] public EventCallback OnNextLevelClick { get; set; }
+
+    // Callbacks - Delegate Management
+    [Parameter] public EventCallback OnDelegatesClick { get; set; }
 
     private string GetPlayerCountDisplay()
     {

@@ -38,15 +38,31 @@ public interface IPaymentService
     /// <summary>
     /// Admin (league organizer) marks payment as paid.
     /// </summary>
-    Task<bool> AdminMarkAsPaidAsync(Guid paymentId, string organizerUserId);
+    Task<(bool Success, string Message)> AdminMarkAsPaidAsync(Guid paymentId, string organizerUserId);
 
     /// <summary>
     /// Admin (league organizer) confirms receipt of payment.
     /// </summary>
-    Task<bool> AdminConfirmPaymentAsync(Guid paymentId, string organizerUserId);
+    Task<(bool Success, string Message)> AdminConfirmPaymentAsync(Guid paymentId, string organizerUserId);
 
     /// <summary>
     /// Gets all pending payments for leagues organized by the user.
     /// </summary>
     Task<IReadOnlyList<PaymentDto>> GetPaymentsForOrganizerAsync(string organizerUserId);
+
+    /// <summary>
+    /// Checks if a player has pending debts (excludes jackpot contributions).
+    /// </summary>
+    Task<bool> HasPendingDebtsAsync(Guid playerId);
+
+    /// <summary>
+    /// Checks if a player has pending credits to receive.
+    /// </summary>
+    Task<bool> HasPendingCreditsAsync(Guid playerId);
+
+    /// <summary>
+    /// Bulk confirm multiple payments at once (admin action).
+    /// Returns the count of confirmed payments.
+    /// </summary>
+    Task<int> BulkConfirmPaymentsAsync(IList<Guid> paymentIds, string userId);
 }

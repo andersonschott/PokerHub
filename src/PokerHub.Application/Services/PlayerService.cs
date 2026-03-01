@@ -11,10 +11,12 @@ namespace PokerHub.Application.Services;
 public class PlayerService : IPlayerService
 {
     private readonly PokerHubDbContext _context;
+    private readonly IPaymentService _paymentService;
 
-    public PlayerService(PokerHubDbContext context)
+    public PlayerService(PokerHubDbContext context, IPaymentService paymentService)
     {
         _context = context;
+        _paymentService = paymentService;
     }
 
     public async Task<IReadOnlyList<PlayerDto>> GetPlayersByLeagueAsync(Guid leagueId)
@@ -172,16 +174,10 @@ public class PlayerService : IPlayerService
         // Check for pending debts (both as debtor and creditor)
         if (checkDebts)
         {
-            var hasPendingDebts = await _context.Payments
-                .AnyAsync(p => p.FromPlayerId == playerId && p.Status == PaymentStatus.Pending);
+            if (await _paymentService.HasPendingDebtsAsync(playerId))
+                return (false, "Não é possível remover o jogador. Existem débitos não confirmados.");
 
-            if (hasPendingDebts)
-                return (false, "Não é possível remover o jogador. Existem débitos pendentes.");
-
-            var hasPendingCredits = await _context.Payments
-                .AnyAsync(p => p.ToPlayerId == playerId && p.Status == PaymentStatus.Pending);
-
-            if (hasPendingCredits)
+            if (await _paymentService.HasPendingCreditsAsync(playerId))
                 return (false, "Não é possível remover o jogador. Existem créditos pendentes a receber.");
         }
 
@@ -219,7 +215,7 @@ public class PlayerService : IPlayerService
     {
         // Filter out jackpot payments (ToPlayerId == null) - those are not player-to-player debts
         var debts = await _context.Payments
-            .Where(p => p.FromPlayerId == playerId && p.Status == PaymentStatus.Pending && p.ToPlayerId != null)
+            .Where(p => p.FromPlayerId == playerId && p.Status != PaymentStatus.Confirmed && p.ToPlayerId != null)
             .Include(p => p.Tournament)
             .Include(p => p.ToPlayer)
             .OrderBy(p => p.CreatedAt)
@@ -235,7 +231,8 @@ public class PlayerService : IPlayerService
                 p.Amount,
                 (DateTime.UtcNow - p.CreatedAt).Days,
                 p.Type,
-                p.Description
+                p.Description,
+                p.Status
             ))
             .ToListAsync();
 
@@ -244,8 +241,7 @@ public class PlayerService : IPlayerService
 
     public async Task<bool> HasPendingDebtsAsync(Guid playerId)
     {
-        return await _context.Payments
-            .AnyAsync(p => p.FromPlayerId == playerId && p.Status == PaymentStatus.Pending);
+        return await _paymentService.HasPendingDebtsAsync(playerId);
     }
 
     public async Task<int> LinkPlayersByEmailAsync(string email, string userId)

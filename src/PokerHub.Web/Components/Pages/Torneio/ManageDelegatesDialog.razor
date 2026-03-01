@@ -1,0 +1,175 @@
+@inject ITournamentService TournamentService
+@inject IPlayerService PlayerService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            <MudIcon Icon="@Icons.Material.Filled.Shield" Class="mr-2" />
+            Gerenciar Delegados
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_loading)
+        {
+            <MudProgressCircular Indeterminate="true" Size="Size.Small" Class="d-block mx-auto my-4" />
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+                Delegados podem gerenciar o torneio (check-in, eliminacoes, rebuys, finalizar).
+            </MudText>
+
+            @* Lista de delegados atuais *@
+            @if (_delegates.Any())
+            {
+                <MudList T="TournamentDelegateDto" Dense="true" Class="mb-4">
+                    @foreach (var del in _delegates)
+                    {
+                        <MudListItem T="TournamentDelegateDto" Icon="@Icons.Material.Filled.Person">
+                            <div class="d-flex align-center justify-space-between" style="width: 100%;">
+                                <div>
+                                    <MudText>@del.UserName</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        Desde @del.AssignedAt.ToLocalTime().ToString("dd/MM/yyyy")
+                                    </MudText>
+                                </div>
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                               Color="Color.Error"
+                                               Size="Size.Small"
+                                               OnClick="@(() => RemoveDelegate(del.UserId))"
+                                               Disabled="_processing" />
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4">
+                    Nenhum delegado atribuido
+                </MudAlert>
+            }
+
+            @* Adicionar novo delegado *@
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Adicionar delegado</MudText>
+            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                <MudAutocomplete T="PlayerDto"
+                                 @bind-Value="_selectedPlayer"
+                                 Label="Buscar membro da liga"
+                                 SearchFunc="SearchPlayers"
+                                 ToStringFunc="@(p => p?.Name ?? "")"
+                                 Dense="true"
+                                 Variant="Variant.Outlined"
+                                 Style="flex: 1;" />
+                <MudButton Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           OnClick="AddDelegate"
+                           Disabled="@(_selectedPlayer == null || _processing)">
+                    Adicionar
+                </MudButton>
+            </MudStack>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Fechar</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Guid TournamentId { get; set; }
+    [Parameter] public Guid LeagueId { get; set; }
+    [Parameter] public string AssignedBy { get; set; } = string.Empty;
+
+    private List<TournamentDelegateDto> _delegates = new();
+    private List<PlayerDto> _leaguePlayers = new();
+    private PlayerDto? _selectedPlayer;
+    private bool _loading = true;
+    private bool _processing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        _delegates = (await TournamentService.GetDelegatesAsync(TournamentId)).ToList();
+        _leaguePlayers = (await PlayerService.GetPlayersByLeagueAsync(LeagueId))
+            .Where(p => !string.IsNullOrEmpty(p.UserId))
+            .ToList();
+        _loading = false;
+    }
+
+    private Task<IEnumerable<PlayerDto>> SearchPlayers(string? value, CancellationToken ct)
+    {
+        var existingUserIds = _delegates.Select(d => d.UserId).ToHashSet();
+        var available = _leaguePlayers.Where(p => !existingUserIds.Contains(p.UserId!));
+
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            available = available.Where(p =>
+                p.Name.Contains(value, StringComparison.OrdinalIgnoreCase) ||
+                (p.Nickname?.Contains(value, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+
+        return Task.FromResult(available);
+    }
+
+    private async Task AddDelegate()
+    {
+        if (_selectedPlayer?.UserId == null) return;
+
+        _processing = true;
+        try
+        {
+            var success = await TournamentService.AddDelegateAsync(
+                TournamentId, _selectedPlayer.UserId, AssignedBy);
+
+            if (success)
+            {
+                Snackbar.Add($"{_selectedPlayer.Name} adicionado como delegado", Severity.Success);
+                _selectedPlayer = null;
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Este jogador ja e delegado deste torneio", Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private async Task RemoveDelegate(string userId)
+    {
+        _processing = true;
+        try
+        {
+            var success = await TournamentService.RemoveDelegateAsync(TournamentId, userId);
+            if (success)
+            {
+                Snackbar.Add("Delegado removido", Severity.Info);
+                await LoadData();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

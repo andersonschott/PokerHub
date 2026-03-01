@@ -69,12 +69,12 @@ else
                                         <MudText Typo="Typo.body2" Color="Color.Secondary">@player.Nickname</MudText>
                                     }
                                     <MudText Typo="Typo.h5" Color="@(player.Profit >= 0 ? Color.Success : Color.Error)">
-                                        @player.Profit.ToString("C")
+                                        @player.Profit.ToBrl()
                                     </MudText>
                                     <MudStack Row Spacing="4" Class="mt-2">
                                         <MudStack AlignItems="AlignItems.Center" Spacing="0">
                                             <MudText Typo="Typo.caption" Color="Color.Secondary">Torneios</MudText>
-                                            <MudText Typo="Typo.body1">@player.TournamentsPlayed</MudText>
+                                            <MudText Typo="Typo.body1">@player.TournamentsPlayed/@player.TotalSeasonTournaments</MudText>
                                         </MudStack>
                                         <MudStack AlignItems="AlignItems.Center" Spacing="0">
                                             <MudText Typo="Typo.caption" Color="Color.Secondary">Vitorias</MudText>
@@ -121,7 +121,7 @@ else
                                 }
                             </MudStack>
                         </MudTd>
-                        <MudTd Style="text-align: center;">@context.TournamentsPlayed</MudTd>
+                        <MudTd Style="text-align: center;">@context.TournamentsPlayed/@context.TotalSeasonTournaments (@context.ParticipationPercentage%)</MudTd>
                         <MudTd Style="text-align: center;">@context.Wins</MudTd>
                         <MudTd Style="text-align: center;">@context.SecondPlaces</MudTd>
                         <MudTd Style="text-align: center;">@context.ThirdPlaces</MudTd>
@@ -129,7 +129,7 @@ else
                         <MudTd Style="text-align: center;">@context.ROI.ToString("F1")%</MudTd>
                         <MudTd Style="text-align: right;">
                             <MudText Color="@(context.Profit >= 0 ? Color.Success : Color.Error)">
-                                @context.Profit.ToString("C")
+                                @context.Profit.ToBrl()
                             </MudText>
                         </MudTd>
                     </RowTemplate>

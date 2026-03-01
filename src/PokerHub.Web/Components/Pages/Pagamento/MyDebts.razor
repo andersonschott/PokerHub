@@ -42,12 +42,12 @@
         <div class="summary-row">
             <div class="summary-card debt">
                 <div class="summary-label">A Pagar</div>
-                <div class="summary-value">@_totalDebt.ToString("C")</div>
+                <div class="summary-value">@_totalDebt.ToBrl()</div>
                 <div class="summary-count">@_debtCount pendente@(_debtCount != 1 ? "s" : "")</div>
             </div>
             <div class="summary-card credit">
                 <div class="summary-label">A Receber</div>
-                <div class="summary-value">@_totalCredit.ToString("C")</div>
+                <div class="summary-value">@_totalCredit.ToBrl()</div>
                 <div class="summary-count">@_creditCount pendente@(_creditCount != 1 ? "s" : "")</div>
             </div>
         </div>
@@ -57,7 +57,7 @@
             <div class="balance-icon">📊</div>
             <div class="balance-info">
                 <div class="balance-label">Saldo Liquido</div>
-                <div class="balance-value">@(_netBalance >= 0 ? "+" : "")@_netBalance.ToString("C")</div>
+                <div class="balance-value">@(_netBalance >= 0 ? "+" : "")@_netBalance.ToBrl()</div>
             </div>
         </div>
 
@@ -135,7 +135,7 @@
                                 </div>
                                 <div class="debt-amount">
                                     <div class="debt-amount-label">Valor:</div>
-                                    <div class="debt-amount-value">@debt.Amount.ToString("C")</div>
+                                    <div class="debt-amount-value">@debt.Amount.ToBrl()</div>
                                 </div>
                             </div>
 
@@ -155,15 +155,24 @@
                             }
 
                             <div class="debt-action">
-                                <button class="btn btn-primary"
-                                        @onclick="@(() => MarkAsPaid(debt))"
-                                        disabled="@(_processingPaymentId == debt.PaymentId)">
-                                    @if (_processingPaymentId == debt.PaymentId)
-                                    {
-                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                                    }
-                                    ✓ Marcar como Pago
-                                </button>
+                                @if (debt.Status == PaymentStatus.Paid)
+                                {
+                                    <div class="status-badge paid" style="text-align: center; padding: 8px; font-size: 13px;">
+                                        ⏳ Aguardando confirmacao do credor
+                                    </div>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-primary"
+                                            @onclick="@(() => MarkAsPaid(debt))"
+                                            disabled="@(_processingPaymentId == debt.PaymentId)">
+                                        @if (_processingPaymentId == debt.PaymentId)
+                                        {
+                                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                        }
+                                        ✓ Marcar como Pago
+                                    </button>
+                                }
                             </div>
                         </div>
                     }
@@ -204,11 +213,11 @@
                                 </div>
                             </div>
                             <div class="credit-status">
-                                <div class="credit-amount">@payment.Amount.ToString("C")</div>
+                                <div class="credit-amount">@payment.Amount.ToBrl()</div>
                                 <div class="status-badge @GetStatusClass(payment.Status)">
                                     @GetStatusText(payment.Status)
                                 </div>
-                                @if (payment.Status == PaymentStatus.Paid)
+                                @if (payment.Status != PaymentStatus.Confirmed)
                                 {
                                     <button class="confirm-btn"
                                             @onclick="@(() => ConfirmPayment(payment))"
@@ -262,42 +271,58 @@
                         @foreach (var payment in FilteredOrganizerPayments)
                         {
                             <div class="admin-card">
-                                <div class="type-badge-small @GetTypeBadgeClassFromPayment(payment)">
-                                    @GetTypeIconFromPayment(payment)
-                                </div>
-                                <div class="admin-card-info">
+                                <div class="admin-card-header">
                                     <div class="admin-card-tournament">@payment.TournamentName</div>
-                                    <div class="admin-card-players">
-                                        @payment.FromPlayerName → @payment.ToPlayerName
+                                    <div class="type-badge-small @GetTypeBadgeClassFromPayment(payment)">
+                                        @GetTypeIconFromPayment(payment)
                                     </div>
                                 </div>
-                                <div class="admin-card-values">
+                                <div class="admin-card-players">
+                                    <div class="admin-card-player-line">
+                                        <span class="player-label">De:</span> @payment.FromPlayerName
+                                    </div>
+                                    <div class="admin-card-player-line">
+                                        <span class="player-label">Para:</span> @payment.ToPlayerName
+                                    </div>
+                                </div>
+                                <div class="admin-card-footer">
                                     <div class="admin-card-amount @(payment.IsJackpotContribution ? "caixinha" : "")">
-                                        @payment.Amount.ToString("C")
+                                        @payment.Amount.ToBrl()
                                     </div>
                                     <div class="admin-card-days">@payment.DaysOpen dia@(payment.DaysOpen != 1 ? "s" : "")</div>
-                                </div>
-                                <div class="admin-card-actions">
-                                    @if (payment.Status == PaymentStatus.Pending)
-                                    {
-                                        <button class="action-btn mark-paid"
-                                                @onclick="@(() => AdminMarkPaid(payment.Id))"
-                                                disabled="@(_processingPaymentId == payment.Id)">
-                                            Pago
-                                        </button>
-                                    }
-                                    else if (payment.Status == PaymentStatus.Paid)
-                                    {
-                                        <button class="action-btn confirm"
-                                                @onclick="@(() => AdminConfirm(payment.Id))"
-                                                disabled="@(_processingPaymentId == payment.Id)">
-                                            Confirmar
-                                        </button>
-                                    }
-                                    else
-                                    {
-                                        <span class="status-done">✓</span>
-                                    }
+                                    <div class="admin-card-actions">
+                                        @if (payment.Status == PaymentStatus.Pending)
+                                        {
+                                            <MudButton Variant="Variant.Text"
+                                                       Color="Color.Info"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => AdminMarkPaid(payment.Id))"
+                                                       Disabled="@(_processingPaymentId == payment.Id)">
+                                                Pago
+                                            </MudButton>
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Success"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => AdminConfirm(payment.Id))"
+                                                       Disabled="@(_processingPaymentId == payment.Id)">
+                                                Confirmar
+                                            </MudButton>
+                                        }
+                                        else if (payment.Status == PaymentStatus.Paid)
+                                        {
+                                            <MudButton Variant="Variant.Filled"
+                                                       Color="Color.Success"
+                                                       Size="Size.Small"
+                                                       OnClick="@(() => AdminConfirm(payment.Id))"
+                                                       Disabled="@(_processingPaymentId == payment.Id)">
+                                                Confirmar
+                                            </MudButton>
+                                        }
+                                        else
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                                        }
+                                    </div>
                                 </div>
                             </div>
                         }
@@ -568,11 +593,15 @@
         _processingPaymentId = paymentId;
         try
         {
-            var success = await PaymentService.AdminMarkAsPaidAsync(paymentId, _currentUserId);
+            var (success, message) = await PaymentService.AdminMarkAsPaidAsync(paymentId, _currentUserId);
             if (success)
             {
                 Snackbar.Add("Pagamento marcado como pago!", Severity.Success);
                 await LoadData();
+            }
+            else
+            {
+                Snackbar.Add(message, Severity.Error);
             }
         }
         catch (Exception ex)
@@ -599,11 +628,15 @@
         _processingPaymentId = paymentId;
         try
         {
-            var success = await PaymentService.AdminConfirmPaymentAsync(paymentId, _currentUserId);
+            var (success, message) = await PaymentService.AdminConfirmPaymentAsync(paymentId, _currentUserId);
             if (success)
             {
                 Snackbar.Add("Pagamento confirmado!", Severity.Success);
                 await LoadData();
+            }
+            else
+            {
+                Snackbar.Add(message, Severity.Error);
             }
         }
         catch (Exception ex)

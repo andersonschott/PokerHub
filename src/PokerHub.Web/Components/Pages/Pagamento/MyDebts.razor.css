@@ -649,41 +649,56 @@
 .admin-card {
     background: var(--mud-palette-surface);
     border-radius: 10px;
-    padding: 10px 12px;
+    padding: 14px;
     display: flex;
-    align-items: center;
+    flex-direction: column;
     gap: 10px;
     min-width: 0;
     width: 100%;
     box-sizing: border-box;
 }
 
-.admin-card-info {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
+.admin-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
 
 .admin-card-tournament {
-    font-size: 11px;
+    font-size: 12px;
     color: var(--mud-palette-text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
 }
 
 .admin-card-players {
-    font-size: 13px;
-    font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
 }
 
-.admin-card-values {
-    text-align: right;
-    flex-shrink: 0;
-    min-width: 80px;
+.admin-card-player-line {
+    font-size: 13px;
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.player-label {
+    font-size: 11px;
+    color: var(--mud-palette-text-secondary);
+    font-weight: 400;
+}
+
+.admin-card-footer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .admin-card-amount {
@@ -704,21 +719,23 @@
 }
 
 .admin-card-actions {
-    min-width: 70px;
+    margin-left: auto;
     flex-shrink: 0;
     display: flex;
-    justify-content: flex-end;
+    gap: 6px;
 }
 
 .action-btn {
-    padding: 5px 10px;
+    padding: 10px 14px;
     border-radius: 6px;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     border: none;
     cursor: pointer;
     text-transform: uppercase;
     transition: all 0.2s ease;
+    min-height: 44px;
+    min-width: 44px;
 }
 
 .action-btn.mark-paid {
@@ -804,36 +821,14 @@
         font-size: 24px;
     }
 
-    .admin-section {
-        max-width: 100%;
-        overflow: hidden;
-    }
-
     .admin-list {
         display: grid;
         grid-template-columns: repeat(2, 1fr);
         gap: 10px;
-        max-width: 100%;
     }
 
     .admin-card {
         min-width: 0;
-        max-width: 100%;
-    }
-
-    .admin-card-info {
-        overflow: hidden;
-    }
-
-    .admin-card-tournament {
-        max-width: 150px;
-    }
-
-    .admin-card-players {
-        max-width: 150px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
     }
 }
 
@@ -846,9 +841,8 @@
         grid-template-columns: repeat(3, 1fr);
     }
 
-    .admin-card-tournament,
-    .admin-card-players {
-        max-width: 180px;
+    .admin-card {
+        min-width: 0;
     }
 }
 

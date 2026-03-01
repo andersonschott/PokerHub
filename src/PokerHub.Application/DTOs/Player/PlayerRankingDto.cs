@@ -14,5 +14,7 @@ public record PlayerRankingDto(
     decimal TotalPrizes,
     decimal Profit,
     decimal ROI,
-    decimal ITMRate
+    decimal ITMRate,
+    int TotalSeasonTournaments,
+    int ParticipationPercentage
 );

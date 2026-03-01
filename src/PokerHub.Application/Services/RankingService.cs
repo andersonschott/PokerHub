@@ -17,6 +17,10 @@ public class RankingService : IRankingService
 
     public async Task<IReadOnlyList<PlayerRankingDto>> GetLeagueRankingAsync(Guid leagueId)
     {
+        // Total de torneios finalizados no BD
+        var dbTotalFinished = await _context.Tournaments
+            .CountAsync(t => t.LeagueId == leagueId && t.Status == TournamentStatus.Finished);
+
         // Buscar dados legados (PlayerSeasonStats)
         var legacyStats = await _context.PlayerSeasonStats
             .Where(pss => pss.Player.LeagueId == leagueId)
@@ -45,10 +49,20 @@ public class RankingService : IRankingService
                     r.TotalPrizes,
                     r.Profit,
                     r.ROI,
-                    r.ITMRate
+                    r.ITMRate,
+                    dbTotalFinished,
+                    CalculateParticipationPercentage(r.TournamentsPlayed, dbTotalFinished)
                 ))
                 .ToList();
         }
+
+        // Estimar total de torneios legados: max(GamesPlayed) por temporada
+        // (o jogador que jogou mais em cada temporada nos dá o total daquela temporada)
+        var legacyTotalTournaments = legacyStats
+            .GroupBy(pss => pss.SeasonId)
+            .Sum(g => g.Max(x => x.GamesPlayed));
+
+        var totalFinished = dbTotalFinished + legacyTotalTournaments;
 
         // Combinar dados legados + torneios por jogador
         var legacyByPlayer = legacyStats
@@ -128,7 +142,9 @@ public class RankingService : IRankingService
                 p.TotalPrizes,
                 p.Profit,
                 p.ROI,
-                p.ITMRate
+                p.ITMRate,
+                totalFinished,
+                CalculateParticipationPercentage(p.TournamentsPlayed, totalFinished)
             ))
             .ToList();
     }
@@ -244,7 +260,9 @@ public class RankingService : IRankingService
                     p.TotalPrize,
                     p.TotalBalance,
                     roi,
-                    itmRate
+                    itmRate,
+                    0, // Legacy data - no total tournament count available
+                    0
                 );
             })
             .ToList();
@@ -301,6 +319,9 @@ public class RankingService : IRankingService
             .OrderByDescending(r => r.Profit)
             .ToList();
 
+        var totalFinished = await _context.Tournaments
+            .CountAsync(t => t.LeagueId == leagueId && t.Status == TournamentStatus.Finished);
+
         return rankings
             .Select((r, index) => new PlayerRankingDto(
                 index + 1,
@@ -316,9 +337,16 @@ public class RankingService : IRankingService
                 r.TotalPrizes,
                 r.Profit,
                 r.ROI,
-                r.ITMRate
+                r.ITMRate,
+                totalFinished,
+                CalculateParticipationPercentage(r.TournamentsPlayed, totalFinished)
             ))
             .ToList();
+    }
+
+    private static int CalculateParticipationPercentage(int played, int total)
+    {
+        return total > 0 ? (int)Math.Round((decimal)played / total * 100) : 0;
     }
 
     public async Task<PlayerStatsDto?> GetPlayerStatsAsync(Guid playerId)

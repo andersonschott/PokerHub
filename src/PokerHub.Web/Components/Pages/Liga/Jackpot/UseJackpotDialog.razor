@@ -24,7 +24,7 @@
                         Class="mb-4" />
 
         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
-            Saldo disponivel: @MaxAmount.ToString("C")
+            Saldo disponivel: @MaxAmount.ToBrl()
         </MudText>
 
         <MudTextField @bind-Value="_description"

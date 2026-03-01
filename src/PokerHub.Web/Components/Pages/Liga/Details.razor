@@ -11,6 +11,7 @@
 @inject IDialogService DialogService
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JS
+@inject IExportService ExportService
 
 <PageTitle>@(_league?.Name ?? "Liga") - PokerHub</PageTitle>
 
@@ -340,6 +341,19 @@ else
                                     </MudSelect>
                                 </div>
 
+                                @if (SortedRankingData.Count() >= 2)
+                                {
+                                    <MudButton Variant="Variant.Outlined"
+                                              Color="Color.Primary"
+                                              Size="Size.Small"
+                                              StartIcon="@Icons.Material.Filled.CompareArrows"
+                                              Href="@($"/ligas/{LeagueId}/comparar")"
+                                              Class="mb-3"
+                                              FullWidth="true">
+                                        Comparar Jogadores
+                                    </MudButton>
+                                }
+
                                 @if (!SortedRankingData.Any())
                                 {
                                     <MudAlert Severity="Severity.Info" Dense="true">
@@ -372,7 +386,7 @@ else
                                             </MudText>
                                         </div>
                                         <div class="d-flex gap-2 mt-1">
-                                            <MudText Typo="Typo.caption" Color="Color.Secondary">@lider.TournamentsPlayed torneios</MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">@lider.TournamentsPlayed/@lider.TotalSeasonTournaments torneios (@lider.ParticipationPercentage%)</MudText>
                                             <MudText Typo="Typo.caption" Color="Color.Secondary">|</MudText>
                                             <MudText Typo="Typo.caption" Color="@(lider.ROI >= 0 ? Color.Success : Color.Error)">
                                                 @(lider.ROI >= 0 ? "+" : "")@lider.ROI.ToString("N1")% ROI
@@ -454,7 +468,7 @@ else
                                                                 }
                                                             </div>
                                                             <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                                                @player.TournamentsPlayed torneios - @player.ITMRate.ToString("N0")% ITM
+                                                                @player.TournamentsPlayed/@player.TotalSeasonTournaments (@player.ParticipationPercentage%) - @player.ITMRate.ToString("N0")% ITM
                                                             </MudText>
                                                         </div>
                                                         <MudChip T="string" Size="Size.Small"
@@ -493,8 +507,8 @@ else
                                                         <MudGrid Spacing="2">
                                                             <MudItem xs="6">
                                                                 <MudPaper Class="pa-2 text-center" Elevation="0" Style="background: rgba(255,255,255,0.05); border-radius: 8px;">
-                                                                    <MudText Typo="Typo.h6" Class="font-weight-bold">@player.TournamentsPlayed</MudText>
-                                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Torneios</MudText>
+                                                                    <MudText Typo="Typo.h6" Class="font-weight-bold">@player.TournamentsPlayed/@player.TotalSeasonTournaments</MudText>
+                                                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Torneios (@player.ParticipationPercentage%)</MudText>
                                                                 </MudPaper>
                                                             </MudItem>
                                                             <MudItem xs="6">
@@ -852,7 +866,28 @@ else
 
                     <MudTabPanel Text="Ranking" Icon="@Icons.Material.Filled.Leaderboard">
                         <MudStack Row Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center" Class="mb-4">
-                            <MudText Typo="Typo.h6">Ranking por Lucro/Prejuizo</MudText>
+                            <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+                                <MudText Typo="Typo.h6">Ranking por Lucro/Prejuizo</MudText>
+                                @if (_rankingData.Any())
+                                {
+                                    <MudTooltip Text="Exportar CSV">
+                                        <MudIconButton Icon="@Icons.Material.Filled.FileDownload"
+                                                       Size="Size.Small"
+                                                       Color="Color.Default"
+                                                       OnClick="ExportRankingCsv" />
+                                    </MudTooltip>
+                                }
+                                @if (_rankingData.Count >= 2)
+                                {
+                                    <MudButton Variant="Variant.Outlined"
+                                              Color="Color.Primary"
+                                              Size="Size.Small"
+                                              StartIcon="@Icons.Material.Filled.CompareArrows"
+                                              Href="@($"/ligas/{LeagueId}/comparar")">
+                                        Comparar
+                                    </MudButton>
+                                }
+                            </MudStack>
                             @if (_seasons.Any())
                             {
                                 <MudSelect T="Guid?" Value="_selectedSeasonId" ValueChanged="OnSeasonChanged"
@@ -1440,5 +1475,14 @@ else
         {
             Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
         }
+    }
+
+    private async Task ExportRankingCsv()
+    {
+        if (_rankingData == null || !_rankingData.Any()) return;
+        var csv = ExportService.ExportRankingToCsv(_rankingData);
+        var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(csv));
+        var filename = $"ranking_{_league!.Name.Replace(" ", "_")}.csv";
+        await JS.InvokeVoidAsync("downloadFile", filename, "text/csv", base64);
     }
 }

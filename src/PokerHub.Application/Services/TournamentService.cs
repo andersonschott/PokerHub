@@ -12,12 +12,14 @@ public class TournamentService : ITournamentService
     private readonly PokerHubDbContext _context;
     private readonly IJackpotService _jackpotService;
     private readonly IPrizeTableService _prizeTableService;
+    private readonly IPaymentService _paymentService;
 
-    public TournamentService(PokerHubDbContext context, IJackpotService jackpotService, IPrizeTableService prizeTableService)
+    public TournamentService(PokerHubDbContext context, IJackpotService jackpotService, IPrizeTableService prizeTableService, IPaymentService paymentService)
     {
         _context = context;
         _jackpotService = jackpotService;
         _prizeTableService = prizeTableService;
+        _paymentService = paymentService;
     }
 
     public async Task<IReadOnlyList<TournamentDto>> GetTournamentsByLeagueAsync(Guid leagueId)
@@ -319,107 +321,109 @@ public class TournamentService : ITournamentService
         return true;
     }
 
-    public async Task<bool> FinishTournamentAsync(Guid tournamentId, IList<(Guid playerId, int position)> positions)
+    public async Task<(bool Success, string Message)> FinishTournamentAsync(Guid tournamentId, IList<(Guid playerId, int position)> positions)
     {
         var tournament = await _context.Tournaments
             .Include(t => t.Players)
             .Include(t => t.League)
             .FirstOrDefaultAsync(t => t.Id == tournamentId);
 
-        if (tournament == null ||
-            (tournament.Status != TournamentStatus.InProgress && tournament.Status != TournamentStatus.Paused))
-            return false;
+        if (tournament == null)
+            return (false, "Torneio não encontrado.");
 
-        var prizePool = CalculatePrizePool(tournament);
+        if (tournament.Status != TournamentStatus.InProgress && tournament.Status != TournamentStatus.Paused)
+            return (false, "Torneio não está em andamento.");
 
-        // Use centralized prize calculation service
-        var prizeResult = await _prizeTableService.CalculatePrizeDistributionAsync(
-            tournament.LeagueId,
-            prizePool,
-            tournament.PrizeStructure,
-            tournament.UsePrizeTable);
-
-        // Create allocation dictionary for quick lookup
-        var prizeAllocations = prizeResult.Allocations.ToDictionary(a => a.Position, a => a.Amount);
-
-        // Assign positions and prizes to players
-        foreach (var (playerId, position) in positions)
+        // TournamentService and JackpotService must remain Scoped
+        // to share the same DbContext instance within this transaction.
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+        try
         {
-            var tp = tournament.Players.FirstOrDefault(p => p.PlayerId == playerId);
-            if (tp != null)
+            var prizePool = CalculatePrizePool(tournament);
+            var prizeResult = await _prizeTableService.CalculatePrizeDistributionAsync(
+                tournament.LeagueId, prizePool, tournament.PrizeStructure, tournament.UsePrizeTable);
+            var prizeAllocations = prizeResult.Allocations.ToDictionary(a => a.Position, a => a.Amount);
+
+            foreach (var (playerId, position) in positions)
             {
-                tp.Position = position;
-                if (prizeAllocations.TryGetValue(position, out var prizeAmount))
+                var tp = tournament.Players.FirstOrDefault(p => p.PlayerId == playerId);
+                if (tp != null)
                 {
-                    tp.Prize = Math.Round(prizeAmount, MidpointRounding.AwayFromZero);
+                    tp.Position = position;
+                    if (prizeAllocations.TryGetValue(position, out var prizeAmount))
+                        tp.Prize = Math.Round(prizeAmount, MidpointRounding.AwayFromZero);
                 }
             }
-        }
 
-        // Adjust rounding difference on 1st place (only for percentage-based distribution without prize table)
-        if (!prizeResult.UsedPrizeTable)
-        {
-            var totalDistributed = tournament.Players.Sum(p => p.Prize) + prizeResult.JackpotContribution;
-            var roundingDiff = prizePool - totalDistributed;
-
-            if (roundingDiff != 0)
+            if (!prizeResult.UsedPrizeTable)
             {
-                var firstPlace = tournament.Players.FirstOrDefault(p => p.Position == 1);
-                if (firstPlace != null)
+                var totalDistributed = tournament.Players.Sum(p => p.Prize) + prizeResult.JackpotContribution;
+                var roundingDiff = prizePool - totalDistributed;
+                if (roundingDiff != 0)
                 {
-                    firstPlace.Prize += roundingDiff;
+                    var firstPlace = tournament.Players.FirstOrDefault(p => p.Position == 1);
+                    if (firstPlace != null) firstPlace.Prize += roundingDiff;
                 }
             }
+
+            tournament.Status = TournamentStatus.Finished;
+            tournament.FinishedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            if (prizeResult.JackpotContribution > 0)
+                await _jackpotService.RecordContributionAsync(tournamentId, prizeResult.JackpotContribution);
+
+            await transaction.CommitAsync();
+            return (true, "Torneio finalizado com sucesso!");
         }
-
-        tournament.Status = TournamentStatus.Finished;
-        tournament.FinishedAt = DateTime.UtcNow;
-
-        await _context.SaveChangesAsync();
-
-        // Record jackpot contribution if any
-        if (prizeResult.JackpotContribution > 0)
+        catch
         {
-            await _jackpotService.RecordContributionAsync(tournamentId, prizeResult.JackpotContribution);
+            await transaction.RollbackAsync();
+            return (false, "Erro ao finalizar torneio. Tente novamente.");
         }
-
-        return true;
     }
 
-    public async Task<bool> FinishTournamentWithCustomPrizesAsync(Guid tournamentId, ConfirmedPrizeDistributionDto distribution)
+    public async Task<(bool Success, string Message)> FinishTournamentWithCustomPrizesAsync(Guid tournamentId, ConfirmedPrizeDistributionDto distribution)
     {
         var tournament = await _context.Tournaments
             .Include(t => t.Players)
             .Include(t => t.League)
             .FirstOrDefaultAsync(t => t.Id == tournamentId);
 
-        if (tournament == null ||
-            (tournament.Status != TournamentStatus.InProgress && tournament.Status != TournamentStatus.Paused))
-            return false;
+        if (tournament == null)
+            return (false, "Torneio não encontrado.");
 
-        // Assign custom prizes to players
-        foreach (var playerPrize in distribution.PlayerPrizes)
+        if (tournament.Status != TournamentStatus.InProgress && tournament.Status != TournamentStatus.Paused)
+            return (false, "Torneio não está em andamento.");
+
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+        try
         {
-            var tp = tournament.Players.FirstOrDefault(p => p.PlayerId == playerPrize.PlayerId);
-            if (tp != null)
+            foreach (var playerPrize in distribution.PlayerPrizes)
             {
-                tp.Position = playerPrize.Position;
-                tp.Prize = playerPrize.Prize;
+                var tp = tournament.Players.FirstOrDefault(p => p.PlayerId == playerPrize.PlayerId);
+                if (tp != null)
+                {
+                    tp.Position = playerPrize.Position;
+                    tp.Prize = playerPrize.Prize;
+                }
             }
+
+            tournament.Status = TournamentStatus.Finished;
+            tournament.FinishedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            if (distribution.JackpotContribution > 0)
+                await _jackpotService.RecordContributionAsync(tournamentId, distribution.JackpotContribution);
+
+            await transaction.CommitAsync();
+            return (true, "Torneio finalizado com sucesso!");
         }
-
-        tournament.Status = TournamentStatus.Finished;
-        tournament.FinishedAt = DateTime.UtcNow;
-
-        await _context.SaveChangesAsync();
-
-        // Record jackpot contribution if any
-        if (distribution.JackpotContribution > 0)
+        catch
         {
-            await _jackpotService.RecordContributionAsync(tournamentId, distribution.JackpotContribution);
+            await transaction.RollbackAsync();
+            return (false, "Erro ao finalizar torneio. Tente novamente.");
         }
-
-        return true;
     }
 
     public async Task<bool> CancelTournamentAsync(Guid tournamentId)
@@ -530,17 +534,17 @@ public class TournamentService : ITournamentService
         return tournament.IsRebuyAllowed(tournament.CurrentLevel, minutesElapsed);
     }
 
-    public async Task<bool> EliminatePlayerAsync(Guid tournamentId, Guid playerId, Guid? eliminatedByPlayerId, int? position = null)
+    public async Task<(bool Success, string Message)> EliminatePlayerAsync(Guid tournamentId, Guid playerId, Guid? eliminatedByPlayerId, int? position = null)
     {
         var tp = await _context.TournamentPlayers
             .FirstOrDefaultAsync(tp => tp.TournamentId == tournamentId && tp.PlayerId == playerId);
-        if (tp == null) return false;
+        if (tp == null) return (false, "Jogador não encontrado no torneio.");
 
         tp.EliminatedByPlayerId = eliminatedByPlayerId;
         tp.EliminatedAt = DateTime.UtcNow;
         tp.Position = position;
         await _context.SaveChangesAsync();
-        return true;
+        return (true, "Jogador eliminado com sucesso.");
     }
 
     public async Task<bool> RestoreEliminatedPlayerAsync(Guid tournamentId, Guid playerId)
@@ -677,82 +681,172 @@ public class TournamentService : ITournamentService
 
     public IReadOnlyList<CreateBlindLevelDto> GetTurboBlindTemplate()
     {
-        return new List<CreateBlindLevelDto>
-        {
-            new(1, 25, 50, 0, 10, false, null),
-            new(2, 50, 100, 0, 10, false, null),
-            new(3, 75, 150, 0, 10, false, null),
-            new(4, 100, 200, 25, 10, false, null),
-            new(5, 0, 0, 0, 10, true, "Intervalo"),
-            new(6, 150, 300, 50, 10, false, null),
-            new(7, 200, 400, 50, 10, false, null),
-            new(8, 300, 600, 75, 10, false, null),
-            new(9, 400, 800, 100, 10, false, null),
-            new(10, 500, 1000, 100, 10, false, null),
-            new(11, 600, 1200, 200, 10, false, null)
-        };
+        return BuildBlindTemplate(
+            (25, 50, 0, 10, false),
+            (50, 100, 0, 10, false),
+            (75, 150, 0, 10, false),
+            (100, 200, 25, 10, false),
+            (0, 0, 0, 10, true),
+            (150, 300, 50, 10, false),
+            (200, 400, 50, 10, false),
+            (300, 600, 75, 10, false),
+            (400, 800, 100, 10, false),
+            (500, 1000, 100, 10, false),
+            (600, 1200, 200, 10, false)
+        );
     }
 
     public IReadOnlyList<CreateBlindLevelDto> GetRegularBlindTemplate()
     {
-        return new List<CreateBlindLevelDto>
-        {
-            new(1, 25, 50, 0, 15, false, null),
-            new(2, 50, 100, 0, 15, false, null),
-            new(3, 75, 150, 0, 15, false, null),
-            new(4, 100, 200, 25, 15, false, null),
-            new(5, 0, 0, 0, 15, true, "Intervalo"),
-            new(6, 150, 300, 25, 15, false, null),
-            new(7, 200, 400, 50, 15, false, null),
-            new(8, 300, 600, 75, 15, false, null),
-            new(9, 0, 0, 0, 10, true, "Intervalo"),
-            new(10, 400, 800, 100, 15, false, null),
-            new(11, 500, 1000, 100, 15, false, null),
-            new(12, 600, 1200, 200, 15, false, null)
-        };
+        return BuildBlindTemplate(
+            (25, 50, 0, 15, false),
+            (50, 100, 0, 15, false),
+            (75, 150, 0, 15, false),
+            (100, 200, 25, 15, false),
+            (0, 0, 0, 15, true),
+            (150, 300, 25, 15, false),
+            (200, 400, 50, 15, false),
+            (300, 600, 75, 15, false),
+            (0, 0, 0, 10, true),
+            (400, 800, 100, 15, false),
+            (500, 1000, 100, 15, false),
+            (600, 1200, 200, 15, false)
+        );
     }
 
     public IReadOnlyList<CreateBlindLevelDto> GetDeepStackBlindTemplate()
     {
-        return new List<CreateBlindLevelDto>
-        {
-            new(1, 25, 50, 0, 20, false, null),
-            new(2, 50, 100, 0, 20, false, null),
-            new(3, 75, 150, 0, 20, false, null),
-            new(4, 100, 200, 0, 20, false, null),
-            new(5, 0, 0, 0, 15, true, "Intervalo"),
-            new(6, 125, 250, 25, 20, false, null),
-            new(7, 150, 300, 25, 20, false, null),
-            new(8, 200, 400, 50, 20, false, null),
-            new(9, 250, 500, 50, 20, false, null),
-            new(10, 0, 0, 0, 15, true, "Intervalo"),
-            new(11, 300, 600, 75, 20, false, null),
-            new(12, 400, 800, 100, 20, false, null),
-            new(13, 500, 1000, 100, 20, false, null),
-            new(14, 600, 1200, 200, 20, false, null)
-        };
+        return BuildBlindTemplate(
+            (25, 50, 0, 20, false),
+            (50, 100, 0, 20, false),
+            (75, 150, 0, 20, false),
+            (100, 200, 0, 20, false),
+            (0, 0, 0, 15, true),
+            (125, 250, 25, 20, false),
+            (150, 300, 25, 20, false),
+            (200, 400, 50, 20, false),
+            (250, 500, 50, 20, false),
+            (0, 0, 0, 15, true),
+            (300, 600, 75, 20, false),
+            (400, 800, 100, 20, false),
+            (500, 1000, 100, 20, false),
+            (600, 1200, 200, 20, false)
+        );
+    }
+
+    private static IReadOnlyList<CreateBlindLevelDto> BuildBlindTemplate(
+        params (int SB, int BB, int Ante, int Duration, bool IsBreak)[] levels)
+    {
+        return levels.Select((level, i) => new CreateBlindLevelDto(
+            i + 1,
+            level.SB,
+            level.BB,
+            level.Ante,
+            level.Duration,
+            level.IsBreak,
+            level.IsBreak ? "Intervalo" : null
+        )).ToList();
     }
 
     public async Task<bool> CanUserManageTournamentAsync(Guid tournamentId, string userId)
     {
+        // 1. Organizer check (cheapest - direct lookup)
+        var isOrganizer = await _context.Tournaments
+            .AnyAsync(t => t.Id == tournamentId && t.League.OrganizerId == userId);
+        if (isOrganizer) return true;
+
+        // 2. Delegate check
+        var isDelegate = await _context.TournamentDelegates
+            .AnyAsync(td => td.TournamentId == tournamentId && td.UserId == userId);
+        if (isDelegate) return true;
+
+        // 3. Checked-in player (most expensive - join with Player)
+        var isCheckedInPlayer = await _context.TournamentPlayers
+            .AnyAsync(tp => tp.TournamentId == tournamentId &&
+                           tp.Player.UserId == userId && tp.CheckedInAt != null);
+        return isCheckedInPlayer;
+    }
+
+    public async Task<bool> AddDelegateAsync(Guid tournamentId, string userId, string assignedBy, DelegatePermissions permissions = DelegatePermissions.All)
+    {
+        var alreadyDelegate = await _context.TournamentDelegates
+            .AnyAsync(td => td.TournamentId == tournamentId && td.UserId == userId);
+        if (alreadyDelegate) return false;
+
+        var tournamentExists = await _context.Tournaments
+            .AnyAsync(t => t.Id == tournamentId);
+        if (!tournamentExists) return false;
+
+        var userExists = await _context.Users
+            .AnyAsync(u => u.Id == userId);
+        if (!userExists) return false;
+
+        var delegate_ = new TournamentDelegate
+        {
+            Id = Guid.NewGuid(),
+            TournamentId = tournamentId,
+            UserId = userId,
+            Permissions = permissions,
+            AssignedAt = DateTime.UtcNow,
+            AssignedBy = assignedBy
+        };
+
+        _context.TournamentDelegates.Add(delegate_);
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<bool> RemoveDelegateAsync(Guid tournamentId, string userId)
+    {
+        var delegate_ = await _context.TournamentDelegates
+            .FirstOrDefaultAsync(td => td.TournamentId == tournamentId && td.UserId == userId);
+        if (delegate_ == null) return false;
+
+        _context.TournamentDelegates.Remove(delegate_);
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<IReadOnlyList<TournamentDelegateDto>> GetDelegatesAsync(Guid tournamentId)
+    {
+        return await _context.TournamentDelegates
+            .AsNoTracking()
+            .Where(td => td.TournamentId == tournamentId)
+            .Include(td => td.User)
+            .OrderBy(td => td.AssignedAt)
+            .Select(td => new TournamentDelegateDto(
+                td.Id,
+                td.TournamentId,
+                td.UserId,
+                td.User.Name,
+                td.Permissions,
+                td.AssignedAt))
+            .ToListAsync();
+    }
+
+    public async Task<int> BulkCheckInAsync(Guid tournamentId, IList<Guid> playerIds)
+    {
         var tournament = await _context.Tournaments
-            .Include(t => t.League)
             .Include(t => t.Players)
-                .ThenInclude(tp => tp.Player)
             .FirstOrDefaultAsync(t => t.Id == tournamentId);
 
-        if (tournament == null)
-            return false;
+        if (tournament == null) return 0;
 
-        // League organizer can always manage
-        if (tournament.League.OrganizerId == userId)
-            return true;
+        var count = 0;
+        foreach (var playerId in playerIds)
+        {
+            var tp = tournament.Players.FirstOrDefault(p => p.PlayerId == playerId);
+            if (tp != null && tp.CheckedInAt == null)
+            {
+                tp.CheckedInAt = DateTime.UtcNow;
+                count++;
+            }
+        }
 
-        // Checked-in player can manage
-        var isCheckedInPlayer = tournament.Players
-            .Any(tp => tp.Player.UserId == userId && tp.CheckedInAt != null);
+        if (count > 0)
+            await _context.SaveChangesAsync();
 
-        return isCheckedInPlayer;
+        return count;
     }
 
     private static TournamentDto MapToDto(Tournament t)
@@ -917,13 +1011,8 @@ public class TournamentService : ITournamentService
         // Check for pending debts if league blocks check-in with debt
         if (tournament.League.BlockCheckInWithDebt)
         {
-            var hasPendingDebts = await _context.Payments
-                .AnyAsync(p => p.FromPlayerId == player.Id &&
-                              p.Status == PaymentStatus.Pending &&
-                              p.ToPlayerId != null);
-
-            if (hasPendingDebts)
-                return (false, "Voce possui debitos pendentes na liga. Quite suas pendencias antes de se inscrever.");
+            if (await _paymentService.HasPendingDebtsAsync(player.Id))
+                return (false, "Voce possui debitos nao confirmados. Aguarde a confirmacao do credor antes de se inscrever.");
         }
 
         // Add player to tournament and auto-checkin if tournament already started

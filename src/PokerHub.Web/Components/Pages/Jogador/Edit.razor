@@ -68,6 +68,8 @@ else
                     <MudTextField @bind-Value="_model.PixKey"
                                  Label="@GetPixKeyLabel()"
                                  Variant="Variant.Outlined"
+                                 Validation="@(new Func<string?, string?>(ValidatePixKey))"
+                                 Immediate="true"
                                  Class="mb-3" />
                 }
 
@@ -240,6 +242,25 @@ else
             PixKeyType.Phone => "Telefone (com DDD)",
             PixKeyType.Random => "Chave Aleatoria",
             _ => "Chave PIX"
+        };
+    }
+
+    private string? ValidatePixKey(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        return _model.PixKeyType switch
+        {
+            PixKeyType.CPF when !System.Text.RegularExpressions.Regex.IsMatch(value, @"^\d{11}$") =>
+                "CPF deve conter exatamente 11 digitos numericos",
+            PixKeyType.Email when !value.Contains('@') || !value.Contains('.') =>
+                "Email invalido",
+            PixKeyType.Phone when !System.Text.RegularExpressions.Regex.IsMatch(value, @"^\+?\d{10,13}$") =>
+                "Telefone deve conter 10-13 digitos (com DDD)",
+            PixKeyType.Random when value.Length < 32 =>
+                "Chave aleatoria deve ter pelo menos 32 caracteres",
+            _ => null
         };
     }
 
