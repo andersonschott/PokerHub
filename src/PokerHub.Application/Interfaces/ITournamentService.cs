@@ -54,6 +54,11 @@ public interface ITournamentService
     /// </summary>
     Task<bool> CanUserManageTournamentAsync(Guid tournamentId, string userId);
 
+    /// <summary>
+    /// Checks if a user is an organizer or delegate of a tournament (for payment management).
+    /// </summary>
+    Task<bool> IsUserOrganizerOrDelegateAsync(Guid tournamentId, string userId);
+
     // Duplicate Tournament
     /// <summary>
     /// Creates a copy of an existing tournament with its blind levels.

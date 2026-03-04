@@ -702,7 +702,7 @@ else
 
             if (!string.IsNullOrEmpty(_currentUserId))
             {
-                _isOrganizer = await LeagueService.IsUserOrganizerAsync(_tournament.LeagueId, _currentUserId);
+                _isOrganizer = await TournamentService.IsUserOrganizerOrDelegateAsync(TournamentId, _currentUserId);
             }
 
             if (_tournament.Status == TournamentStatus.Finished)

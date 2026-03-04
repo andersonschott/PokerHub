@@ -365,17 +365,17 @@ public class PaymentService : IPaymentService
         return true;
     }
 
-    public async Task<(bool Success, string Message)> AdminMarkAsPaidAsync(Guid paymentId, string organizerUserId)
+    public async Task<(bool Success, string Message)> AdminMarkAsPaidAsync(Guid paymentId, string userId)
     {
         var payment = await _context.Payments
             .Include(p => p.Tournament)
-                .ThenInclude(t => t.League)
             .FirstOrDefaultAsync(p => p.Id == paymentId);
 
         if (payment == null)
             return (false, "Pagamento não encontrado.");
 
-        if (payment.Tournament.League.OrganizerId != organizerUserId)
+        var hasPermission = await HasPaymentManagementPermissionAsync(payment.TournamentId, userId);
+        if (!hasPermission)
             return (false, "Sem permissão para gerenciar este pagamento.");
 
         if (payment.Status != PaymentStatus.Pending)
@@ -386,17 +386,17 @@ public class PaymentService : IPaymentService
         return (true, "Pagamento marcado como pago.");
     }
 
-    public async Task<(bool Success, string Message)> AdminConfirmPaymentAsync(Guid paymentId, string organizerUserId)
+    public async Task<(bool Success, string Message)> AdminConfirmPaymentAsync(Guid paymentId, string userId)
     {
         var payment = await _context.Payments
             .Include(p => p.Tournament)
-                .ThenInclude(t => t.League)
             .FirstOrDefaultAsync(p => p.Id == paymentId);
 
         if (payment == null)
             return (false, "Pagamento não encontrado.");
 
-        if (payment.Tournament.League.OrganizerId != organizerUserId)
+        var hasPermission = await HasPaymentManagementPermissionAsync(payment.TournamentId, userId);
+        if (!hasPermission)
             return (false, "Sem permissão para gerenciar este pagamento.");
 
         if (payment.Status == PaymentStatus.Confirmed)
@@ -405,6 +405,18 @@ public class PaymentService : IPaymentService
         payment.Confirm();
         await _context.SaveChangesAsync();
         return (true, "Pagamento confirmado com sucesso.");
+    }
+
+    private async Task<bool> HasPaymentManagementPermissionAsync(Guid tournamentId, string userId)
+    {
+        // Use SQL comparison (case-insensitive) to avoid C# string comparison issues
+        var isOrganizer = await _context.Leagues
+            .AnyAsync(l => l.Tournaments.Any(t => t.Id == tournamentId) && l.OrganizerId == userId);
+        if (isOrganizer) return true;
+
+        var isDelegate = await _context.TournamentDelegates
+            .AnyAsync(td => td.TournamentId == tournamentId && td.UserId == userId);
+        return isDelegate;
     }
 
     public async Task<IReadOnlyList<PlayerBalanceDto>> GetTournamentPlayerBalancesAsync(Guid tournamentId)

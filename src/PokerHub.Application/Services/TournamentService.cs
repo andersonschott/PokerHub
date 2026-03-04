@@ -767,6 +767,16 @@ public class TournamentService : ITournamentService
         return isCheckedInPlayer;
     }
 
+    public async Task<bool> IsUserOrganizerOrDelegateAsync(Guid tournamentId, string userId)
+    {
+        var isOrganizer = await _context.Tournaments
+            .AnyAsync(t => t.Id == tournamentId && t.League.OrganizerId == userId);
+        if (isOrganizer) return true;
+
+        return await _context.TournamentDelegates
+            .AnyAsync(td => td.TournamentId == tournamentId && td.UserId == userId);
+    }
+
     public async Task<bool> AddDelegateAsync(Guid tournamentId, string userId, string assignedBy, DelegatePermissions permissions = DelegatePermissions.All)
     {
         var alreadyDelegate = await _context.TournamentDelegates
