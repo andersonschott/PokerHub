@@ -1,0 +1,42 @@
+﻿@page "/"
+@attribute [Authorize]
+@inject NavigationManager Navigation
+
+<PageTitle>PokerHub - Gestão de Torneios</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-8">
+    <MudText Typo="Typo.h3" Class="mb-2">Bem-vindo!</MudText>
+    <MudText Typo="Typo.subtitle1" Color="Color.Secondary" Class="mb-6">
+        Gerencie suas ligas e torneios de poker
+    </MudText>
+
+    <MudGrid>
+        <MudItem xs="12" sm="6" md="4">
+            <MudCard Elevation="2" Class="cursor-pointer" @onclick="@(() => Navigation.NavigateTo("/ligas"))">
+                <MudCardContent Class="d-flex flex-column align-center pa-6">
+                    <MudIcon Icon="@Icons.Material.Filled.Groups" Size="Size.Large" Color="Color.Primary" Class="mb-4" />
+                    <MudText Typo="Typo.h5">Minhas Ligas</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Gerencie suas ligas e jogadores</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudCard Elevation="2" Class="cursor-pointer" @onclick="@(() => Navigation.NavigateTo("/pagamentos"))">
+                <MudCardContent Class="d-flex flex-column align-center pa-6">
+                    <MudIcon Icon="@Icons.Material.Filled.Payments" Size="Size.Large" Color="Color.Secondary" Class="mb-4" />
+                    <MudText Typo="Typo.h5">Meus Débitos</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Veja e quite seus débitos</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudCard Elevation="2" Class="cursor-pointer" @onclick="@(() => Navigation.NavigateTo("/perfil"))">
+                <MudCardContent Class="d-flex flex-column align-center pa-6">
+                    <MudIcon Icon="@Icons.Material.Filled.Person" Size="Size.Large" Color="Color.Tertiary" Class="mb-4" />
+                    <MudText Typo="Typo.h5">Meu Perfil</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Configurações da conta</MudText>
+                </MudCardContent>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+</MudContainer>

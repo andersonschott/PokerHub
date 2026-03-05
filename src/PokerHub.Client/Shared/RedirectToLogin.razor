@@ -1,0 +1,12 @@
+@inject NavigationManager Navigation
+@inject AuthStateService AuthState
+
+@code {
+    protected override void OnInitialized()
+    {
+        if (!AuthState.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/login", forceLoad: false);
+        }
+    }
+}

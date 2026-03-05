@@ -1,0 +1,563 @@
+@page "/ligas/{LeagueId:guid}/comparar"
+@attribute [Authorize]
+@inject IRankingService RankingService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Comparar Jogadores</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="compare-page mt-4">
+
+    @* ===== PLAYER SELECTORS ===== *@
+    <div class="compare-header">
+        <div class="selector-container">
+            <MudAutocomplete T="PlayerRankingDto"
+                             Label="Jogador 1"
+                             Value="_selectedPlayer1"
+                             SearchFunc="SearchPlayers"
+                             ToStringFunc="@(p => p == null ? "" : GetPlayerDisplayName(p))"
+                             Variant="Variant.Outlined"
+                             Dense="true"
+                             Margin="Margin.Dense"
+                             Clearable="true"
+                             MaxItems="10"
+                             DebounceInterval="300"
+                             ValueChanged="OnPlayer1Changed"
+                             Class="player-autocomplete"
+                             Adornment="Adornment.Start"
+                             AdornmentIcon="@Icons.Material.Filled.Person" />
+        </div>
+        <div class="vs-badge">VS</div>
+        <div class="selector-container">
+            <MudAutocomplete T="PlayerRankingDto"
+                             Label="Jogador 2"
+                             Value="_selectedPlayer2"
+                             SearchFunc="SearchPlayers"
+                             ToStringFunc="@(p => p == null ? "" : GetPlayerDisplayName(p))"
+                             Variant="Variant.Outlined"
+                             Dense="true"
+                             Margin="Margin.Dense"
+                             Clearable="true"
+                             MaxItems="10"
+                             DebounceInterval="300"
+                             ValueChanged="OnPlayer2Changed"
+                             Class="player-autocomplete"
+                             Adornment="Adornment.Start"
+                             AdornmentIcon="@Icons.Material.Filled.Person" />
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-container">
+            <MudProgressCircular Color="Color.Success" Size="Size.Large" Indeterminate="true" />
+            <MudText Typo="Typo.body1" Class="mt-3">Carregando estatisticas...</MudText>
+        </div>
+    }
+    else if (_stats1 == null && _stats2 == null)
+    {
+        <div class="empty-container">
+            <MudIcon Icon="@Icons.Material.Filled.CompareArrows" Size="Size.Large" Color="Color.Default" />
+            <MudText Typo="Typo.h6" Class="mt-3">Selecione dois jogadores para comparar</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Use os campos acima para buscar jogadores da liga.
+            </MudText>
+        </div>
+    }
+    else
+    {
+        <ResponsiveLayout>
+            <Mobile>
+                @* ===== MOBILE LAYOUT ===== *@
+                <div class="mobile-comparison">
+                    @if (_stats1 != null)
+                    {
+                        <div class="mobile-player-card">
+                            <div class="mobile-player-header">
+                                <div class="player-avatar small" style="@GetAvatarStyle(_stats1.PlayerName)">
+                                    @GetInitials(_stats1.PlayerName)
+                                </div>
+                                <div class="mobile-player-name">@GetStatsDisplayName(_stats1)</div>
+                            </div>
+                            @RenderMobileStats(_stats1, _ranking1, _stats2, _ranking2, true)
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mobile-player-placeholder">
+                            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Size="Size.Large" Color="Color.Default" />
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Selecione o Jogador 1</MudText>
+                        </div>
+                    }
+
+                    <div class="mobile-vs-divider">
+                        <div class="vs-line"></div>
+                        <div class="vs-badge small">VS</div>
+                        <div class="vs-line"></div>
+                    </div>
+
+                    @if (_stats2 != null)
+                    {
+                        <div class="mobile-player-card">
+                            <div class="mobile-player-header">
+                                <div class="player-avatar small" style="@GetAvatarStyle(_stats2.PlayerName)">
+                                    @GetInitials(_stats2.PlayerName)
+                                </div>
+                                <div class="mobile-player-name">@GetStatsDisplayName(_stats2)</div>
+                            </div>
+                            @RenderMobileStats(_stats2, _ranking2, _stats1, _ranking1, false)
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mobile-player-placeholder">
+                            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Size="Size.Large" Color="Color.Default" />
+                            <MudText Typo="Typo.body2" Color="Color.Secondary">Selecione o Jogador 2</MudText>
+                        </div>
+                    }
+                </div>
+            </Mobile>
+
+            <Desktop>
+                @* ===== DESKTOP LAYOUT ===== *@
+                <div class="desktop-comparison">
+                    @* Player headers *@
+                    <div class="desktop-player-col left">
+                        @if (_stats1 != null)
+                        {
+                            <div class="desktop-player-header">
+                                <div class="player-avatar" style="@GetAvatarStyle(_stats1.PlayerName)">
+                                    @GetInitials(_stats1.PlayerName)
+                                </div>
+                                <div class="desktop-player-name">@GetStatsDisplayName(_stats1)</div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="desktop-player-placeholder">
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">Selecione o Jogador 1</MudText>
+                            </div>
+                        }
+                    </div>
+                    <div class="desktop-label-col header-spacer"></div>
+                    <div class="desktop-player-col right">
+                        @if (_stats2 != null)
+                        {
+                            <div class="desktop-player-header">
+                                <div class="player-avatar" style="@GetAvatarStyle(_stats2.PlayerName)">
+                                    @GetInitials(_stats2.PlayerName)
+                                </div>
+                                <div class="desktop-player-name">@GetStatsDisplayName(_stats2)</div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="desktop-player-placeholder">
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">Selecione o Jogador 2</MudText>
+                            </div>
+                        }
+                    </div>
+
+                    @* Stat rows *@
+                    @foreach (var stat in GetComparisonStats())
+                    {
+                        var comparison = CompareValues(stat.Value1, stat.Value2, stat.LowerIsBetter);
+                        <div class="desktop-player-col left">
+                            <div class="desktop-stat-value @GetComparisonClass(comparison, true)">
+                                @if (_stats1 != null)
+                                {
+                                    @if (comparison == ComparisonResult.LeftWins)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Class="compare-arrow winner" />
+                                    }
+                                    else if (comparison == ComparisonResult.RightWins)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Class="compare-arrow loser" />
+                                    }
+                                    <span>@stat.Display1</span>
+                                }
+                                else
+                                {
+                                    <span class="no-data">--</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="desktop-label-col">
+                            <div class="desktop-stat-label">@stat.Label</div>
+                        </div>
+                        <div class="desktop-player-col right">
+                            <div class="desktop-stat-value @GetComparisonClass(comparison, false)">
+                                @if (_stats2 != null)
+                                {
+                                    <span>@stat.Display2</span>
+                                    @if (comparison == ComparisonResult.RightWins)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Class="compare-arrow winner" />
+                                    }
+                                    else if (comparison == ComparisonResult.LeftWins)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Class="compare-arrow loser" />
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="no-data">--</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </Desktop>
+        </ResponsiveLayout>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public Guid LeagueId { get; set; }
+
+    private IReadOnlyList<PlayerRankingDto> _players = [];
+    private PlayerRankingDto? _selectedPlayer1;
+    private PlayerRankingDto? _selectedPlayer2;
+    private PlayerStatsDto? _stats1;
+    private PlayerStatsDto? _stats2;
+    private PlayerRankingDto? _ranking1;
+    private PlayerRankingDto? _ranking2;
+    private bool _loading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _players = await RankingService.GetLeagueRankingAsync(LeagueId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Erro ao carregar jogadores da liga.", Severity.Error);
+            Console.WriteLine($"Error loading ranking: {ex.Message}");
+        }
+
+        // Parse query parameters
+        var uri = new Uri(Navigation.Uri);
+        var queryParams = ParseQueryString(uri.Query);
+
+        Guid? p1Id = null;
+        Guid? p2Id = null;
+
+        if (queryParams.TryGetValue("p1", out var p1Value) && Guid.TryParse(p1Value, out var parsedP1))
+        {
+            p1Id = parsedP1;
+            _selectedPlayer1 = _players.FirstOrDefault(p => p.PlayerId == parsedP1);
+        }
+
+        if (queryParams.TryGetValue("p2", out var p2Value) && Guid.TryParse(p2Value, out var parsedP2))
+        {
+            p2Id = parsedP2;
+            _selectedPlayer2 = _players.FirstOrDefault(p => p.PlayerId == parsedP2);
+        }
+
+        if (p1Id.HasValue || p2Id.HasValue)
+        {
+            await LoadStats(p1Id, p2Id);
+        }
+    }
+
+    private async Task LoadStats(Guid? player1Id, Guid? player2Id)
+    {
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            if (player1Id.HasValue)
+            {
+                _stats1 = await RankingService.GetPlayerStatsAsync(player1Id.Value);
+                _ranking1 = _players.FirstOrDefault(p => p.PlayerId == player1Id.Value);
+            }
+            else
+            {
+                _stats1 = null;
+                _ranking1 = null;
+            }
+
+            if (player2Id.HasValue)
+            {
+                _stats2 = await RankingService.GetPlayerStatsAsync(player2Id.Value);
+                _ranking2 = _players.FirstOrDefault(p => p.PlayerId == player2Id.Value);
+            }
+            else
+            {
+                _stats2 = null;
+                _ranking2 = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add("Erro ao carregar estatisticas.", Severity.Error);
+            Console.WriteLine($"Error loading stats: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task<IEnumerable<PlayerRankingDto>> SearchPlayers(string? value, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return _players;
+
+        var search = value.ToLowerInvariant();
+        return _players.Where(p =>
+            p.PlayerName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+            (p.Nickname?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+    }
+
+    private async Task OnPlayer1Changed(PlayerRankingDto? player)
+    {
+        _selectedPlayer1 = player;
+        UpdateUrl();
+        await LoadStats(player?.PlayerId, _selectedPlayer2?.PlayerId);
+    }
+
+    private async Task OnPlayer2Changed(PlayerRankingDto? player)
+    {
+        _selectedPlayer2 = player;
+        UpdateUrl();
+        await LoadStats(_selectedPlayer1?.PlayerId, player?.PlayerId);
+    }
+
+    private void UpdateUrl()
+    {
+        var baseUri = $"/ligas/{LeagueId}/comparar";
+        var parts = new List<string>();
+
+        if (_selectedPlayer1 != null)
+            parts.Add($"p1={Uri.EscapeDataString(_selectedPlayer1.PlayerId.ToString())}");
+
+        if (_selectedPlayer2 != null)
+            parts.Add($"p2={Uri.EscapeDataString(_selectedPlayer2.PlayerId.ToString())}");
+
+        var newUri = parts.Count > 0 ? $"{baseUri}?{string.Join("&", parts)}" : baseUri;
+        Navigation.NavigateTo(newUri, replace: true);
+    }
+
+    private static Dictionary<string, string> ParseQueryString(string query)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(query)) return result;
+
+        var q = query.TrimStart('?');
+        foreach (var pair in q.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var idx = pair.IndexOf('=');
+            if (idx > 0)
+            {
+                var key = Uri.UnescapeDataString(pair[..idx]);
+                var value = Uri.UnescapeDataString(pair[(idx + 1)..]);
+                result[key] = value;
+            }
+        }
+        return result;
+    }
+
+    private string GetPlayerDisplayName(PlayerRankingDto player)
+    {
+        if (!string.IsNullOrEmpty(player.Nickname))
+            return $"{player.Nickname} ({player.PlayerName})";
+        return player.PlayerName;
+    }
+
+    private string GetStatsDisplayName(PlayerStatsDto stats)
+    {
+        if (!string.IsNullOrEmpty(stats.Nickname))
+            return stats.Nickname;
+        return stats.PlayerName;
+    }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "?";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2)
+            return $"{parts[0][0]}{parts[^1][0]}".ToUpper();
+        return name.Length >= 2 ? name[..2].ToUpper() : name.ToUpper();
+    }
+
+    private string GetAvatarStyle(string name)
+    {
+        var hash = Math.Abs(name.GetHashCode());
+        var hue = hash % 360;
+        return $"background: linear-gradient(135deg, hsl({hue}, 70%, 45%) 0%, hsl({hue}, 70%, 35%) 100%);";
+    }
+
+    // ===== Comparison Logic =====
+
+    private enum ComparisonResult { Tie, LeftWins, RightWins, NoComparison }
+
+    private record ComparisonStat(
+        string Label,
+        decimal? Value1,
+        decimal? Value2,
+        string Display1,
+        string Display2,
+        bool LowerIsBetter = false
+    );
+
+    private List<ComparisonStat> GetComparisonStats()
+    {
+        var roi1 = _stats1 != null && _stats1.TotalBuyIns > 0
+            ? (_stats1.Profit / _stats1.TotalBuyIns) * 100 : 0;
+        var roi2 = _stats2 != null && _stats2.TotalBuyIns > 0
+            ? (_stats2.Profit / _stats2.TotalBuyIns) * 100 : 0;
+
+        var itm1 = _ranking1?.ITMRate ?? (_stats1 != null && _stats1.TournamentsPlayed > 0
+            ? ((decimal)_stats1.Top3Finishes / _stats1.TournamentsPlayed) * 100 : 0);
+        var itm2 = _ranking2?.ITMRate ?? (_stats2 != null && _stats2.TournamentsPlayed > 0
+            ? ((decimal)_stats2.Top3Finishes / _stats2.TournamentsPlayed) * 100 : 0);
+
+        return
+        [
+            new("Torneios",
+                _stats1?.TournamentsPlayed, _stats2?.TournamentsPlayed,
+                _stats1?.TournamentsPlayed.ToString() ?? "--",
+                _stats2?.TournamentsPlayed.ToString() ?? "--"),
+
+            new("Vitorias",
+                _stats1?.Wins, _stats2?.Wins,
+                _stats1?.Wins.ToString() ?? "--",
+                _stats2?.Wins.ToString() ?? "--"),
+
+            new("Top 3",
+                _stats1?.Top3Finishes, _stats2?.Top3Finishes,
+                _stats1?.Top3Finishes.ToString() ?? "--",
+                _stats2?.Top3Finishes.ToString() ?? "--"),
+
+            new("Lucro",
+                _stats1?.Profit, _stats2?.Profit,
+                _stats1 != null ? FormatProfit(_stats1.Profit) : "--",
+                _stats2 != null ? FormatProfit(_stats2.Profit) : "--"),
+
+            new("ROI",
+                _stats1 != null ? roi1 : null,
+                _stats2 != null ? roi2 : null,
+                _stats1 != null ? $"{(roi1 >= 0 ? "+" : "")}{roi1:N1}%" : "--",
+                _stats2 != null ? $"{(roi2 >= 0 ? "+" : "")}{roi2:N1}%" : "--"),
+
+            new("ITM",
+                _stats1 != null ? itm1 : null,
+                _stats2 != null ? itm2 : null,
+                _stats1 != null ? $"{itm1:N1}%" : "--",
+                _stats2 != null ? $"{itm2:N1}%" : "--"),
+
+            new("Pos. Media",
+                _stats1?.AveragePosition, _stats2?.AveragePosition,
+                _stats1 != null ? $"{_stats1.AveragePosition:N1}" : "--",
+                _stats2 != null ? $"{_stats2.AveragePosition:N1}" : "--",
+                LowerIsBetter: true),
+
+            new("Investido",
+                _stats1?.TotalBuyIns, _stats2?.TotalBuyIns,
+                _stats1?.TotalBuyIns.ToBrl() ?? "--",
+                _stats2?.TotalBuyIns.ToBrl() ?? "--"),
+
+            new("Premios",
+                _stats1?.TotalPrizes, _stats2?.TotalPrizes,
+                _stats1?.TotalPrizes.ToBrl() ?? "--",
+                _stats2?.TotalPrizes.ToBrl() ?? "--"),
+        ];
+    }
+
+    private string FormatProfit(decimal profit)
+    {
+        return $"{(profit >= 0 ? "+" : "")}{profit.ToBrl()}";
+    }
+
+    private ComparisonResult CompareValues(decimal? val1, decimal? val2, bool lowerIsBetter)
+    {
+        if (!val1.HasValue || !val2.HasValue)
+            return ComparisonResult.NoComparison;
+
+        if (val1.Value == val2.Value)
+            return ComparisonResult.Tie;
+
+        if (lowerIsBetter)
+            return val1.Value < val2.Value ? ComparisonResult.LeftWins : ComparisonResult.RightWins;
+
+        return val1.Value > val2.Value ? ComparisonResult.LeftWins : ComparisonResult.RightWins;
+    }
+
+    private string GetComparisonClass(ComparisonResult result, bool isLeft)
+    {
+        return result switch
+        {
+            ComparisonResult.LeftWins when isLeft => "stat-winner",
+            ComparisonResult.RightWins when !isLeft => "stat-winner",
+            ComparisonResult.LeftWins when !isLeft => "stat-loser",
+            ComparisonResult.RightWins when isLeft => "stat-loser",
+            _ => ""
+        };
+    }
+
+    // ===== Mobile Stats Rendering =====
+
+    private RenderFragment RenderMobileStats(
+        PlayerStatsDto stats, PlayerRankingDto? ranking,
+        PlayerStatsDto? opponent, PlayerRankingDto? opponentRanking,
+        bool isLeft) => __builder =>
+    {
+        var roi = stats.TotalBuyIns > 0 ? (stats.Profit / stats.TotalBuyIns) * 100 : 0;
+        var itm = ranking?.ITMRate ?? (stats.TournamentsPlayed > 0
+            ? ((decimal)stats.Top3Finishes / stats.TournamentsPlayed) * 100 : 0);
+
+        var opponentRoi = opponent != null && opponent.TotalBuyIns > 0
+            ? (opponent.Profit / opponent.TotalBuyIns) * 100 : (decimal?)null;
+        var opponentItm = opponentRanking?.ITMRate ?? (opponent != null && opponent.TournamentsPlayed > 0
+            ? ((decimal)opponent.Top3Finishes / opponent.TournamentsPlayed) * 100 : (decimal?)null);
+
+        <div class="mobile-stats-grid">
+            @{
+                RenderMobileStat(__builder, "Torneios", stats.TournamentsPlayed.ToString(),
+                    stats.TournamentsPlayed, opponent?.TournamentsPlayed, false);
+                RenderMobileStat(__builder, "Vitorias", stats.Wins.ToString(),
+                    stats.Wins, opponent?.Wins, false);
+                RenderMobileStat(__builder, "Top 3", stats.Top3Finishes.ToString(),
+                    stats.Top3Finishes, opponent?.Top3Finishes, false);
+                RenderMobileStat(__builder, "Lucro", FormatProfit(stats.Profit),
+                    stats.Profit, opponent?.Profit, false);
+                RenderMobileStat(__builder, "ROI", $"{(roi >= 0 ? "+" : "")}{roi:N1}%",
+                    roi, opponentRoi, false);
+                RenderMobileStat(__builder, "ITM", $"{itm:N1}%",
+                    itm, opponentItm, false);
+                RenderMobileStat(__builder, "Pos. Media", $"{stats.AveragePosition:N1}",
+                    stats.AveragePosition, opponent?.AveragePosition, true);
+            }
+        </div>
+    };
+
+    private void RenderMobileStat(
+        Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder __builder,
+        string label, string display,
+        decimal myValue, decimal? opponentValue, bool lowerIsBetter)
+    {
+        var comparison = CompareValues(myValue, opponentValue, lowerIsBetter);
+        var isWinner = comparison == ComparisonResult.LeftWins;
+        var isLoser = comparison == ComparisonResult.RightWins;
+        var cssClass = isWinner ? "stat-winner" : isLoser ? "stat-loser" : "";
+
+        <div class="mobile-stat-item @cssClass">
+            <div class="mobile-stat-label">@label</div>
+            <div class="mobile-stat-value">
+                @if (isWinner)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" Class="compare-arrow winner" />
+                }
+                else if (isLoser)
+                {
+                    <MudIcon Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" Class="compare-arrow loser" />
+                }
+                <span>@display</span>
+            </div>
+        </div>
+    }
+}

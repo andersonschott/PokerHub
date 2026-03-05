@@ -11,6 +11,20 @@ public class TournamentsController(ITournamentService tournamentService) : BaseA
 {
     // ── Queries ──────────────────────────────────────────────────────────────
 
+    [HttpGet]
+    public async Task<IActionResult> GetMyTournaments()
+    {
+        var tournaments = await tournamentService.GetTournamentsByUserAsync(GetUserId());
+        return Ok(tournaments);
+    }
+
+    [HttpGet("/api/leagues/{leagueId:guid}/tournaments")]
+    public async Task<IActionResult> GetLeagueTournaments(Guid leagueId)
+    {
+        var tournaments = await tournamentService.GetTournamentsByLeagueAsync(leagueId);
+        return Ok(tournaments);
+    }
+
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetTournament(Guid id)
     {

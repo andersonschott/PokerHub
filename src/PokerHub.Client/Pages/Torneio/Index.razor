@@ -1,0 +1,375 @@
+@page "/torneios"
+@page "/ligas/{LeagueId:guid}/torneios"
+@attribute [Authorize]
+@implements IBrowserViewportObserver
+@implements IAsyncDisposable
+@inject ITournamentService TournamentService
+@inject ILeagueService LeagueService
+@inject IBrowserViewportService BrowserViewportService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject AuthStateService AuthState
+
+<PageTitle>Torneios - PokerHub</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="tournaments-page mt-4">
+    @if (_league != null)
+    {
+        <MudBreadcrumbs Items="_breadcrumbs" Class="mb-3" />
+    }
+
+    @* Page Header *@
+    <div class="page-header">
+        <div class="page-title">@(_league != null ? $"Torneios - {_league.Name}" : "Meus Torneios")</div>
+        @if (_league != null)
+        {
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       Size="Size.Small"
+                       Href="@($"/ligas/{LeagueId}/torneios/criar")">
+                Novo Torneio
+            </MudButton>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <div class="loading-container">
+            <MudProgressCircular Color="Color.Success" Size="Size.Large" Indeterminate="true" />
+            <MudText Typo="Typo.body1" Class="mt-3">Carregando torneios...</MudText>
+        </div>
+    }
+    else if (_tournaments == null || !_tournaments.Any())
+    {
+        <div class="empty-container">
+            <MudIcon Icon="@Icons.Material.Filled.EventBusy" Size="Size.Large" Color="Color.Warning" />
+            <MudText Typo="Typo.h6" Class="mt-3">Nenhum torneio encontrado</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                @if (_league != null)
+                {
+                    <text>Crie o primeiro torneio desta liga!</text>
+                }
+                else
+                {
+                    <text>Acesse uma liga para criar torneios.</text>
+                }
+            </MudText>
+        </div>
+    }
+    else
+    {
+        @* Hero Stats *@
+        <div class="hero-stats @(_isMobile ? "" : "desktop")">
+            <div class="hero-stat">
+                <div class="hero-stat-icon">🎯</div>
+                <div class="hero-stat-value">@_totalCount</div>
+                <div class="hero-stat-label">Torneios</div>
+            </div>
+            <div class="hero-stat active-stat">
+                <div class="hero-stat-icon">▶️</div>
+                <div class="hero-stat-value">@_inProgressCount</div>
+                <div class="hero-stat-label">Em Andamento</div>
+            </div>
+            <div class="hero-stat">
+                <div class="hero-stat-icon">📅</div>
+                <div class="hero-stat-value">@_scheduledCount</div>
+                <div class="hero-stat-label">Agendados</div>
+            </div>
+            <div class="hero-stat">
+                <div class="hero-stat-icon">✓</div>
+                <div class="hero-stat-value">@_finishedCount</div>
+                <div class="hero-stat-label">Finalizados</div>
+            </div>
+        </div>
+
+        @* Search *@
+        <MudTextField @bind-Value="_searchTerm"
+                      Placeholder="Buscar torneio..."
+                      Immediate="true"
+                      DebounceInterval="300"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search"
+                      Clearable="true"
+                      Variant="Variant.Outlined"
+                      Margin="Margin.Dense"
+                      Class="mb-3" />
+
+        @* Segmented Tabs *@
+        <div class="tab-segment-container">
+            <button class="tab-segment @(_activeTab == 0 ? "active" : "")"
+                    @onclick="@(() => SetActiveTab(0))">
+                Proximos
+            </button>
+            <button class="tab-segment @(_activeTab == 1 ? "active" : "")"
+                    @onclick="@(() => SetActiveTab(1))">
+                Em Andamento
+                @if (_inProgressCount > 0)
+                {
+                    <span class="tab-segment-badge">@_inProgressCount</span>
+                }
+            </button>
+            <button class="tab-segment @(_activeTab == 2 ? "active" : "")"
+                    @onclick="@(() => SetActiveTab(2))">
+                Finalizados
+            </button>
+        </div>
+
+        @* Tournament Content *@
+        @RenderTournamentContent()
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public Guid? LeagueId { get; set; }
+
+    private IReadOnlyList<TournamentDto>? _tournaments;
+    private LeagueDto? _league;
+    private bool _loading = true;
+    private bool _duplicating;
+    private bool _isMobile;
+    private int _activeTab = 0;
+    private string? _searchTerm;
+    private List<BreadcrumbItem> _breadcrumbs = new();
+
+    // Computed counts
+    private int _totalCount => _tournaments?.Count ?? 0;
+    private int _inProgressCount => _tournaments?.Count(t =>
+        t.Status == TournamentStatus.InProgress || t.Status == TournamentStatus.Paused) ?? 0;
+    private int _scheduledCount => _tournaments?.Count(t =>
+        t.Status == TournamentStatus.Scheduled) ?? 0;
+    private int _finishedCount => _tournaments?.Count(t =>
+        t.Status == TournamentStatus.Finished) ?? 0;
+
+    // IBrowserViewportObserver implementation
+    public Guid Id { get; } = Guid.NewGuid();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (LeagueId.HasValue)
+        {
+            _league = await LeagueService.GetLeagueByIdAsync(LeagueId.Value);
+            if (_league != null)
+            {
+                _breadcrumbs = new List<BreadcrumbItem>
+                {
+                    new("Ligas", "/ligas", false),
+                    new(_league.Name, $"/ligas/{LeagueId}", false),
+                    new("Torneios", null, true)
+                };
+            }
+            _tournaments = await TournamentService.GetTournamentsByLeagueAsync(LeagueId.Value);
+        }
+        else
+        {
+            var userId = AuthState.GetUserId();
+            if (userId != null)
+            {
+                _tournaments = await TournamentService.GetTournamentsByUserAsync(userId);
+            }
+        }
+
+        _loading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await BrowserViewportService.SubscribeAsync(this, fireImmediately: true);
+        }
+    }
+
+    Task IBrowserViewportObserver.NotifyBrowserViewportChangeAsync(BrowserViewportEventArgs args)
+    {
+        _isMobile = args.Breakpoint <= Breakpoint.Sm;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await BrowserViewportService.UnsubscribeAsync(this);
+    }
+
+    private void SetActiveTab(int tab)
+    {
+        _activeTab = tab;
+    }
+
+    private IEnumerable<TournamentDto> GetFilteredTournaments()
+    {
+        var filtered = _activeTab switch
+        {
+            0 => _tournaments!.Where(t => t.Status == TournamentStatus.Scheduled),
+            1 => _tournaments!.Where(t => t.Status == TournamentStatus.InProgress ||
+                                          t.Status == TournamentStatus.Paused),
+            2 => _tournaments!.Where(t => t.Status == TournamentStatus.Finished),
+            _ => _tournaments!.AsEnumerable()
+        };
+
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            filtered = filtered.Where(t =>
+                t.Name.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return filtered.OrderByDescending(t => t.ScheduledDateTime);
+    }
+
+    private RenderFragment RenderTournamentContent() => @<text>
+        @{
+            var filteredTournaments = GetFilteredTournaments().ToList();
+        }
+
+        @if (!filteredTournaments.Any())
+        {
+            <div class="empty-container">
+                <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Color="Color.Secondary" />
+                <MudText Typo="Typo.body1" Class="mt-3">Nenhum torneio nesta categoria</MudText>
+            </div>
+        }
+        else if (_isMobile)
+        {
+            @* Mobile: List View *@
+            <div class="tournament-list">
+                @foreach (var tournament in filteredTournaments)
+                {
+                    <div class="tournament-list-item" @onclick="@(() => NavigateToTournament(tournament))">
+                        <div class="tournament-list-status @GetStatusClass(tournament.Status)"></div>
+                        <div class="tournament-list-info">
+                            <div class="tournament-list-name">@tournament.Name</div>
+                            <div class="tournament-list-meta">
+                                <span>📅 <span class="mono-font">@tournament.ScheduledDateTime.ToString("dd/MM HH:mm")</span></span>
+                                <span>💰 <span class="mono-font">@tournament.BuyIn.ToString("C0")</span></span>
+                                <span>👥 <span class="mono-font">@tournament.CheckedInCount/@tournament.PlayerCount</span></span>
+                            </div>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="tournament-list-chevron" />
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            @* Desktop: Card Grid *@
+            <div class="tournament-grid">
+                @foreach (var tournament in filteredTournaments)
+                {
+                    <div class="tournament-card status-@GetStatusClass(tournament.Status)">
+                        <div class="tournament-card-header">
+                            <span class="status-chip @GetStatusClass(tournament.Status)">
+                                @GetStatusText(tournament.Status)
+                            </span>
+                            @if (tournament.Status is TournamentStatus.InProgress or TournamentStatus.Paused)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.Timer"
+                                               Size="Size.Small"
+                                               Href="@($"/timer/{tournament.Id}")"
+                                               Color="Color.Primary" />
+                            }
+                        </div>
+
+                        <div class="tournament-card-title">@tournament.Name</div>
+
+                        <div class="tournament-card-date">
+                            <MudIcon Icon="@Icons.Material.Filled.Event" Size="Size.Small" />
+                            <span class="mono-font">@tournament.ScheduledDateTime.ToString("dd/MM/yyyy HH:mm")</span>
+                        </div>
+
+                        <div class="tournament-card-stats">
+                            <div class="stat-box">
+                                <div class="stat-box-value">@tournament.BuyIn.ToString("C0")</div>
+                                <div class="stat-box-label">Buy-in</div>
+                            </div>
+                            <div class="stat-box">
+                                <div class="stat-box-value">@tournament.CheckedInCount/@tournament.PlayerCount</div>
+                                <div class="stat-box-label">Jogadores</div>
+                            </div>
+                        </div>
+
+                        <div class="tournament-card-actions">
+                            <MudButton Variant="Variant.Text"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       Href="@($"/torneios/{tournament.Id}")">
+                                @(tournament.Status == TournamentStatus.Scheduled ? "Gerenciar" : "Detalhes")
+                            </MudButton>
+                            <MudTooltip Text="Duplicar torneio">
+                                <MudIconButton Icon="@Icons.Material.Filled.ContentCopy"
+                                               Size="Size.Small"
+                                               Color="Color.Default"
+                                               Disabled="_duplicating"
+                                               OnClick="@(() => DuplicateTournament(tournament.Id, tournament.LeagueId))" />
+                            </MudTooltip>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </text>;
+
+    private void NavigateToTournament(TournamentDto tournament)
+    {
+        Navigation.NavigateTo($"/torneios/{tournament.Id}");
+    }
+
+    private string GetStatusClass(TournamentStatus status) => status switch
+    {
+        TournamentStatus.Scheduled => "scheduled",
+        TournamentStatus.InProgress => "inprogress",
+        TournamentStatus.Paused => "paused",
+        TournamentStatus.Finished => "finished",
+        TournamentStatus.Cancelled => "cancelled",
+        _ => "default"
+    };
+
+    private string GetStatusText(TournamentStatus status) => status switch
+    {
+        TournamentStatus.Scheduled => "Agendado",
+        TournamentStatus.InProgress => "Em Andamento",
+        TournamentStatus.Paused => "Pausado",
+        TournamentStatus.Finished => "Finalizado",
+        TournamentStatus.Cancelled => "Cancelado",
+        _ => status.ToString()
+    };
+
+    private async Task DuplicateTournament(Guid tournamentId, Guid leagueId)
+    {
+        if (_duplicating) return;
+
+        _duplicating = true;
+        try
+        {
+            var result = await TournamentService.DuplicateTournamentAsync(tournamentId, leagueId);
+            if (result != null)
+            {
+                Snackbar.Add($"Torneio '{result.Name}' criado!", Severity.Success);
+                // Reload tournaments list
+                if (LeagueId.HasValue)
+                {
+                    _tournaments = await TournamentService.GetTournamentsByLeagueAsync(LeagueId.Value);
+                }
+                else
+                {
+                    var userId = AuthState.GetUserId();
+                    if (userId != null)
+                    {
+                        _tournaments = await TournamentService.GetTournamentsByUserAsync(userId);
+                    }
+                }
+            }
+            else
+            {
+                Snackbar.Add("Erro ao copiar torneio", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _duplicating = false;
+        }
+    }
+}

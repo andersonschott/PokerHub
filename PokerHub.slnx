@@ -5,6 +5,7 @@
     <Project Path="src/PokerHub.Infrastructure/PokerHub.Infrastructure.csproj" />
     <Project Path="src/PokerHub.Shared/PokerHub.Shared.csproj" />
     <Project Path="src/PokerHub.Web/PokerHub.Web.csproj" />
+    <Project Path="src/PokerHub.Client/PokerHub.Client.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PokerHub.Application.Tests/PokerHub.Application.Tests.csproj" />

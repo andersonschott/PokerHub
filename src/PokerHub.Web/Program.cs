@@ -31,6 +31,20 @@ builder.Services.Configure<RequestLocalizationOptions>(options =>
     options.SupportedUICultures = new[] { cultureInfo };
 });
 
+// CORS para o Blazor WASM Client
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("WasmClient", policy =>
+    {
+        policy.WithOrigins(
+                builder.Configuration["Cors:WasmOrigin"] ?? "https://localhost:7098",
+                "http://localhost:5094")
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
+    });
+});
+
 // Controllers + API
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -173,6 +187,7 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 app.UseHttpsRedirection();
 app.UseRequestLocalization();
 
+app.UseCors("WasmClient");
 app.UseAuthentication();
 app.UseAuthorization();
 
