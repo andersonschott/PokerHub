@@ -10,6 +10,8 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.3" />
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.2" />
         <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.1" />
         <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.1" />
         <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="10.0.1" />
@@ -28,6 +30,7 @@
     <ItemGroup>
       <ProjectReference Include="..\PokerHub.Application\PokerHub.Application.csproj" />
       <ProjectReference Include="..\PokerHub.Infrastructure\PokerHub.Infrastructure.csproj" />
+      <ProjectReference Include="..\PokerHub.Shared\PokerHub.Shared.csproj" />
     </ItemGroup>
 
 </Project>

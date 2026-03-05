@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\PokerHub.Domain\PokerHub.Domain.csproj" />
     <ProjectReference Include="..\PokerHub.Infrastructure\PokerHub.Infrastructure.csproj" />
+    <ProjectReference Include="..\PokerHub.Shared\PokerHub.Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>
