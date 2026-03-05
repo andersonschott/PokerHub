@@ -97,6 +97,33 @@
     gap: 8px;
 }
 
+/* ===== TYPE FILTER ROW (Mobile) ===== */
+.type-filter-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.type-btn {
+    flex: 1;
+    padding: 6px 4px;
+    border: 1px solid var(--mud-palette-lines-default);
+    background: transparent;
+    color: var(--mud-palette-text-secondary);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.type-btn.active {
+    background: var(--mud-palette-primary);
+    color: #fff;
+    border-color: var(--mud-palette-primary);
+}
+
 /* ===== FILTER CHIPS (Horizontal Scroll) ===== */
 .filter-scroll {
     overflow-x: auto;
