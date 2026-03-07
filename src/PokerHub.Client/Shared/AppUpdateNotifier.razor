@@ -1,0 +1,63 @@
+@* Componente renderless que escuta eventos do Service Worker e exibe toasts.
+   Deve ser colocado em MainLayout.razor. *@
+
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+@code {
+
+    private DotNetObjectReference<AppUpdateNotifier>? _dotNetRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _dotNetRef = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("pokerhubSW.watch", _dotNetRef);
+        }
+        catch
+        {
+            // SW pode não estar disponível em dev mode ou navegadores sem suporte
+        }
+    }
+
+    /// <summary>Chamado pelo sw-update.js quando nova versão está disponível.</summary>
+    [JSInvokable]
+    public void OnUpdateAvailable()
+    {
+        Snackbar.Add(
+            "🔄 Nova versão disponível",
+            Severity.Info,
+            config =>
+            {
+                config.Action                = "Atualizar";
+                config.ActionColor           = Color.Success;
+                config.VisibleStateDuration  = 30_000;
+                config.ShowCloseIcon         = true;
+                config.OnClick               = async _ =>
+                {
+                    try { await JS.InvokeVoidAsync("pokerhubSW.applyUpdate"); }
+                    catch { }
+                };
+            });
+    }
+
+    /// <summary>Chamado quando o background sync conclui ações offline.</summary>
+    [JSInvokable]
+    public void OnSyncComplete(int processed)
+    {
+        if (processed <= 0) return;
+        Snackbar.Add(
+            $"✅ {processed} ação{(processed > 1 ? "ões" : "")} offline sincronizada{(processed > 1 ? "s" : "")}",
+            Severity.Success,
+            config => { config.VisibleStateDuration = 5_000; });
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _dotNetRef?.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}

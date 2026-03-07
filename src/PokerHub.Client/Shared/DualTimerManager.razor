@@ -1,0 +1,486 @@
+@* Componente renderless: gerencia SignalR + Web Worker para o timer offline-first.
+   Online  → SignalR drive display; envia SYNC ao Worker a cada tick
+   Offline → Worker drive display autonomamente (timestamp absoluto, sem drift)
+   Reconectou → compara estado, server wins se drift > 3s *@
+
+@implements IAsyncDisposable
+@inject IConfiguration Config
+@inject IJSRuntime JS
+@using Microsoft.AspNetCore.SignalR.Client
+@using System.Text.Json
+
+@* Sem markup — renderless *@
+
+@code {
+
+    // ── Parâmetros ──────────────────────────────────────────────────────────
+
+    [Parameter, EditorRequired] public Guid TournamentId  { get; set; }
+    [Parameter, EditorRequired] public List<BlindLevelDto> BlindStructure { get; set; } = [];
+    [Parameter] public int  InitialLevel                { get; set; }
+    [Parameter] public int  InitialTimeRemainingSeconds { get; set; }
+    [Parameter] public bool InitialIsPaused             { get; set; }
+
+    /// Dispara a cada tick (250 ms do Worker ou ~1 s do SignalR)
+    [Parameter] public EventCallback<TimerTickData>    OnTick              { get; set; }
+    [Parameter] public EventCallback<LevelChangedData> OnLevelChanged      { get; set; }
+    [Parameter] public EventCallback<bool>             OnPauseChanged      { get; set; }
+    [Parameter] public EventCallback<bool>             OnFinished          { get; set; }
+    [Parameter] public EventCallback<PrizePoolUpdate>  OnPrizePoolUpdated  { get; set; }
+    [Parameter] public EventCallback                   OnPlayersChanged    { get; set; }
+    /// Mudança de status de conexão: Connecting | Online | Reconnecting | Offline
+    [Parameter] public EventCallback<ConnectionStatus> OnConnectionChanged { get; set; }
+
+    // ── Estado interno ───────────────────────────────────────────────────────
+
+    private HubConnection? _hub;
+    private DotNetObjectReference<DualTimerManager>? _dotNetRef;
+    private bool _workerReady;
+
+    /// Estado atual da conexão (exposto para leitura pelo pai)
+    public ConnectionStatus Status { get; private set; } = ConnectionStatus.Connecting;
+
+    // IDisposable dos handlers do hub
+    private IDisposable? _hTick, _hLevel, _hPaused, _hResumed, _hEliminated,
+                         _hPrize, _hFinished, _hState, _hPlayers;
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+
+        await InitWorkerAsync();
+        await ConnectHubAsync();
+    }
+
+    // ── Worker setup ──────────────────────────────────────────────────────────
+
+    private async Task InitWorkerAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("timerBridge.init", _dotNetRef, "/js/timer-worker.js");
+
+            var blindsJs = BlindStructure.Select(b => new
+            {
+                id               = b.Id,
+                order            = b.Order,
+                smallBlind       = b.SmallBlind,
+                bigBlind         = b.BigBlind,
+                ante             = b.Ante,
+                durationMinutes  = b.DurationMinutes,
+                isBreak          = b.IsBreak,
+                breakDescription = b.BreakDescription
+            }).ToArray();
+
+            await JS.InvokeVoidAsync("timerBridge.send", "INIT", new
+            {
+                tournamentId         = TournamentId,
+                blindStructure       = blindsJs,
+                currentLevel         = InitialLevel,
+                timeRemainingSeconds = InitialTimeRemainingSeconds,
+                isPaused             = InitialIsPaused
+            });
+
+            _workerReady = true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DualTimer] Worker init error: {ex.Message}");
+        }
+    }
+
+    // ── SignalR setup ─────────────────────────────────────────────────────────
+
+    private async Task ConnectHubAsync()
+    {
+        try
+        {
+            var apiBase = Config["ApiBaseUrl"]?.TrimEnd('/') ?? "";
+            var hubUrl  = $"{apiBase}/hubs/torneio";
+
+            _hub = new HubConnectionBuilder()
+                .WithUrl(hubUrl)
+                .WithAutomaticReconnect([
+                    TimeSpan.Zero,
+                    TimeSpan.FromSeconds(2),
+                    TimeSpan.FromSeconds(5),
+                    TimeSpan.FromSeconds(10),
+                    TimeSpan.FromSeconds(30),
+                    TimeSpan.FromSeconds(60)
+                ])
+                .Build();
+
+            _hub.Reconnecting += async _ =>
+            {
+                await SetStatus(ConnectionStatus.Reconnecting);
+            };
+
+            _hub.Reconnected += async _ =>
+            {
+                // Ao reconectar: pede estado do Worker e compara com servidor
+                await _hub.SendAsync("JoinTorneio", TournamentId);
+                if (_workerReady)
+                    await JS.InvokeVoidAsync("timerBridge.send", "GET_STATE", new { });
+                await SetStatus(ConnectionStatus.Online);
+            };
+
+            _hub.Closed += async _ =>
+            {
+                await SetStatus(ConnectionStatus.Offline);
+            };
+
+            RegisterHubHandlers();
+
+            await _hub.StartAsync();
+            await _hub.SendAsync("JoinTorneio", TournamentId);
+            await SetStatus(ConnectionStatus.Online);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[DualTimer] SignalR connection failed: {ex.Message}");
+            await SetStatus(ConnectionStatus.Offline);
+            // Worker já foi inicializado — assumirá controle automaticamente
+        }
+    }
+
+    private void RegisterHubHandlers()
+    {
+        if (_hub == null) return;
+
+        // TimerTick — fonte principal quando online
+        _hTick = _hub.On<object>("TimerTick", async data =>
+        {
+            try
+            {
+                var tick = Deserialize<HubTimerTick>(data);
+                if (tick == null) return;
+
+                // Envia SYNC ao Worker (mantém alinhado, server wins se drift > 2s)
+                if (_workerReady)
+                {
+                    await JS.InvokeVoidAsync("timerBridge.send", "SYNC", new
+                    {
+                        timeRemainingSeconds = tick.SecondsRemaining,
+                        currentLevel         = tick.CurrentLevel,
+                        isPaused             = false
+                    });
+                }
+
+                await OnTick.InvokeAsync(new TimerTickData
+                {
+                    SecondsRemaining = tick.SecondsRemaining,
+                    CurrentLevel     = tick.CurrentLevel,
+                    SmallBlind       = tick.SmallBlind,
+                    BigBlind         = tick.BigBlind,
+                    Ante             = tick.Ante,
+                    IsBreak          = tick.IsBreak,
+                    BreakDescription = tick.BreakDescription,
+                    FromWorker       = false
+                });
+            }
+            catch { }
+        });
+
+        _hLevel = _hub.On<object>("NivelAlterado", async data =>
+        {
+            try
+            {
+                var levelData = Deserialize<HubLevelChanged>(data);
+                if (levelData?.NewLevel == null) return;
+
+                await OnLevelChanged.InvokeAsync(new LevelChangedData
+                {
+                    NewLevel  = levelData.NewLevel,
+                    NextLevel = levelData.NextLevel
+                });
+            }
+            catch { }
+        });
+
+        _hPaused = _hub.On<int>("TorneioPausado", async secs =>
+        {
+            if (_workerReady)
+                await JS.InvokeVoidAsync("timerBridge.send", "PAUSE", new { });
+            await OnPauseChanged.InvokeAsync(true);
+        });
+
+        _hResumed = _hub.On("TorneioRetomado", async () =>
+        {
+            if (_workerReady)
+                await JS.InvokeVoidAsync("timerBridge.send", "RESUME", new { });
+            await OnPauseChanged.InvokeAsync(false);
+        });
+
+        _hEliminated = _hub.On<object>("JogadorEliminado", async _ =>
+        {
+            await OnPlayersChanged.InvokeAsync();
+        });
+
+        _hPrize = _hub.On<object>("PrizePoolAtualizado", async data =>
+        {
+            try
+            {
+                var prize = Deserialize<HubPrizePoolUpdate>(data);
+                if (prize != null)
+                    await OnPrizePoolUpdated.InvokeAsync(new PrizePoolUpdate(prize.PrizePool, prize.TotalRebuys, prize.TotalAddons));
+            }
+            catch { }
+        });
+
+        _hFinished = _hub.On("TorneioFinalizado", async () =>
+        {
+            await OnFinished.InvokeAsync(true);
+        });
+
+        _hState = _hub.On<TimerStateDto>("TimerStateUpdated", async state =>
+        {
+            // Sync completo com o servidor
+            if (_workerReady)
+            {
+                await JS.InvokeVoidAsync("timerBridge.send", "SYNC", new
+                {
+                    timeRemainingSeconds = state.TimeRemainingSeconds,
+                    currentLevel         = state.CurrentLevel,
+                    isPaused             = state.Status == TournamentStatus.Paused
+                });
+            }
+
+            if (state.CurrentBlindLevel != null)
+            {
+                await OnTick.InvokeAsync(new TimerTickData
+                {
+                    SecondsRemaining = state.TimeRemainingSeconds,
+                    CurrentLevel     = state.CurrentLevel,
+                    SmallBlind       = state.CurrentBlindLevel.SmallBlind,
+                    BigBlind         = state.CurrentBlindLevel.BigBlind,
+                    Ante             = state.CurrentBlindLevel.Ante,
+                    IsBreak          = state.CurrentBlindLevel.IsBreak,
+                    BreakDescription = state.CurrentBlindLevel.BreakDescription,
+                    NextLevel        = state.NextBlindLevel,
+                    FromWorker       = false
+                });
+            }
+        });
+
+        _hPlayers = _hub.On("PlayerUpdated", async () =>
+        {
+            await OnPlayersChanged.InvokeAsync();
+        });
+    }
+
+    // ── JSInvokable — callbacks do Worker (quando offline) ───────────────────
+    // Acionados pelo timer-bridge.js via dotnetRef.invokeMethodAsync(...)
+    // Só propagam quando online, o SignalR tem prioridade (evita duplicatas).
+
+    [JSInvokable]
+    public async Task OnTimerTick(WorkerTickPayload payload)
+    {
+        // Se SignalR está online, descarta ticks do Worker (evita duplicatas no display)
+        // O Worker é mantido em sync pelo SYNC command, mas não precisa re-renderizar
+        if (Status == ConnectionStatus.Online) return;
+
+        await OnTick.InvokeAsync(new TimerTickData
+        {
+            SecondsRemaining = payload.SecondsRemaining,
+            CurrentLevel     = payload.CurrentLevel,
+            SmallBlind       = payload.Blind?.SmallBlind ?? 0,
+            BigBlind         = payload.Blind?.BigBlind   ?? 0,
+            Ante             = payload.Blind?.Ante        ?? 0,
+            IsBreak          = payload.Blind?.IsBreak     ?? false,
+            BreakDescription = payload.Blind?.BreakDescription,
+            NextLevel        = payload.NextBlind == null ? null : new BlindLevelDto(
+                payload.NextBlind.Id,
+                payload.NextBlind.Order,
+                payload.NextBlind.SmallBlind,
+                payload.NextBlind.BigBlind,
+                payload.NextBlind.Ante,
+                payload.NextBlind.DurationMinutes,
+                payload.NextBlind.IsBreak,
+                payload.NextBlind.BreakDescription),
+            FromWorker = true
+        });
+    }
+
+    [JSInvokable]
+    public async Task OnWorkerLevelChanged(WorkerLevelPayload payload)
+    {
+        if (payload.Blind == null) return;
+
+        var newLevel = new BlindLevelDto(
+            payload.Blind.Id, payload.Blind.Order,
+            payload.Blind.SmallBlind, payload.Blind.BigBlind,
+            payload.Blind.Ante, payload.Blind.DurationMinutes,
+            payload.Blind.IsBreak, payload.Blind.BreakDescription);
+
+        var nextLevel = payload.NextBlind == null ? null : new BlindLevelDto(
+            payload.NextBlind.Id, payload.NextBlind.Order,
+            payload.NextBlind.SmallBlind, payload.NextBlind.BigBlind,
+            payload.NextBlind.Ante, payload.NextBlind.DurationMinutes,
+            payload.NextBlind.IsBreak, payload.NextBlind.BreakDescription);
+
+        await OnLevelChanged.InvokeAsync(new LevelChangedData { NewLevel = newLevel, NextLevel = nextLevel });
+    }
+
+    [JSInvokable]
+    public async Task OnTimerPaused(object _) => await OnPauseChanged.InvokeAsync(true);
+
+    [JSInvokable]
+    public async Task OnTimerResumed(object _) => await OnPauseChanged.InvokeAsync(false);
+
+    [JSInvokable]
+    public async Task OnTournamentLastLevel(object _) => await OnFinished.InvokeAsync(true);
+
+    [JSInvokable]
+    public Task OnSyncApplied(object _)  => Task.CompletedTask;
+
+    [JSInvokable]
+    public Task OnTimerState(object _)   => Task.CompletedTask;
+
+    [JSInvokable]
+    public Task OnTimerError(object _)   => Task.CompletedTask;
+
+    // ── Comandos públicos (chamados pelo pai) ─────────────────────────────────
+
+    public async Task PauseAsync()
+    {
+        if (_hub?.State == HubConnectionState.Connected)
+            try { await _hub.SendAsync("PauseTorneio", TournamentId); } catch { }
+        else if (_workerReady)
+            await JS.InvokeVoidAsync("timerBridge.send", "PAUSE", new { });
+    }
+
+    public async Task ResumeAsync()
+    {
+        if (_hub?.State == HubConnectionState.Connected)
+            try { await _hub.SendAsync("ResumeTorneio", TournamentId); } catch { }
+        else if (_workerReady)
+            await JS.InvokeVoidAsync("timerBridge.send", "RESUME", new { });
+    }
+
+    public async Task SkipLevelAsync()
+    {
+        if (_workerReady)
+            await JS.InvokeVoidAsync("timerBridge.send", "SKIP_LEVEL", new { });
+    }
+
+    public async Task PrevLevelAsync()
+    {
+        if (_workerReady)
+            await JS.InvokeVoidAsync("timerBridge.send", "PREV_LEVEL", new { });
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private async Task SetStatus(ConnectionStatus status)
+    {
+        if (Status == status) return;
+        Status = status;
+        await OnConnectionChanged.InvokeAsync(status);
+    }
+
+    private static T? Deserialize<T>(object data)
+    {
+        var json = JsonSerializer.Serialize(data);
+        return JsonSerializer.Deserialize<T>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+    }
+
+    // ── Dispose ───────────────────────────────────────────────────────────────
+
+    public async ValueTask DisposeAsync()
+    {
+        _hTick?.Dispose(); _hLevel?.Dispose(); _hPaused?.Dispose();
+        _hResumed?.Dispose(); _hEliminated?.Dispose(); _hPrize?.Dispose();
+        _hFinished?.Dispose(); _hState?.Dispose(); _hPlayers?.Dispose();
+
+        if (_hub != null)
+        {
+            try { await _hub.SendAsync("LeaveTorneio", TournamentId); } catch { }
+            await _hub.DisposeAsync();
+        }
+
+        try { await JS.InvokeVoidAsync("timerBridge.destroy"); } catch { }
+        _dotNetRef?.Dispose();
+    }
+
+    // ── Tipos públicos ────────────────────────────────────────────────────────
+
+    public enum ConnectionStatus { Connecting, Online, Reconnecting, Offline }
+
+    public class TimerTickData
+    {
+        public int          SecondsRemaining { get; set; }
+        public int          CurrentLevel     { get; set; }
+        public decimal      SmallBlind       { get; set; }
+        public decimal      BigBlind         { get; set; }
+        public decimal      Ante             { get; set; }
+        public bool         IsBreak          { get; set; }
+        public string?      BreakDescription { get; set; }
+        public BlindLevelDto? NextLevel      { get; set; }
+        public bool         FromWorker       { get; set; }
+    }
+
+    public class LevelChangedData
+    {
+        public BlindLevelDto? NewLevel  { get; set; }
+        public BlindLevelDto? NextLevel { get; set; }
+    }
+
+    public record PrizePoolUpdate(decimal PrizePool, int TotalRebuys, int TotalAddons);
+
+    // Payloads do Worker (camelCase do JS)
+    public class WorkerBlind
+    {
+        public Guid    Id               { get; set; }
+        public int     Order            { get; set; }
+        public int     SmallBlind       { get; set; }
+        public int     BigBlind         { get; set; }
+        public int     Ante             { get; set; }
+        public int     DurationMinutes  { get; set; }
+        public bool    IsBreak          { get; set; }
+        public string? BreakDescription { get; set; }
+    }
+
+    public class WorkerTickPayload
+    {
+        public int         SecondsRemaining { get; set; }
+        public int         CurrentLevel     { get; set; }
+        public WorkerBlind? Blind           { get; set; }
+        public WorkerBlind? NextBlind       { get; set; }
+    }
+
+    public class WorkerLevelPayload
+    {
+        public int          CurrentLevel { get; set; }
+        public WorkerBlind? Blind        { get; set; }
+        public WorkerBlind? NextBlind    { get; set; }
+    }
+
+    // Payloads do Hub (PascalCase do C#)
+    private class HubTimerTick
+    {
+        public int     SecondsRemaining { get; set; }
+        public int     CurrentLevel     { get; set; }
+        public decimal SmallBlind       { get; set; }
+        public decimal BigBlind         { get; set; }
+        public decimal Ante             { get; set; }
+        public bool    IsBreak          { get; set; }
+        public string? BreakDescription { get; set; }
+    }
+
+    private class HubLevelChanged
+    {
+        public BlindLevelDto? NewLevel  { get; set; }
+        public BlindLevelDto? NextLevel { get; set; }
+    }
+
+    private class HubPrizePoolUpdate
+    {
+        public decimal PrizePool   { get; set; }
+        public int     TotalRebuys { get; set; }
+        public int     TotalAddons { get; set; }
+    }
+}

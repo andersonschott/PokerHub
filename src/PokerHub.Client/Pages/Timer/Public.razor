@@ -1,0 +1,342 @@
+@page "/tv/{TournamentId:guid}"
+@attribute [AllowAnonymous]
+@layout EmptyLayout
+@implements IAsyncDisposable
+@inject ITournamentService TournamentService
+@inject IJSRuntime JS
+
+<PageTitle>Timer - @(_name ?? "Torneio")</PageTitle>
+
+@* DualTimerManager renderless *@
+<DualTimerManager @ref="_timer"
+    TournamentId="@TournamentId"
+    BlindStructure="@_blinds"
+    InitialLevel="@_level"
+    InitialTimeRemainingSeconds="@_seconds"
+    InitialIsPaused="@_isPaused"
+    OnTick="@HandleTick"
+    OnLevelChanged="@HandleLevelChanged"
+    OnPauseChanged="@(v => { _isPaused = v; return InvokeAsync(StateHasChanged); })"
+    OnFinished="@(v => { _isFinished = v; return InvokeAsync(StateHasChanged); })"
+    OnPrizePoolUpdated="@(u => { _prizePool = u.PrizePool; _totalRebuys = u.TotalRebuys; _totalAddons = u.TotalAddons; return InvokeAsync(StateHasChanged); })"
+    OnPlayersChanged="@HandlePlayersChanged"
+    OnConnectionChanged="@(s => { _connStatus = s; return InvokeAsync(StateHasChanged); })" />
+
+@* Banner de conexão *@
+<div style="@BannerStyle()">
+    @(_connStatus switch
+    {
+        DualTimerManager.ConnectionStatus.Online => "🟢 Online",
+        DualTimerManager.ConnectionStatus.Reconnecting => "🟡 Reconectando...",
+        DualTimerManager.ConnectionStatus.Offline => "🔴 Offline — timer local",
+        _ => "⏳ Conectando..."
+    })
+</div>
+
+<div class="timer-fullscreen @(_isBreak ? "break-mode" : "")">
+    @if (_loading)
+    {
+        <div class="timer-center">
+            <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+        </div>
+    }
+    else if (_error != null)
+    {
+        <div class="timer-center">
+            <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Large" Color="Color.Error" />
+            <MudText Typo="Typo.h5" Class="mt-4">@_error</MudText>
+        </div>
+    }
+    else if (_isFinished)
+    {
+        <div class="timer-center">
+            <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Style="font-size:8rem;" Color="Color.Warning" />
+            <MudText Typo="Typo.h3" Class="mt-4">Torneio Finalizado</MudText>
+            <MudText Typo="Typo.h5" Color="Color.Secondary">@_name</MudText>
+        </div>
+    }
+    else
+    {
+        <div class="timer-header">
+            <span class="tournament-name">@_name</span>
+            @if (_isPaused)
+            {
+                <div class="paused-badge">
+                    <MudIcon Icon="@Icons.Material.Filled.Pause" />
+                    <span>PAUSADO</span>
+                </div>
+            }
+        </div>
+
+        <div class="timer-main">
+            @if (_isBreak)
+            {
+                <div class="break-title">☕ INTERVALO</div>
+                @if (!string.IsNullOrEmpty(_breakDesc))
+                {
+                    <div class="break-desc">@_breakDesc</div>
+                }
+            }
+            else
+            {
+                <div class="level-label">NÍVEL @_level</div>
+                <div class="blinds-row">
+                    <span class="blind-val">@Chips(_sb)</span>
+                    <span class="blind-sep">/</span>
+                    <span class="blind-val">@Chips(_bb)</span>
+                </div>
+                @if (_ante > 0)
+                {
+                    <div class="ante-label">ANTE: @Chips(_ante)</div>
+                }
+            }
+
+            <div class="time-display @TimeClass()">
+                <span class="time-value">@FmtTime(_seconds)</span>
+            </div>
+
+            @if (_next != null)
+            {
+                <div class="next-level">
+                    <span class="next-label">PRÓXIMO:</span>
+                    @if (_next.IsBreak)
+                    {
+                        <span class="next-value">Intervalo@(!string.IsNullOrEmpty(_next.BreakDescription) ? $" ({_next.BreakDescription})" : "")</span>
+                    }
+                    else
+                    {
+                        <span class="next-value">@Chips(_next.SmallBlind) / @Chips(_next.BigBlind)@(_next.Ante > 0 ? $" (Ante: {Chips(_next.Ante)})" : "")</span>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="timer-footer">
+            <div class="info-item">
+                <MudIcon Icon="@Icons.Material.Filled.People" />
+                <span class="info-val">@_playersRemaining / @_totalPlayers</span>
+                <span class="info-lbl">Jogadores</span>
+            </div>
+            <div class="info-item">
+                <MudIcon Icon="@Icons.Material.Filled.Payments" />
+                <span class="info-val">@_prizePool.ToBrl()</span>
+                <span class="info-lbl">Prize Pool</span>
+            </div>
+            <div class="info-item">
+                <MudIcon Icon="@Icons.Material.Filled.Refresh" />
+                <span class="info-val">@_totalRebuys / @_totalAddons</span>
+                <span class="info-lbl">Rebuys / Add-ons</span>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .timer-fullscreen {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #1a1a2e 100%);
+        display: flex; flex-direction: column; justify-content: space-between;
+        padding: 2rem; color: white; font-family: 'Space Grotesk','Roboto',sans-serif;
+        overflow: hidden;
+    }
+    .timer-fullscreen.break-mode {
+        background: linear-gradient(135deg, #1a2a1a 0%, #1a3320 50%, #0d1f15 100%);
+    }
+    .timer-center {
+        flex: 1; display: flex; flex-direction: column;
+        justify-content: center; align-items: center; gap: 16px;
+    }
+    .timer-header {
+        display: flex; justify-content: space-between; align-items: center;
+    }
+    .tournament-name {
+        font-size: clamp(1.2rem, 3vw, 2.5rem); font-weight: 600; color: #4CAF50;
+    }
+    .paused-badge {
+        display: flex; align-items: center; gap: 8px;
+        background: rgba(234,179,8,.2); border: 1px solid rgba(234,179,8,.5);
+        color: #eab308; padding: 8px 20px; border-radius: 999px;
+        font-weight: 700; animation: pulse 1.5s infinite;
+    }
+    .timer-main {
+        flex: 1; display: flex; flex-direction: column;
+        justify-content: center; align-items: center; gap: 1rem;
+    }
+    .break-title {
+        font-size: clamp(3rem, 8vw, 7rem); font-weight: 800;
+        color: #eab308; letter-spacing: .1em;
+    }
+    .break-desc { color: rgba(255,255,255,.7); font-size: clamp(1rem, 2vw, 1.8rem); }
+    .level-label {
+        font-size: clamp(1.2rem, 2.5vw, 2.2rem); color: #22c55e;
+        font-weight: 700; letter-spacing: .2em; text-transform: uppercase;
+    }
+    .blinds-row {
+        display: flex; align-items: baseline; gap: 1rem;
+    }
+    .blind-val  { font-size: clamp(3rem, 8vw, 7rem); font-weight: 800; }
+    .blind-sep  { font-size: clamp(2rem, 6vw, 5rem); color: rgba(255,255,255,.4); }
+    .ante-label { font-size: clamp(1rem, 2vw, 2rem); color: #9ca3af; }
+    .time-display { margin-top: 1.5rem; }
+    .time-value {
+        font-size: clamp(5rem, 15vw, 14rem); font-family: 'JetBrains Mono','Courier New',monospace;
+        font-weight: 800; letter-spacing: .05em;
+        text-shadow: 0 0 40px rgba(255,255,255,.2);
+    }
+    .time-warning  .time-value { color: #eab308; }
+    .time-critical .time-value { color: #ef4444; animation: blink .5s infinite; }
+    .next-level {
+        display: flex; align-items: center; gap: 1rem; margin-top: 1.5rem;
+        padding: .75rem 2rem; background: rgba(255,255,255,.07);
+        border: 1px solid rgba(255,255,255,.1); border-radius: 12px;
+    }
+    .next-label { color: rgba(255,255,255,.5); font-size: clamp(.9rem, 1.5vw, 1.3rem); }
+    .next-value { font-size: clamp(1rem, 2vw, 1.6rem); font-weight: 600; }
+    .timer-footer {
+        display: flex; justify-content: space-around;
+        padding-top: 1rem; border-top: 1px solid rgba(255,255,255,.1);
+    }
+    .info-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .info-val  { font-size: clamp(1.2rem, 2.5vw, 2rem); font-weight: 700; }
+    .info-lbl  { font-size: clamp(.7rem, 1vw, .9rem); color: rgba(255,255,255,.5); text-transform: uppercase; letter-spacing: .1em; }
+    @@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .6; } }
+    @@keyframes blink  { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+</style>
+
+@code {
+    [Parameter] public Guid TournamentId { get; set; }
+
+    private DualTimerManager? _timer;
+    private DualTimerManager.ConnectionStatus _connStatus = DualTimerManager.ConnectionStatus.Connecting;
+
+    private bool    _loading  = true;
+    private string? _error;
+    private bool    _isFinished;
+    private bool    _isPaused;
+    private bool    _isBreak;
+    private string? _breakDesc;
+    private string? _name;
+
+    private int     _level   = 1;
+    private int     _seconds;
+    private decimal _sb, _bb, _ante;
+    private BlindLevelDto? _next;
+
+    private int     _playersRemaining;
+    private int     _totalPlayers;
+    private decimal _prizePool;
+    private int     _totalRebuys;
+    private int     _totalAddons;
+
+    private List<BlindLevelDto> _blinds = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var state = await TournamentService.GetTimerStateAsync(TournamentId);
+            if (state == null)
+            {
+                var t = await TournamentService.GetTournamentByIdAsync(TournamentId);
+                if (t == null)               { _error = "Torneio não encontrado"; _loading = false; return; }
+                if (t.Status == TournamentStatus.Finished) { _isFinished = true; _name = t.Name; _loading = false; return; }
+                if (t.Status == TournamentStatus.Scheduled) { _error = "Torneio ainda não iniciado"; _loading = false; return; }
+                _name = t.Name; _prizePool = t.PrizePool; _totalPlayers = t.PlayerCount; _playersRemaining = t.CheckedInCount;
+            }
+            else
+            {
+                ApplyState(state);
+
+                // Carrega blind structure para o Worker
+                var detail = await TournamentService.GetTournamentDetailAsync(TournamentId);
+                if (detail != null) _blinds = detail.BlindLevels.ToList();
+            }
+            _loading = false;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Erro: {ex.Message}"; _loading = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try { await JS.InvokeVoidAsync("requestWakeLock"); } catch { }
+    }
+
+    private void ApplyState(TimerStateDto s)
+    {
+        _name     = s.TournamentName;
+        _seconds  = s.TimeRemainingSeconds;
+        _level    = s.CurrentLevel;
+        _isPaused = s.Status == TournamentStatus.Paused;
+        _isFinished = s.Status == TournamentStatus.Finished;
+        _playersRemaining = s.PlayersRemaining;
+        _totalPlayers     = s.TotalPlayers;
+        _prizePool        = s.PrizePool;
+        _totalRebuys      = s.TotalRebuys;
+        _totalAddons      = s.TotalAddons;
+        if (s.CurrentBlindLevel != null)
+        {
+            _sb = s.CurrentBlindLevel.SmallBlind; _bb = s.CurrentBlindLevel.BigBlind;
+            _ante = s.CurrentBlindLevel.Ante;
+            _isBreak = s.CurrentBlindLevel.IsBreak; _breakDesc = s.CurrentBlindLevel.BreakDescription;
+        }
+        _next = s.NextBlindLevel;
+    }
+
+    private async Task HandleTick(DualTimerManager.TimerTickData d)
+    {
+        _seconds = d.SecondsRemaining; _level = d.CurrentLevel;
+        _sb = d.SmallBlind; _bb = d.BigBlind; _ante = d.Ante;
+        _isBreak = d.IsBreak; _breakDesc = d.BreakDescription; _next = d.NextLevel;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandleLevelChanged(DualTimerManager.LevelChangedData d)
+    {
+        if (d.NewLevel == null) return;
+        _level = d.NewLevel.Order; _sb = d.NewLevel.SmallBlind; _bb = d.NewLevel.BigBlind;
+        _ante = d.NewLevel.Ante; _isBreak = d.NewLevel.IsBreak; _breakDesc = d.NewLevel.BreakDescription;
+        _seconds = d.NewLevel.DurationMinutes * 60; _next = d.NextLevel;
+        var snd = d.NewLevel.IsBreak ? "timerSounds.playBreakStart" : "timerSounds.playLevelChange";
+        try { await JS.InvokeVoidAsync(snd); } catch { }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HandlePlayersChanged()
+    {
+        try
+        {
+            var state = await TournamentService.GetTimerStateAsync(TournamentId);
+            if (state != null) { _playersRemaining = state.PlayersRemaining; _totalPlayers = state.TotalPlayers; _prizePool = state.PrizePool; _totalRebuys = state.TotalRebuys; _totalAddons = state.TotalAddons; }
+        }
+        catch { }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private string BannerStyle()
+    {
+        var bg = _connStatus switch
+        {
+            DualTimerManager.ConnectionStatus.Online       => "rgba(34,197,94,.12)",
+            DualTimerManager.ConnectionStatus.Reconnecting => "rgba(234,179,8,.12)",
+            DualTimerManager.ConnectionStatus.Offline      => "rgba(239,68,68,.12)",
+            _                                              => "rgba(100,100,100,.12)"
+        };
+        return $"position: fixed; top: 0; left: 0; right: 0; z-index: 99999; " +
+               $"text-align: center; padding: 3px 0; font-size: 11px; font-weight: 600; " +
+               $"background: {bg}; pointer-events: none;";
+    }
+
+    private string TimeClass() => _seconds <= 10 ? "time-critical" : _seconds <= 60 ? "time-warning" : "";
+
+    private static string FmtTime(int s) { if (s < 0) s = 0; return $"{s / 60:D2}:{s % 60:D2}"; }
+    private static string Chips(decimal v) => v >= 1_000_000 ? $"{v/1_000_000:0.#}M" : v >= 1_000 ? $"{v/1_000:0.#}K" : v.ToString("0");
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("releaseWakeLock"); } catch { }
+    }
+}

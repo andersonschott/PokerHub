@@ -48,4 +48,7 @@ builder.Services.AddScoped<ISeasonService, HttpSeasonService>();
 builder.Services.AddScoped<IJackpotService, HttpJackpotService>();
 builder.Services.AddScoped<IPrizeTableService, HttpPrizeTableService>();
 
+// Serviços offline
+builder.Services.AddScoped<IndexedDbService>();
+
 await builder.Build().RunAsync();
