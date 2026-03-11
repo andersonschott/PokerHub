@@ -1,0 +1,1003 @@
+@page "/torneios/{TournamentId:guid}/pagamentos"
+@attribute [Authorize]
+@inject IPaymentService PaymentService
+@inject ITournamentService TournamentService
+@inject ITournamentExpenseService ExpenseService
+@inject IndexedDbService IndexedDb
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject AuthStateService AuthState
+@inject IJSRuntime JS
+
+<PageTitle>Pagamentos - PokerHub</PageTitle>
+
+@* ── Offline / Stale banner ── *@
+@if (_isOffline)
+{
+    <div style="position: fixed; top: 64px; left: 0; right: 0; z-index: 99998; pointer-events: none;
+                background: rgba(239,68,68,0.85); color: #fff; text-align: center;
+                padding: 6px; font-size: 12px; font-weight: 600;">
+        🔴 Offline — ações serão sincronizadas ao reconectar
+    </div>
+}
+else if (_isStaleData)
+{
+    <div style="position: fixed; top: 64px; left: 0; right: 0; z-index: 99997; pointer-events: none;
+                background: rgba(234,179,8,0.85); color: #000; text-align: center;
+                padding: 6px; font-size: 12px; font-weight: 600;">
+        ⚠️ Dados do último cache — puxe para atualizar
+    </div>
+}
+
+<div class="payments-page">
+    @if (_loading)
+    {
+        @* Skeleton loading *@
+        <div class="pa-3">
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="120px" Class="rounded-lg mb-3" />
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="44px" Class="rounded-lg mb-3" />
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="80px" Class="rounded-lg mb-2" />
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="80px" Class="rounded-lg mb-2" />
+            <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="80px" Class="rounded-lg mb-2" />
+        </div>
+    }
+    else if (_tournament == null)
+    {
+        <div class="empty-state pa-4">
+            <div class="empty-state-icon">
+                <MudIcon Icon="@Icons.Material.Filled.SearchOff" Size="Size.Large" Color="Color.Warning" />
+            </div>
+            <MudText Typo="Typo.h6">Torneio nao encontrado</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                O torneio solicitado nao existe ou foi removido.
+            </MudText>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-4"
+                       OnClick="@(() => Navigation.NavigateTo("/torneios"))">
+                Voltar para Torneios
+            </MudButton>
+        </div>
+    }
+    else if (_tournament.Status != TournamentStatus.Finished)
+    {
+        <div class="empty-state pa-4">
+            <div class="empty-state-icon">
+                <MudIcon Icon="@Icons.Material.Filled.Schedule" Size="Size.Large" Color="Color.Info" />
+            </div>
+            <MudText Typo="Typo.h6">Torneio em andamento</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">
+                Os pagamentos sao calculados automaticamente apos o termino do torneio.
+            </MudText>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-4"
+                       Href="@($"/torneios/{TournamentId}")">
+                Ver Torneio
+            </MudButton>
+        </div>
+    }
+    else
+    {
+        @* ── MOBILE ── *@
+        <div class="mobile-payments-page pa-3">
+
+            @* Mobile header *@
+            <div class="mobile-header">
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Color="Color.Default"
+                               OnClick="@(() => Navigation.NavigateTo($"/torneios/{TournamentId}"))" />
+                <div style="flex:1; min-width:0;">
+                    <MudText Typo="Typo.subtitle1" Style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        Pagamentos
+                    </MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary"
+                             Style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        @_tournament.Name
+                    </MudText>
+                </div>
+                @if (_isOrganizer && _payments?.Any() == true)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Warning"
+                                   Size="Size.Small" OnClick="CalculatePayments" Disabled="_processing" />
+                }
+            </div>
+
+            @* Summary card *@
+            <div class="summary-card">
+                <div class="summary-stats">
+                    <div class="summary-stat">
+                        <div class="summary-stat-value positive">R$ @GetTotalToReceive().ToString("N0")</div>
+                        <div class="summary-stat-label">A Receber</div>
+                    </div>
+                    <div class="summary-divider"></div>
+                    <div class="summary-stat">
+                        <div class="summary-stat-value warning">@GetPendingCount()</div>
+                        <div class="summary-stat-label">Pendentes</div>
+                    </div>
+                    <div class="summary-divider"></div>
+                    <div class="summary-stat">
+                        <div class="summary-stat-value success">@GetConfirmedCount()</div>
+                        <div class="summary-stat-label">Confirmados</div>
+                    </div>
+                </div>
+                @if (_payments != null && _payments.Any())
+                {
+                    <div class="progress-section">
+                        <MudProgressLinear Color="Color.Success" Rounded="true" Size="Size.Medium"
+                                           Value="@GetProgressPercent()" />
+                        <div class="progress-text">@GetProgressPercent().ToString("N0")% concluido</div>
+                    </div>
+                }
+            </div>
+
+            @* Tabs *@
+            <div class="tabs-container">
+                <MudChipSet T="string" SelectionMode="SelectionMode.SingleSelection">
+                    <MudChip T="string" Text="Saldo" Color="Color.Default"
+                             Variant="@(_mobileTab == "saldo" ? Variant.Filled : Variant.Outlined)"
+                             OnClick="@(() => _mobileTab = "saldo")" />
+                    <MudChip T="string" Text="Pagamentos" Color="Color.Default"
+                             Variant="@(_mobileTab == "pagamentos" ? Variant.Filled : Variant.Outlined)"
+                             OnClick="@(() => _mobileTab = "pagamentos")" />
+                </MudChipSet>
+            </div>
+
+            @if (_mobileTab == "saldo")
+            {
+                @* Balance list *@
+                @if (_balances != null && _balances.Any())
+                {
+                    <div class="balance-list">
+                        @foreach (var balance in _balances)
+                        {
+                            <div class="balance-card">
+                                <div class="balance-avatar">@GetInitials(balance.PlayerName)</div>
+                                <div class="balance-info">
+                                    <div class="balance-name">@balance.PlayerName</div>
+                                    <div class="balance-details">
+                                        <span>Investiu: R$ @balance.TotalInvestment.ToString("N0")</span>
+                                        <span>Premio: R$ @balance.Prize.ToString("N0")</span>
+                                    </div>
+                                </div>
+                                <div class="balance-amount @(balance.Balance >= 0 ? "positive" : "negative")">
+                                    @(balance.Balance >= 0 ? "+" : "")R$ @balance.Balance.ToString("N0")
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    @if (_jackpotContribution > 0)
+                    {
+                        <div class="jackpot-card">
+                            <div class="jackpot-label">
+                                <MudIcon Icon="@Icons.Material.Filled.Savings" Color="Color.Warning" Size="Size.Small" />
+                                Contribuicao para Caixinha
+                            </div>
+                            <div class="jackpot-value">R$ @_jackpotContribution.ToString("N0")</div>
+                        </div>
+                    }
+
+                    <div class="total-card">
+                        <div class="total-label">Total Prize Pool</div>
+                        <div class="total-value">R$ @_balances.Sum(b => b.TotalInvestment).ToString("N0")</div>
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-state">
+                        <div class="empty-state-icon">
+                            <MudIcon Icon="@Icons.Material.Filled.Calculate" Size="Size.Large" Color="Color.Secondary" />
+                        </div>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">Nenhum saldo calculado.</MudText>
+                    </div>
+                }
+            }
+            else
+            {
+                @* Payment filters *@
+                <div class="filter-scroll">
+                    <div class="filter-chips">
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(_typeFilter == "todos" ? Color.Primary : Color.Default)"
+                                 Variant="@(_typeFilter == "todos" ? Variant.Filled : Variant.Outlined)"
+                                 OnClick="@(() => _typeFilter = "todos")">Todos</MudChip>
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(_typeFilter == "poker" ? Color.Success : Color.Default)"
+                                 Variant="@(_typeFilter == "poker" ? Variant.Filled : Variant.Outlined)"
+                                 OnClick="@(() => _typeFilter = "poker")">Poker (@CountPoker())</MudChip>
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(_typeFilter == "despesa" ? Color.Warning : Color.Default)"
+                                 Variant="@(_typeFilter == "despesa" ? Variant.Filled : Variant.Outlined)"
+                                 OnClick="@(() => _typeFilter = "despesa")">Despesas (@CountDespesa())</MudChip>
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(_paymentFilter == "pendente" ? Color.Warning : Color.Default)"
+                                 Variant="@(_paymentFilter == "pendente" ? Variant.Filled : Variant.Outlined)"
+                                 OnClick="@(() => _paymentFilter = _paymentFilter == "pendente" ? "todos" : "pendente")">Pendentes</MudChip>
+                        <MudChip T="string" Size="Size.Small"
+                                 Color="@(_paymentFilter == "confirmado" ? Color.Success : Color.Default)"
+                                 Variant="@(_paymentFilter == "confirmado" ? Variant.Filled : Variant.Outlined)"
+                                 OnClick="@(() => _paymentFilter = _paymentFilter == "confirmado" ? "todos" : "confirmado")">Confirmados</MudChip>
+                    </div>
+                </div>
+
+                @* Payment cards *@
+                @if (FilteredPayments.Any())
+                {
+                    <div class="payment-list">
+                        @foreach (var payment in FilteredPayments)
+                        {
+                            <div class="payment-card">
+                                <div class="status-indicator @GetStatusClass(payment.Status)"></div>
+                                <div class="payment-content">
+                                    <div class="payment-type">
+                                        @switch (payment.Type)
+                                        {
+                                            case PaymentType.Poker:
+                                                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">Poker</MudChip>
+                                                break;
+                                            case PaymentType.Expense:
+                                                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">@payment.Description</MudChip>
+                                                break;
+                                            case PaymentType.Jackpot:
+                                                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">Caixinha</MudChip>
+                                                break;
+                                        }
+                                    </div>
+                                    <div class="payment-flow">
+                                        <div class="payment-player">
+                                            <div class="payment-player-avatar from">@GetInitials(payment.FromPlayerName)</div>
+                                            <span class="payment-player-name">@payment.FromPlayerName</span>
+                                        </div>
+                                        <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" Class="payment-arrow" />
+                                        <div class="payment-player">
+                                            <div class="payment-player-avatar to">@GetInitials(payment.ToPlayerName)</div>
+                                            <span class="payment-player-name">@payment.ToPlayerName</span>
+                                        </div>
+                                    </div>
+                                    <div class="payment-footer">
+                                        <div>
+                                            <div class="payment-amount @(payment.IsJackpotContribution ? "jackpot" : "")">
+                                                R$ @payment.Amount.ToString("N0")
+                                            </div>
+                                            @if (!string.IsNullOrEmpty(payment.ToPlayerPixKey))
+                                            {
+                                                <div class="d-flex align-center gap-1 mt-1">
+                                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled">
+                                                        @GetPixTypeText(payment.ToPlayerPixKeyType)
+                                                    </MudChip>
+                                                    <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small"
+                                                                   OnClick="@(() => CopyToClipboard(payment.ToPlayerPixKey))"
+                                                                   Color="Color.Default" />
+                                                </div>
+                                            }
+                                        </div>
+                                        <div class="payment-actions">
+                                            <MudChip T="string" Size="Size.Small"
+                                                     Color="@GetStatusColor(payment.Status)"
+                                                     Variant="Variant.Filled">
+                                                @GetStatusText(payment.Status)
+                                            </MudChip>
+                                            @if (_isOrganizer && payment.Status == PaymentStatus.Pending)
+                                            {
+                                                <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                                           Color="Color.Success"
+                                                           OnClick="@(() => AdminMarkPaid(payment.Id))"
+                                                           Disabled="_processingPayment == payment.Id">
+                                                    PAGO
+                                                </MudButton>
+                                                <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                                           Color="Color.Success"
+                                                           OnClick="@(() => AdminConfirm(payment.Id))"
+                                                           Disabled="_processingPayment == payment.Id">
+                                                    Confirmar
+                                                </MudButton>
+                                            }
+                                            else if (_isOrganizer && payment.Status == PaymentStatus.Paid)
+                                            {
+                                                <MudButton Size="Size.Small" Variant="Variant.Outlined"
+                                                           Color="Color.Success"
+                                                           OnClick="@(() => AdminConfirm(payment.Id))"
+                                                           Disabled="_processingPayment == payment.Id">
+                                                    Confirmar
+                                                </MudButton>
+                                            }
+                                            else if (payment.Status == PaymentStatus.Confirmed)
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" />
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-state">
+                        <div class="empty-state-icon">
+                            <MudIcon Icon="@Icons.Material.Filled.Calculate" Size="Size.Large" Color="Color.Secondary" />
+                        </div>
+                        <MudText Typo="Typo.h6" Class="mt-2">Nenhum pagamento calculado</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Clique em "Calcular" para gerar os pagamentos.
+                        </MudText>
+                    </div>
+                }
+            }
+
+            @* FAB calcular *@
+            @if (_isOrganizer)
+            {
+                <MudFab Class="mobile-fab"
+                        Color="@(_payments?.Any() == true ? Color.Warning : Color.Primary)"
+                        StartIcon="@Icons.Material.Filled.Calculate"
+                        OnClick="CalculatePayments"
+                        Disabled="_processing" />
+            }
+        </div>
+
+        @* ── DESKTOP ── *@
+        <div class="desktop-payments-page">
+            <MudContainer MaxWidth="MaxWidth.Large" Class="py-4">
+                <MudBreadcrumbs Items="_breadcrumbs" Class="pa-0 mb-2">
+                    <ItemTemplate Context="item">
+                        <MudLink Href="@item.Href" Color="@(item.Disabled ? Color.Default : Color.Primary)">
+                            @item.Text
+                        </MudLink>
+                    </ItemTemplate>
+                </MudBreadcrumbs>
+
+                <div class="desktop-header">
+                    <div class="desktop-header-info">
+                        <h1>Pagamentos</h1>
+                        <div class="subtitle">@_tournament.Name</div>
+                    </div>
+                    <div class="desktop-header-actions">
+                        @if (_isOrganizer && (_payments == null || !_payments.Any()))
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                                       StartIcon="@Icons.Material.Filled.Calculate"
+                                       OnClick="CalculatePayments" Disabled="_processing">
+                                Calcular Pagamentos
+                            </MudButton>
+                        }
+                        else if (_isOrganizer)
+                        {
+                            <MudButton Variant="Variant.Outlined" Color="Color.Warning"
+                                       StartIcon="@Icons.Material.Filled.Refresh"
+                                       OnClick="CalculatePayments" Disabled="_processing">
+                                Recalcular
+                            </MudButton>
+                        }
+                    </div>
+                </div>
+
+                <MudGrid>
+                    <MudItem xs="12" lg="9">
+                        @if (_balances != null && _balances.Any())
+                        {
+                            <div class="desktop-card">
+                                <div class="desktop-card-header">
+                                    <span class="desktop-card-title">Saldo do Torneio</span>
+                                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Outlined">
+                                        @_balances.Count jogadores
+                                    </MudChip>
+                                </div>
+                                <div class="balance-table-container">
+                                    <MudTable Items="@_balances" Hover="true" Elevation="0" Dense="true" Class="balance-table">
+                                        <HeaderContent>
+                                            <MudTh>Jogador</MudTh>
+                                            <MudTh Style="text-align: right;">Investimento</MudTh>
+                                            <MudTh Style="text-align: right;">Premio</MudTh>
+                                            <MudTh Style="text-align: right;">Saldo</MudTh>
+                                        </HeaderContent>
+                                        <RowTemplate>
+                                            <MudTd DataLabel="Jogador">
+                                                <div class="d-flex align-center gap-2">
+                                                    <MudAvatar Size="Size.Small" Color="Color.Primary">
+                                                        @GetInitials(context.PlayerName)
+                                                    </MudAvatar>
+                                                    <MudText>@context.PlayerName</MudText>
+                                                </div>
+                                            </MudTd>
+                                            <MudTd DataLabel="Investimento" Style="text-align: right;">
+                                                <span class="mono-font">R$ @context.TotalInvestment.ToString("N0")</span>
+                                            </MudTd>
+                                            <MudTd DataLabel="Premio" Style="text-align: right;">
+                                                <span class="mono-font">R$ @context.Prize.ToString("N0")</span>
+                                            </MudTd>
+                                            <MudTd DataLabel="Saldo" Style="text-align: right;">
+                                                <span class="mono-font font-weight-bold"
+                                                      style="color: @(context.Balance >= 0 ? "#22c55e" : "#ef4444")">
+                                                    @(context.Balance >= 0 ? "+" : "")R$ @context.Balance.ToString("N0")
+                                                </span>
+                                            </MudTd>
+                                        </RowTemplate>
+                                    </MudTable>
+                                </div>
+                                <div class="totals-section">
+                                    @if (_jackpotContribution > 0)
+                                    {
+                                        <div class="totals-row jackpot">
+                                            <div class="totals-row-label">
+                                                <MudIcon Icon="@Icons.Material.Filled.Savings" Size="Size.Small" Color="Color.Warning" />
+                                                <span>Contribuicao para Caixinha</span>
+                                            </div>
+                                            <span class="totals-row-value">R$ @_jackpotContribution.ToString("N0")</span>
+                                        </div>
+                                    }
+                                    <div class="totals-row total">
+                                        <span class="totals-row-label">Total Prize Pool</span>
+                                        <span class="totals-row-value">R$ @_balances.Sum(b => b.TotalInvestment).ToString("N0")</span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </MudItem>
+
+                    <MudItem xs="12" lg="3">
+                        <div class="summary-sidebar">
+                            <div class="summary-sidebar-title">Resumo</div>
+                            <div class="summary-row">
+                                <span class="summary-row-label">Total a receber</span>
+                                <span class="summary-row-value success">R$ @GetTotalToReceive().ToString("N0")</span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-row-label">Pagamentos pendentes</span>
+                                <span class="summary-row-value warning">@GetPendingCount()</span>
+                            </div>
+                            <div class="summary-row">
+                                <span class="summary-row-label">Pagamentos confirmados</span>
+                                <span class="summary-row-value success">@GetConfirmedCount()</span>
+                            </div>
+                            @if (_payments != null && _payments.Any())
+                            {
+                                <MudDivider Class="my-3" />
+                                <MudProgressLinear Color="Color.Success" Rounded="true" Size="Size.Large"
+                                                   Value="@GetProgressPercent()" Class="mb-2" />
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Align="Align.Center">
+                                    @GetProgressPercent().ToString("N0")% concluido
+                                </MudText>
+                            }
+                        </div>
+
+                        <div class="quick-actions">
+                            <div class="quick-actions-title">Acoes Rapidas</div>
+                            <div class="quick-actions-list">
+                                <MudButton Variant="Variant.Outlined" Color="Color.Default" FullWidth="true"
+                                           StartIcon="@Icons.Material.Filled.History"
+                                           Href="@($"/torneios/{TournamentId}")">
+                                    Ver Torneio
+                                </MudButton>
+                            </div>
+                        </div>
+                    </MudItem>
+
+                    <MudItem xs="12">
+                        @if (_payments != null && _payments.Any())
+                        {
+                            <div class="desktop-card">
+                                <div class="desktop-card-header" style="flex-direction: column; align-items: stretch; gap: 10px;">
+                                    <div class="d-flex justify-space-between align-center">
+                                        <span class="desktop-card-title">Lista de Pagamentos</span>
+                                        @if (_isOrganizer && _selectedPayments.Any(p => p.Status != PaymentStatus.Confirmed))
+                                        {
+                                            <MudButton Variant="Variant.Filled" Color="Color.Success"
+                                                       Size="Size.Small"
+                                                       StartIcon="@Icons.Material.Filled.DoneAll"
+                                                       OnClick="BulkConfirmPayments"
+                                                       Disabled="_processing">
+                                                Confirmar (@_selectedPayments.Count(p => p.Status != PaymentStatus.Confirmed))
+                                            </MudButton>
+                                        }
+                                    </div>
+                                    <div class="d-flex gap-2 align-center">
+                                        <MudSelect T="string" @bind-Value="_typeFilter" Dense="true"
+                                                   Variant="Variant.Outlined" Margin="Margin.Dense"
+                                                   Style="width:150px; flex-shrink:0;">
+                                            <MudSelectItem Value="@("todos")">Todos</MudSelectItem>
+                                            <MudSelectItem Value="@("poker")">Poker (@CountPoker())</MudSelectItem>
+                                            <MudSelectItem Value="@("despesa")">Despesas (@CountDespesa())</MudSelectItem>
+                                        </MudSelect>
+                                        <MudChip T="string" Color="Color.Warning" Size="Size.Small"
+                                                 Variant="@(_paymentFilter == "pendente" ? Variant.Filled : Variant.Outlined)"
+                                                 OnClick="@(() => _paymentFilter = _paymentFilter == "pendente" ? "todos" : "pendente")">
+                                            @GetPendingCount() Pendentes
+                                        </MudChip>
+                                        <MudChip T="string" Color="Color.Success" Size="Size.Small"
+                                                 Variant="@(_paymentFilter == "confirmado" ? Variant.Filled : Variant.Outlined)"
+                                                 OnClick="@(() => _paymentFilter = _paymentFilter == "confirmado" ? "todos" : "confirmado")">
+                                            @GetConfirmedCount() Confirmados
+                                        </MudChip>
+                                    </div>
+                                </div>
+
+                                <MudTable Items="@FilteredPayments" Hover="true" Elevation="0"
+                                          Breakpoint="Breakpoint.None" Class="payments-table" RowsPerPage="15"
+                                          MultiSelection="@_isOrganizer" @bind-SelectedItems="_selectedPayments">
+                                    <HeaderContent>
+                                        <MudTh>Tipo</MudTh>
+                                        <MudTh>De</MudTh>
+                                        <MudTh>Para</MudTh>
+                                        <MudTh Style="text-align: right;">Valor</MudTh>
+                                        <MudTh>PIX</MudTh>
+                                        <MudTh Style="text-align: center;">Status</MudTh>
+                                        @if (_isOrganizer)
+                                        {
+                                            <MudTh Style="text-align: center;">Acoes</MudTh>
+                                        }
+                                    </HeaderContent>
+                                    <RowTemplate>
+                                        <MudTd DataLabel="Tipo">
+                                            @switch (context.Type)
+                                            {
+                                                case PaymentType.Poker:
+                                                    <MudChip T="string" Color="Color.Success" Size="Size.Small">Poker</MudChip>
+                                                    break;
+                                                case PaymentType.Expense:
+                                                    <MudChip T="string" Color="Color.Warning" Size="Size.Small">@context.Description</MudChip>
+                                                    break;
+                                                case PaymentType.Jackpot:
+                                                    <MudChip T="string" Color="Color.Info" Size="Size.Small">Caixinha</MudChip>
+                                                    break;
+                                            }
+                                        </MudTd>
+                                        <MudTd DataLabel="De">
+                                            <div class="d-flex align-center gap-2">
+                                                <MudAvatar Size="Size.Small" Color="Color.Secondary">
+                                                    @GetInitials(context.FromPlayerName)
+                                                </MudAvatar>
+                                                <MudText>@context.FromPlayerName</MudText>
+                                            </div>
+                                        </MudTd>
+                                        <MudTd DataLabel="Para">
+                                            <div class="d-flex align-center gap-2">
+                                                <MudAvatar Size="Size.Small" Color="Color.Primary">
+                                                    @GetInitials(context.ToPlayerName)
+                                                </MudAvatar>
+                                                <MudText>@context.ToPlayerName</MudText>
+                                            </div>
+                                        </MudTd>
+                                        <MudTd DataLabel="Valor" Style="text-align: right;">
+                                            <span class="mono-font font-weight-bold"
+                                                  style="color: @(context.IsJackpotContribution ? "#eab308" : "inherit")">
+                                                R$ @context.Amount.ToString("N0")
+                                            </span>
+                                        </MudTd>
+                                        <MudTd DataLabel="PIX">
+                                            @if (!string.IsNullOrEmpty(context.ToPlayerPixKey))
+                                            {
+                                                <div class="d-flex align-center gap-1">
+                                                    <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled">
+                                                        @GetPixTypeText(context.ToPlayerPixKeyType)
+                                                    </MudChip>
+                                                    <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small"
+                                                                   OnClick="@(() => CopyToClipboard(context.ToPlayerPixKey))"
+                                                                   Color="Color.Default" />
+                                                </div>
+                                            }
+                                            else if (context.IsJackpotContribution)
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Warning">Pote Acumulado</MudText>
+                                            }
+                                            else
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">Sem PIX</MudText>
+                                            }
+                                        </MudTd>
+                                        <MudTd DataLabel="Status" Style="text-align: center;">
+                                            <MudChip T="string" Size="Size.Small"
+                                                     Color="@GetStatusColor(context.Status)"
+                                                     Variant="Variant.Filled">
+                                                @GetStatusText(context.Status)
+                                            </MudChip>
+                                        </MudTd>
+                                        @if (_isOrganizer)
+                                        {
+                                            <MudTd DataLabel="Acoes" Style="text-align: center;">
+                                                @if (context.Status == PaymentStatus.Pending)
+                                                {
+                                                    <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Success"
+                                                               OnClick="@(() => AdminMarkPaid(context.Id))"
+                                                               Disabled="_processingPayment == context.Id">
+                                                        PAGO
+                                                    </MudButton>
+                                                    <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Success"
+                                                               OnClick="@(() => AdminConfirm(context.Id))"
+                                                               Disabled="_processingPayment == context.Id">
+                                                        Confirmar
+                                                    </MudButton>
+                                                }
+                                                else if (context.Status == PaymentStatus.Paid)
+                                                {
+                                                    <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Success"
+                                                               OnClick="@(() => AdminConfirm(context.Id))"
+                                                               Disabled="_processingPayment == context.Id">
+                                                        Confirmar
+                                                    </MudButton>
+                                                }
+                                                else
+                                                {
+                                                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" />
+                                                }
+                                            </MudTd>
+                                        }
+                                    </RowTemplate>
+                                    <PagerContent>
+                                        <MudTablePager />
+                                    </PagerContent>
+                                </MudTable>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <MudIcon Icon="@Icons.Material.Filled.Calculate" Size="Size.Large" Color="Color.Secondary" />
+                                </div>
+                                <MudText Typo="Typo.h6" Class="mt-2">Nenhum pagamento calculado</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                                    Clique em "Calcular Pagamentos" para gerar os pagamentos.
+                                </MudText>
+                            </div>
+                        }
+                    </MudItem>
+                </MudGrid>
+            </MudContainer>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid TournamentId { get; set; }
+
+    private TournamentDto? _tournament;
+    private IReadOnlyList<PaymentDto>? _payments;
+    private IReadOnlyList<PlayerBalanceDto>? _balances;
+    private decimal _jackpotContribution;
+    private bool _loading = true;
+    private bool _processing;
+    private Guid? _processingPayment;
+    private bool _isOrganizer;
+    private bool _isOffline;
+    private bool _isStaleData;
+    private string? _currentUserId;
+    private List<BreadcrumbItem> _breadcrumbs = new();
+
+    private string _mobileTab = "saldo";
+    private string _paymentFilter = "todos";
+    private string _typeFilter = "todos";
+    private HashSet<PaymentDto> _selectedPayments = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _currentUserId = AuthState.GetUserId();
+        _isOffline = !await IsOnlineAsync();
+        await LoadData();
+    }
+
+    private async Task<bool> IsOnlineAsync()
+    {
+        try { return await JS.InvokeAsync<bool>("eval", "navigator.onLine"); }
+        catch { return true; }
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            if (_isOffline)
+            {
+                await LoadFromCache();
+                return;
+            }
+
+            _tournament = await TournamentService.GetTournamentByIdAsync(TournamentId);
+
+            if (_tournament != null)
+            {
+                _breadcrumbs = new List<BreadcrumbItem>
+                {
+                    new("Torneios", "/torneios", false),
+                    new(_tournament.Name, $"/torneios/{TournamentId}", false),
+                    new("Pagamentos", null, true)
+                };
+
+                if (!string.IsNullOrEmpty(_currentUserId))
+                    _isOrganizer = await TournamentService.IsUserOrganizerOrDelegateAsync(TournamentId, _currentUserId);
+
+                if (_tournament.Status == TournamentStatus.Finished)
+                {
+                    _payments = await PaymentService.GetPaymentsByTournamentAsync(TournamentId);
+                    _balances = await PaymentService.GetTournamentPlayerBalancesAsync(TournamentId);
+                    _jackpotContribution = await PaymentService.GetJackpotContributionAsync(TournamentId);
+
+                    // Cache for offline
+                    await CacheData();
+                }
+            }
+            _isStaleData = false;
+        }
+        catch (Exception)
+        {
+            await LoadFromCache();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task CacheData()
+    {
+        if (_payments == null) return;
+        try
+        {
+            var data = new CachedPaymentsData(
+                _payments, _balances, _jackpotContribution, _tournament?.Name, _isOrganizer);
+            await IndexedDb.SaveLeagueDataAsync(TournamentId, data);
+        }
+        catch { /* ignore cache errors */ }
+    }
+
+    private async Task LoadFromCache()
+    {
+        try
+        {
+            var data = await IndexedDb.GetLeagueDataAsync<CachedPaymentsData>(TournamentId);
+            if (data != null)
+            {
+                _payments = data.Payments;
+                _balances = data.Balances;
+                _jackpotContribution = data.JackpotContribution;
+                _isOrganizer = data.IsOrganizer;
+
+                if (_tournament == null && data.TournamentName != null)
+                {
+                    // Minimal stub for UI rendering
+                    _tournament = new TournamentDto(
+                        TournamentId, Guid.Empty, "", data.TournamentName,
+                        DateTime.UtcNow, null, 0, null, null, 0,
+                        TournamentStatus.Finished, 0, 0, 0, 0,
+                        "", null, DateTime.UtcNow);
+                }
+
+                _breadcrumbs = new List<BreadcrumbItem>
+                {
+                    new("Torneios", "/torneios", false),
+                    new(_tournament?.Name ?? "Torneio", $"/torneios/{TournamentId}", false),
+                    new("Pagamentos", null, true)
+                };
+
+                _isStaleData = true;
+            }
+        }
+        catch { /* ignore */ }
+    }
+
+    private IEnumerable<PaymentDto> FilteredPayments
+    {
+        get
+        {
+            var q = _payments ?? Enumerable.Empty<PaymentDto>();
+
+            q = _paymentFilter switch
+            {
+                "pendente"   => q.Where(p => p.Status == PaymentStatus.Pending),
+                "confirmado" => q.Where(p => p.Status == PaymentStatus.Confirmed),
+                _            => q
+            };
+
+            q = _typeFilter switch
+            {
+                "poker"   => q.Where(p => p.Type == PaymentType.Poker || p.Type == PaymentType.Jackpot),
+                "despesa" => q.Where(p => p.Type == PaymentType.Expense),
+                _         => q
+            };
+
+            return q;
+        }
+    }
+
+    private int CountPoker()   => _payments?.Count(p => p.Type == PaymentType.Poker || p.Type == PaymentType.Jackpot) ?? 0;
+    private int CountDespesa() => _payments?.Count(p => p.Type == PaymentType.Expense) ?? 0;
+    private int GetPendingCount()   => _payments?.Count(p => p.Status == PaymentStatus.Pending) ?? 0;
+    private int GetConfirmedCount() => _payments?.Count(p => p.Status == PaymentStatus.Confirmed) ?? 0;
+
+    private decimal GetTotalToReceive()
+        => _payments?.Where(p => p.Status == PaymentStatus.Pending).Sum(p => p.Amount) ?? 0;
+
+    private double GetProgressPercent()
+    {
+        if (_payments == null || !_payments.Any()) return 0;
+        return (GetConfirmedCount() * 100.0) / _payments.Count;
+    }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "?";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2
+            ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
+            : (name.Length >= 2 ? name[..2].ToUpper() : name.ToUpper());
+    }
+
+    private string GetStatusClass(PaymentStatus status) => status switch
+    {
+        PaymentStatus.Pending   => "pending",
+        PaymentStatus.Paid      => "paid",
+        PaymentStatus.Confirmed => "confirmed",
+        _ => ""
+    };
+
+    private Color GetStatusColor(PaymentStatus status) => status switch
+    {
+        PaymentStatus.Pending   => Color.Warning,
+        PaymentStatus.Paid      => Color.Info,
+        PaymentStatus.Confirmed => Color.Success,
+        _ => Color.Default
+    };
+
+    private string GetStatusText(PaymentStatus status) => status switch
+    {
+        PaymentStatus.Pending   => "Pendente",
+        PaymentStatus.Paid      => "Pago",
+        PaymentStatus.Confirmed => "Confirmado",
+        _ => status.ToString()
+    };
+
+    private string GetPixTypeText(PixKeyType? type) => type switch
+    {
+        PixKeyType.CPF    => "CPF",
+        PixKeyType.Email  => "Email",
+        PixKeyType.Phone  => "Telefone",
+        PixKeyType.Random => "Aleatoria",
+        _ => "PIX"
+    };
+
+    private async Task CopyToClipboard(string text)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+            Snackbar.Add("Chave PIX copiada!", Severity.Success);
+        }
+        catch { Snackbar.Add("Erro ao copiar", Severity.Error); }
+    }
+
+    private async Task CalculatePayments()
+    {
+        if (_payments?.Any() == true)
+        {
+            var confirmed = await DialogService.ShowMessageBox(
+                "Recalcular Pagamentos",
+                "Isso ira apagar os pagamentos existentes e recalcular. Deseja continuar?",
+                yesText: "Recalcular", cancelText: "Cancelar");
+            if (confirmed != true) return;
+        }
+
+        _processing = true;
+        try
+        {
+            _payments = await PaymentService.CalculateAndCreatePaymentsAsync(TournamentId);
+            _balances = await PaymentService.GetTournamentPlayerBalancesAsync(TournamentId);
+            await CacheData();
+            Snackbar.Add("Pagamentos calculados com sucesso!", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add($"Erro: {ex.Message}", Severity.Error); }
+        finally { _processing = false; }
+    }
+
+    private async Task AdminMarkPaid(Guid paymentId)
+    {
+        if (string.IsNullOrEmpty(_currentUserId)) return;
+
+        var confirmed = await DialogService.ShowMessageBox(
+            "Confirmar Pagamento", "Deseja marcar este pagamento como pago?",
+            yesText: "Sim", cancelText: "Cancelar");
+        if (confirmed != true) return;
+
+        _processingPayment = paymentId;
+        try
+        {
+            // Optimistic update
+            UpdatePaymentStatus(paymentId, PaymentStatus.Paid);
+
+            var (success, message) = await PaymentService.AdminMarkAsPaidAsync(paymentId, _currentUserId);
+            if (success)
+            {
+                Snackbar.Add(_isOffline ? "Acao enfileirada — sera sincronizada ao reconectar" : "Pagamento marcado como pago!", Severity.Success);
+                if (!_isOffline)
+                {
+                    _payments = await PaymentService.GetPaymentsByTournamentAsync(TournamentId);
+                    await CacheData();
+                }
+            }
+            else
+            {
+                // Rollback
+                UpdatePaymentStatus(paymentId, PaymentStatus.Pending);
+                Snackbar.Add(message, Severity.Error);
+            }
+        }
+        catch { UpdatePaymentStatus(paymentId, PaymentStatus.Pending); }
+        finally { _processingPayment = null; }
+    }
+
+    private async Task AdminConfirm(Guid paymentId)
+    {
+        if (string.IsNullOrEmpty(_currentUserId)) return;
+
+        var confirmed = await DialogService.ShowMessageBox(
+            "Confirmar Recebimento", "Deseja confirmar o recebimento deste pagamento?",
+            yesText: "Sim", cancelText: "Cancelar");
+        if (confirmed != true) return;
+
+        _processingPayment = paymentId;
+        try
+        {
+            // Optimistic update
+            UpdatePaymentStatus(paymentId, PaymentStatus.Confirmed);
+
+            var (success, message) = await PaymentService.AdminConfirmPaymentAsync(paymentId, _currentUserId);
+            if (success)
+            {
+                Snackbar.Add(_isOffline ? "Acao enfileirada — sera sincronizada ao reconectar" : "Pagamento confirmado!", Severity.Success);
+                if (!_isOffline)
+                {
+                    _payments = await PaymentService.GetPaymentsByTournamentAsync(TournamentId);
+                    await CacheData();
+                }
+            }
+            else
+            {
+                UpdatePaymentStatus(paymentId, PaymentStatus.Paid);
+                Snackbar.Add(message, Severity.Error);
+            }
+        }
+        catch { UpdatePaymentStatus(paymentId, PaymentStatus.Paid); }
+        finally { _processingPayment = null; }
+    }
+
+    private async Task BulkConfirmPayments()
+    {
+        if (string.IsNullOrEmpty(_currentUserId)) return;
+        var toConfirm = _selectedPayments.Where(p => p.Status != PaymentStatus.Confirmed).ToList();
+        if (!toConfirm.Any()) return;
+
+        var confirmed = await DialogService.ShowMessageBox(
+            "Confirmar em Massa",
+            $"Confirmar {toConfirm.Count} pagamento(s)?",
+            yesText: "Confirmar", cancelText: "Cancelar");
+        if (confirmed != true) return;
+
+        _processing = true;
+        try
+        {
+            var count = await PaymentService.BulkConfirmPaymentsAsync(
+                toConfirm.Select(p => p.Id).ToList(), _currentUserId);
+            Snackbar.Add($"{count} pagamento(s) confirmado(s)", Severity.Success);
+            _selectedPayments.Clear();
+            _payments = await PaymentService.GetPaymentsByTournamentAsync(TournamentId);
+            await CacheData();
+        }
+        catch (Exception ex) { Snackbar.Add($"Erro: {ex.Message}", Severity.Error); }
+        finally { _processing = false; }
+    }
+
+    private void UpdatePaymentStatus(Guid paymentId, PaymentStatus newStatus)
+    {
+        if (_payments == null) return;
+        _payments = _payments
+            .Select(p => p.Id == paymentId ? p with { Status = newStatus } : p)
+            .ToList()
+            .AsReadOnly();
+        StateHasChanged();
+    }
+
+    private record CachedPaymentsData(
+        IReadOnlyList<PaymentDto> Payments,
+        IReadOnlyList<PlayerBalanceDto>? Balances,
+        decimal JackpotContribution,
+        string? TournamentName,
+        bool IsOrganizer);
+}

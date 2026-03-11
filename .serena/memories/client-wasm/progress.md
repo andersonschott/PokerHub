@@ -1,10 +1,10 @@
 # PokerHub Client (WASM) - Status de Desenvolvimento
 
-## Ultima atualizacao: 2026-03-06
+## Ultima atualizacao: 2026-03-10
 
 ## Contexto
 O projeto `src/PokerHub.Client/` é um app Blazor WebAssembly separado do `PokerHub.Web` (Blazor Server).
-Consome a API REST em `src/PokerHub.Web/Controllers/Api/`.
+Consume a API REST em `src/PokerHub.Web/Controllers/Api/`.
 Objetivo: cliente WASM offline-capable (branch `feature/offline`).
 
 ---
@@ -14,26 +14,30 @@ Objetivo: cliente WASM offline-capable (branch `feature/offline`).
 src/PokerHub.Client/
 ├── Pages/
 │   ├── Liga/Index.razor, Details.razor, AddPlayerDialog.razor
-│   ├── Torneio/Index.razor
+│   ├── Torneio/Index.razor, Dashboard.razor   ← NOVO
 │   ├── Ranking/PlayerStats.razor, Compare.razor
 │   ├── Timer/
 │   │   ├── Index.razor    # /timer/{guid} — TV 3 colunas, usa DualTimerManager
 │   │   └── Public.razor   # /tv/{guid} — vista pública simplificada, @layout EmptyLayout
 │   └── Home.razor, Login.razor
 ├── Shared/
-│   └── DualTimerManager.razor  # renderless: SignalR + Web Worker (offline-first)
+│   ├── DualTimerManager.razor          # renderless: SignalR + Web Worker (offline-first)
+│   ├── TournamentMobileDashboard.razor ← NOVO — componente mobile do Dashboard
+│   └── AppUpdateNotifier.razor         # notifica update + sync offline
 ├── Layout/
-│   └── EmptyLayout.razor       # para páginas sem AppBar (Public timer, etc.)
+│   └── EmptyLayout.razor
 ├── Services/
 │   ├── Http/ (HttpTournamentService, etc.)
-│   ├── IndexedDbService.cs   # wrapper para window.pokerhubDB
-│   └── OfflineAction.cs      # record + OfflineActionTypes
+│   ├── IndexedDbService.cs
+│   ├── OfflineAction.cs + OfflineActionTypes
+│   └── OfflineQueueManager.cs          ← NOVO — rastreia ações pendentes para badge UI
 └── wwwroot/js/
-    ├── indexeddb-service.js  # window.pokerhubDB
-    ├── wakelock.js           # Screen Wake Lock API
-    ├── timer-worker.js       # Web Worker (timestamp absoluto, sem drift)
-    ├── timer-bridge.js       # JSInterop bridge Blazor <-> Worker
-    └── timer-sounds.js       # Sons via Web Audio API
+    ├── indexeddb-service.js
+    ├── wakelock.js
+    ├── timer-worker.js
+    ├── timer-bridge.js
+    ├── timer-sounds.js
+    └── sw-update.js
 ```
 
 ---
@@ -47,10 +51,60 @@ src/PokerHub.Client/
 | `/ligas` | Liga/Index.razor | OK |
 | `/ligas/{guid}` | Liga/Details.razor | OK |
 | `/torneios` e `/ligas/{guid}/torneios` | Torneio/Index.razor | OK |
+| `/torneios/{guid}` | Torneio/Dashboard.razor | OK — offline-first |
 | `/jogador/{guid}/stats` | Ranking/PlayerStats.razor | OK |
 | `/ligas/{guid}/comparar` | Ranking/Compare.razor | OK |
 | `/timer/{guid}` | Timer/Index.razor | OK — DualTimerManager |
 | `/tv/{guid}` | Timer/Public.razor | OK — DualTimerManager |
+
+---
+
+## Dashboard WASM — Arquitetura Offline-First
+
+### Localização: Pages/Torneio/Dashboard.razor
+
+### Componentes usados
+- `DualTimerManager` (renderless) — gerencia timer + SignalR
+- `TournamentMobileDashboard` (Shared) — layout mobile idêntico ao Web
+- `OfflineQueueManager` (Service) — rastreia ações pendentes para badge
+
+### OfflineQueueManager
+- `ExecuteAsync(actionType, description, Func<Task<bool>>)` — executa e rastreia offline
+- `IsOnlineAsync()` — verifica `navigator.onLine` via JSInterop
+- `OnSyncComplete(int)` — chamado pelo AppUpdateNotifier quando SW sync completa
+- `OnChanged` event — notifica UI quando count muda
+- Registrado como `AddScoped<OfflineQueueManager>()` no Program.cs
+
+### Fluxo de ações offline
+1. Action chamada (ex: AddRebuy)
+2. Optimistic update local imediato (modifica `_detail` com `record with {}`)
+3. `OfflineQueue.ExecuteAsync(...)` chama o HTTP service
+4. Se online: request vai para API normalmente
+5. Se offline: SW intercepta POST/DELETE e retorna 202 (queued)
+6. `OfflineQueue` verifica `navigator.onLine`; se false → adiciona à lista de pendentes
+7. Badge no header mostra count de pendentes
+8. SW faz background sync quando reconectar → envia `SYNC_COMPLETE`
+9. `AppUpdateNotifier.OnSyncComplete` → `OfflineQueue.OnSyncComplete` + toast
+
+### Timer State
+- `_timerState` é `TimerStateDto?` mantido localmente
+- Inicializado por `BuildTimerState(_detail)` no LoadTournament
+- Atualizado pelos callbacks do DualTimerManager:
+  - `OnTick` → atualiza `TimeRemainingSeconds`
+  - `OnLevelChanged` → atualiza nível + blinds
+  - `OnPauseChanged` → atualiza `Status`
+  - `OnPrizePoolUpdated` → atualiza `PrizePool`
+  - `OnPlayersChanged` → chama `RefreshPlayerData()` (busca dados fresh do servidor)
+
+### Connection Banner
+- Fixo no topo da página (abaixo do AppBar)
+- 🟡 Reconnecting | 🔴 Offline
+
+### Funcionalidades NÃO disponíveis no WASM MVP (mostram Snackbar "disponível na versão completa"):
+- Adicionar jogador (AddTournamentPlayerDialog)
+- Adicionar/editar despesas (AddExpenseDialog)
+- Gerenciar delegados (ManageDelegatesDialog)
+- Finalizar torneio usa flow simplificado (sem ConfirmPrizeDistributionDialog)
 
 ---
 
@@ -62,71 +116,73 @@ src/PokerHub.Client/
 - TournamentId, BlindStructure, InitialLevel, InitialTimeRemainingSeconds, InitialIsPaused
 - EventCallbacks: OnTick, OnLevelChanged, OnPauseChanged, OnFinished, OnPrizePoolUpdated, OnPlayersChanged, OnConnectionChanged
 
+### Comandos públicos (chamados pelo Dashboard)
+- `PauseAsync()` — pausa timer local + envia via SignalR se online
+- `ResumeAsync()` — retoma timer local + envia via SignalR se online
+- `SkipLevelAsync()` — avança nível no Worker
+- `PrevLevelAsync()` — volta nível no Worker
+
 ### Estado da conexão (enum ConnectionStatus)
-- Connecting → tentando SignalR
-- Online → SignalR drive display, SYNC ao Worker a cada tick
-- Reconnecting → Worker drive display
-- Offline → Worker drive display
-
-### Fluxo
-1. OnAfterRenderAsync(firstRender): InitWorkerAsync() + ConnectHubAsync()
-2. Worker inicia com cacheBlindStructure + estado inicial
-3. SignalR (hub URL = ApiBaseUrl + /hubs/torneio):
-   - TimerTick → envia SYNC ao Worker + dispara OnTick EventCallback
-   - NivelAlterado → dispara OnLevelChanged
-   - TorneioPausado/Retomado → PAUSE/RESUME ao Worker + OnPauseChanged
-4. Se SignalR offline: Worker faz tick autônomo via [JSInvokable] OnTimerTick
-5. Worker [JSInvokable] callbacks: OnTimerTick, OnWorkerLevelChanged, OnTimerPaused, OnTimerResumed, OnTournamentLastLevel, OnSyncApplied, OnTimerState, OnTimerError
-
-### IMPORTANTE — Conflito de nomes
-- [Parameter] EventCallback se chama OnLevelChanged
-- [JSInvokable] do Worker se chama OnWorkerLevelChanged (para evitar conflito CS0102)
-- timer-bridge.js chama 'OnWorkerLevelChanged' (não 'OnLevelChanged') para LEVEL_CHANGED
-
-### Pacote NuGet adicionado
-- Microsoft.AspNetCore.SignalR.Client v10.0.1
+- Connecting → Online → Reconnecting → Offline
 
 ---
 
 ## Service Worker (service-worker.published.js)
-- Assets estáticos: cache-first (comportamento padrão)
-- API timer-state e detail: network-first com fallback para cache
-  - Padrões: /api/tournaments/{id}/timer-state e /api/tournaments/{id}/detail
-  - TTL do cache de API: 5 minutos
-  - Cache separado: 'pokerhub-api-v1'
-
----
-
-## Connection Banner (não-bloqueante)
-- Posição: fixed top, z-index 99998, pointer-events: none
-- 🟢 Online / 🟡 Reconectando... / 🔴 Offline — timer local ativo
-- Fundo translúcido colorido, sem bloquear interação
+- Estratégias: network-first, stale-while-revalidate, cache-first-ttl, network-only+queue
+- Auth nunca cacheada
+- POST/PUT/DELETE offline → retorna 202 + `X-Offline-Queued: true`
+- Background sync tag: `pokerhub-offline-queue`
+- Limite cache API: 50MB, evicção LRU
 
 ---
 
 ## Padrões do Client
 
+### Optimistic updates
+- Usar `record with {}` para atualizar `_detail` localmente
+- Chamar `StateHasChanged()` logo após
+- O SW garante que o request HTTP será entregue quando online
+
 ### RenderFragment locais em Razor
-- USAR sintaxe de método: @StatCard(...), @TimerBox(...), @NextLevelBox(...)
-- NAO usar sintaxe de componente <StatCard .../> (gera warning RZ10012)
+- USAR sintaxe de método: `@StatCard(...)` 
+- NAO usar sintaxe de componente `<StatCard .../>` (gera warning RZ10012)
 
 ### [JSInvokable] em WASM
-- Devem ser public (não internal/private)
+- Devem ser public
 - Não podem ter mesmo nome que [Parameter] EventCallback (CS0102)
-
-### EmptyLayout
-- Criado em Layout/EmptyLayout.razor — sem AppBar/Drawer
-- Usar com @layout EmptyLayout em páginas fullscreen (timer público)
 
 ---
 
-## Páginas PENDENTES
+## Páginas IMPLEMENTADAS (Sessão 2026-03-10)
 
+| Rota | Arquivo | Status |
+|------|---------|--------|
+| `/ligas/{guid}/jackpot` | Liga/Jackpot/Index.razor + UseJackpotDialog.razor | OK — cache IndexedDB |
+| `/torneios/{guid}/pagamentos` | Pagamento/TournamentPayments.razor | OK — cache + optimistic |
+| `/meus-debitos` | Pagamento/MyDebts.razor | OK |
+| `/registrar` | Auth/Register.razor | OK |
+| `/ligas/criar` | Liga/Create.razor | OK |
+| `/ligas/{guid}/editar` | Liga/Edit.razor | OK |
+| `/jogadores/{guid}/editar` | Jogador/Edit.razor | OK |
+| `/ligas/{guid}/torneios/criar` | Torneio/Create.razor | OK — wizard 5 steps |
+| `/torneios/{guid}/editar` | Torneio/Edit.razor | OK |
+| `/torneios/{guid}/duplicar` (dialog) | Torneio/DuplicateDialog.razor | OK |
+| `/ligas/{guid}/tabelas-premiacao` | Liga/PrizeTables/Index.razor + PrizeTableDialog.razor | OK |
+| `/ligas/{guid}/temporadas` | Liga/Seasons/Index.razor | OK |
+| `/ligas/{guid}/temporadas/criar` | Liga/Seasons/Create.razor | OK |
+| `/ligas/{guid}/temporadas/{guid}/editar` | Liga/Seasons/Edit.razor | OK |
+| `/ligas/{guid}/temporadas/{guid}/ranking` | Liga/Seasons/Ranking.razor | OK |
+
+## Auth — JWT Persistence (AuthStateService)
+- `IJSRuntime` injetado no `AuthStateService`
+- `InitializeAsync()` lê token do localStorage na inicialização
+- Chamado em `App.razor.OnInitializedAsync()`
+- `SetTokens()` e `ClearTokens()` salvam/limpam localStorage
+- `IsTokenExpired()` com buffer de 1 minuto
+- **PROBLEMA ABERTO**: Reload da página está deslogando o usuário (investigar na próxima sessão)
+
+## Páginas PENDENTES (baixa prioridade)
 | Rota | Prioridade |
 |------|------------|
-| `/torneios/{guid}` (Dashboard) | ALTA |
-| `/ligas/{guid}/jackpot` | ALTA |
-| `/ligas/criar`, `/ligas/{guid}/editar` | MEDIA |
-| `/ligas/{guid}/torneios/criar`, `/torneios/{guid}/editar` | MEDIA |
-| `/torneios/{guid}/pagamentos` | MEDIA |
 | `/torneios/entrar/{InviteCode}`, `/ligas/entrar` | BAIXA |
+| Export de pagamentos | BAIXA |

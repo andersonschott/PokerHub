@@ -1,0 +1,196 @@
+@page "/registrar"
+@layout Layout.EmptyLayout
+@inject HttpClient Http
+@inject AuthStateService AuthState
+@inject NavigationManager Navigation
+
+<PageTitle>Criar Conta - PokerHub</PageTitle>
+
+<div class="login-page">
+    <MudPaper Elevation="8" Class="login-card pa-8">
+        <MudStack AlignItems="AlignItems.Center" Class="mb-6">
+            <MudIcon Icon="@Icons.Material.Filled.Casino" Size="Size.Large"
+                     Color="Color.Primary" Style="font-size: 3.5rem;" />
+            <MudText Typo="Typo.h4" Class="font-weight-bold">PokerHub</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Crie sua conta</MudText>
+        </MudStack>
+
+        @if (_success)
+        {
+            <MudAlert Severity="Severity.Success" Class="mb-4">
+                Conta criada com sucesso! Redirecionando...
+            </MudAlert>
+        }
+        else
+        {
+            <EditForm Model="_model" OnValidSubmit="HandleRegister">
+                <DataAnnotationsValidator />
+                <MudStack Spacing="3">
+                    <MudTextField @bind-Value="_model.Name"
+                                  Label="Nome completo"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Person"
+                                  Immediate="true" />
+
+                    <MudTextField @bind-Value="_model.Email"
+                                  Label="E-mail"
+                                  Variant="Variant.Outlined"
+                                  InputType="InputType.Email"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Email"
+                                  Immediate="true" />
+
+                    <MudTextField @bind-Value="_model.Password"
+                                  Label="Senha"
+                                  Variant="Variant.Outlined"
+                                  InputType="@_passwordInputType"
+                                  Adornment="Adornment.End"
+                                  AdornmentIcon="@_passwordIcon"
+                                  OnAdornmentClick="TogglePassword"
+                                  HelperText="Minimo 6 caracteres" />
+
+                    <MudTextField @bind-Value="_model.ConfirmPassword"
+                                  Label="Confirmar senha"
+                                  Variant="Variant.Outlined"
+                                  InputType="InputType.Password"
+                                  Validation="@((string s) => s != _model.Password ? "Senhas nao conferem" : null)" />
+
+                    @if (!string.IsNullOrEmpty(_errorMessage))
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true">@_errorMessage</MudAlert>
+                    }
+
+                    <MudButton ButtonType="ButtonType.Submit"
+                               Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               FullWidth="true"
+                               Size="Size.Large"
+                               Disabled="_loading"
+                               Class="mt-2">
+                        @if (_loading)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                        }
+                        Criar Conta
+                    </MudButton>
+
+                    <MudDivider />
+
+                    <MudText Align="Align.Center" Typo="Typo.body2">
+                        Ja tem uma conta?
+                        <MudLink Href="/login" Color="Color.Primary">Entrar</MudLink>
+                    </MudText>
+                </MudStack>
+            </EditForm>
+        }
+    </MudPaper>
+</div>
+
+<style>
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--mud-palette-background);
+    padding: 16px;
+}
+.login-card {
+    width: 100%;
+    max-width: 420px;
+    border-radius: 20px;
+}
+</style>
+
+@code {
+    private readonly RegisterModel _model = new();
+    private bool _loading;
+    private bool _success;
+    private bool _showPassword;
+    private string? _errorMessage;
+    private InputType _passwordInputType => _showPassword ? InputType.Text : InputType.Password;
+    private string _passwordIcon => _showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility;
+
+    protected override void OnInitialized()
+    {
+        if (AuthState.IsAuthenticated)
+            Navigation.NavigateTo("/", replace: true);
+    }
+
+    private async Task HandleRegister()
+    {
+        if (_model.Password != _model.ConfirmPassword)
+        {
+            _errorMessage = "As senhas nao conferem.";
+            return;
+        }
+
+        _loading = true;
+        _errorMessage = null;
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/auth/register", new
+            {
+                _model.Name,
+                _model.Email,
+                _model.Password,
+                ConfirmPassword = _model.ConfirmPassword
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<TokenResponse>();
+                if (result is not null)
+                {
+                    _success = true;
+                    AuthState.SetTokens(result.Token, result.RefreshToken);
+                    await Task.Delay(1500);
+                    Navigation.NavigateTo("/", replace: true);
+                }
+                else
+                {
+                    // Registration ok but no auto-login — redirect to login
+                    _success = true;
+                    await Task.Delay(1500);
+                    Navigation.NavigateTo("/login", replace: true);
+                }
+            }
+            else
+            {
+                var err = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+                _errorMessage = err?.Message ?? "Erro ao criar conta. Tente novamente.";
+            }
+        }
+        catch
+        {
+            _errorMessage = "Erro de conexao com o servidor.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void TogglePassword() => _showPassword = !_showPassword;
+
+    private class RegisterModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Nome obrigatorio")]
+        public string Name { get; set; } = "";
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "E-mail obrigatorio")]
+        [System.ComponentModel.DataAnnotations.EmailAddress(ErrorMessage = "E-mail invalido")]
+        public string Email { get; set; } = "";
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Senha obrigatoria")]
+        [System.ComponentModel.DataAnnotations.MinLength(6, ErrorMessage = "Minimo 6 caracteres")]
+        public string Password { get; set; } = "";
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Confirmacao obrigatoria")]
+        public string ConfirmPassword { get; set; } = "";
+    }
+
+    private record TokenResponse(string Token, string RefreshToken, DateTime ExpiresAt, string UserName, string Email);
+    private record ErrorResponse(string Message);
+}

@@ -50,5 +50,6 @@ builder.Services.AddScoped<IPrizeTableService, HttpPrizeTableService>();
 
 // Serviços offline
 builder.Services.AddScoped<IndexedDbService>();
+builder.Services.AddScoped<OfflineQueueManager>();
 
 await builder.Build().RunAsync();

@@ -4,6 +4,7 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
+@inject OfflineQueueManager OfflineQueue
 
 @code {
 
@@ -49,6 +50,9 @@
     public void OnSyncComplete(int processed)
     {
         if (processed <= 0) return;
+
+        OfflineQueue.OnSyncComplete(processed);
+
         Snackbar.Add(
             $"✅ {processed} ação{(processed > 1 ? "ões" : "")} offline sincronizada{(processed > 1 ? "s" : "")}",
             Severity.Success,

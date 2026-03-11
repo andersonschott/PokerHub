@@ -178,35 +178,42 @@ else
                         else
                         {
                             @* Tab Pagamentos *@
-                            @* Filtro por tipo (linha separada, 3 opcoes de largura igual) *@
-                            <div class="type-filter-row">
-                                <button class="type-btn @(_typeFilter == "todos"   ? "active" : "")" @onclick="@(() => _typeFilter = "todos")">Todos</button>
-                                <button class="type-btn @(_typeFilter == "poker"   ? "active" : "")" @onclick="@(() => _typeFilter = "poker")">Poker</button>
-                                <button class="type-btn @(_typeFilter == "despesa" ? "active" : "")" @onclick="@(() => _typeFilter = "despesa")">Despesas</button>
-                            </div>
-
-                            @* Filtro por status (horizontal scroll) *@
-                            <div class="filter-scroll">
-                                <div class="filter-chips">
-                                    <MudChip T="string" Size="Size.Small"
-                                             Variant="@(_paymentFilter == "todos" ? Variant.Filled : Variant.Outlined)"
-                                             Color="Color.Default"
-                                             OnClick="@(() => _paymentFilter = "todos")">
+                            @* Filtro por tipo *@
+                            <div class="filter-scroll mb-2">
+                                <MudChipSet T="string" @bind-SelectedValue="_typeFilter" Class="filter-chips">
+                                    <MudChip T="string" Value="@("todos")" Size="Size.Small" Color="Color.Default"
+                                             Variant="@(_typeFilter == "todos" ? Variant.Filled : Variant.Outlined)">
                                         Todos
                                     </MudChip>
-                                    <MudChip T="string" Size="Size.Small"
-                                             Color="Color.Warning"
-                                             Variant="@(_paymentFilter == "pendente" ? Variant.Filled : Variant.Outlined)"
-                                             OnClick="@(() => _paymentFilter = "pendente")">
+                                    <MudChip T="string" Value="@("poker")" Size="Size.Small" Color="Color.Success"
+                                             Variant="@(_typeFilter == "poker" ? Variant.Filled : Variant.Outlined)">
+                                        <MudIcon Icon="@Icons.Material.Filled.Casino" Size="Size.Small" Class="mr-1" />
+                                        Poker
+                                    </MudChip>
+                                    <MudChip T="string" Value="@("despesa")" Size="Size.Small" Color="Color.Warning"
+                                             Variant="@(_typeFilter == "despesa" ? Variant.Filled : Variant.Outlined)">
+                                        <MudIcon Icon="@Icons.Material.Filled.Fastfood" Size="Size.Small" Class="mr-1" />
+                                        Despesas
+                                    </MudChip>
+                                </MudChipSet>
+                            </div>
+
+                            @* Filtro por status *@
+                            <div class="filter-scroll">
+                                <MudChipSet T="string" @bind-SelectedValue="_paymentFilter" Class="filter-chips">
+                                    <MudChip T="string" Value="@("todos")" Size="Size.Small" Color="Color.Default"
+                                             Variant="@(_paymentFilter == "todos" ? Variant.Filled : Variant.Outlined)">
+                                        Todos
+                                    </MudChip>
+                                    <MudChip T="string" Value="@("pendente")" Size="Size.Small" Color="Color.Warning"
+                                             Variant="@(_paymentFilter == "pendente" ? Variant.Filled : Variant.Outlined)">
                                         Pendentes (@GetPendingCount())
                                     </MudChip>
-                                    <MudChip T="string" Size="Size.Small"
-                                             Color="Color.Success"
-                                             Variant="@(_paymentFilter == "confirmado" ? Variant.Filled : Variant.Outlined)"
-                                             OnClick="@(() => _paymentFilter = "confirmado")">
+                                    <MudChip T="string" Value="@("confirmado")" Size="Size.Small" Color="Color.Success"
+                                             Variant="@(_paymentFilter == "confirmado" ? Variant.Filled : Variant.Outlined)">
                                         Confirmados (@GetConfirmedCount())
                                     </MudChip>
-                                </div>
+                                </MudChipSet>
                             </div>
 
                             @if (_payments == null || !FilteredPayments.Any())

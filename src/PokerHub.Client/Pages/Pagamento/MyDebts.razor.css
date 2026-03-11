@@ -1,6 +1,5 @@
-/* MyDebts.razor.css */
+/* MyDebts.razor.css — WASM Client */
 /* Meus Débitos - Design Mobile-First */
-/* Uses MudBlazor CSS variables for light/dark theme support */
 
 /* ===== VARIABLES ===== */
 .debts-page {
@@ -10,7 +9,6 @@
     --accent-orange: #f97316;
     --accent-blue: #3b82f6;
     --accent-purple: #8b5cf6;
-    --accent-cyan: #06b6d4;
 }
 
 /* ===== PAGE CONTAINER ===== */
@@ -34,9 +32,7 @@
 }
 
 /* ===== HEADER ===== */
-.page-header {
-    margin-bottom: 16px;
-}
+.page-header { margin-bottom: 16px; }
 
 .page-title-row {
     display: flex;
@@ -58,16 +54,17 @@
     border-radius: 14px;
     padding: 14px;
     border: 1px solid var(--mud-palette-lines-default);
+    animation: fadeIn 0.3s ease-out;
 }
 
 .summary-card.debt {
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, var(--mud-palette-surface) 100%);
-    border-color: rgba(239, 68, 68, 0.3);
+    background: linear-gradient(135deg, rgba(239,68,68,0.1) 0%, var(--mud-palette-surface) 100%);
+    border-color: rgba(239,68,68,0.3);
 }
 
 .summary-card.credit {
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, var(--mud-palette-surface) 100%);
-    border-color: rgba(34, 197, 94, 0.3);
+    background: linear-gradient(135deg, rgba(34,197,94,0.1) 0%, var(--mud-palette-surface) 100%);
+    border-color: rgba(34,197,94,0.3);
 }
 
 .summary-label {
@@ -84,7 +81,7 @@
     font-weight: 800;
 }
 
-.summary-card.debt .summary-value { color: var(--accent-red); }
+.summary-card.debt .summary-value  { color: var(--accent-red); }
 .summary-card.credit .summary-value { color: var(--accent-green); }
 
 .summary-count {
@@ -103,22 +100,20 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    animation: fadeIn 0.3s ease-out;
 }
 
 .balance-card.positive {
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, var(--mud-palette-surface) 100%);
-    border-color: rgba(34, 197, 94, 0.2);
+    background: linear-gradient(135deg, rgba(34,197,94,0.08) 0%, var(--mud-palette-surface) 100%);
+    border-color: rgba(34,197,94,0.2);
 }
 
 .balance-card.negative {
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.08) 0%, var(--mud-palette-surface) 100%);
-    border-color: rgba(239, 68, 68, 0.2);
+    background: linear-gradient(135deg, rgba(239,68,68,0.08) 0%, var(--mud-palette-surface) 100%);
+    border-color: rgba(239,68,68,0.2);
 }
 
-.balance-label {
-    font-size: 12px;
-    color: var(--mud-palette-text-secondary);
-}
+.balance-label { font-size: 12px; color: var(--mud-palette-text-secondary); }
 
 .balance-value {
     font-family: 'JetBrains Mono', monospace;
@@ -129,7 +124,7 @@
 .balance-card.positive .balance-value { color: var(--accent-green); }
 .balance-card.negative .balance-value { color: var(--accent-red); }
 
-/* ===== TABS (MudChipSet) ===== */
+/* ===== TABS ===== */
 .tabs-wrapper {
     margin-bottom: 16px;
     overflow-x: auto;
@@ -142,7 +137,7 @@
     gap: 6px;
 }
 
-/* ===== FILTERS (MudChipSet horizontal scroll) ===== */
+/* ===== FILTERS ===== */
 .filter-scroll {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -152,9 +147,7 @@
     padding-bottom: 4px;
 }
 
-.filter-scroll::-webkit-scrollbar {
-    display: none;
-}
+.filter-scroll::-webkit-scrollbar { display: none; }
 
 ::deep .filter-chips {
     display: flex;
@@ -192,17 +185,10 @@
     font-family: 'JetBrains Mono', monospace;
 }
 
-.section-badge.green {
-    background: var(--accent-green);
-    color: white;
-}
+.section-badge.green { background: var(--accent-green); color: white; }
 
 /* ===== DEBT CARD ===== */
-.debt-list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
+.debt-list { display: flex; flex-direction: column; gap: 10px; }
 
 .debt-card {
     background: var(--mud-palette-surface);
@@ -210,15 +196,14 @@
     padding: 14px;
     border: 1px solid var(--mud-palette-lines-default);
     transition: all 0.2s ease;
+    animation: fadeIn 0.3s ease-out;
 }
 
-.debt-card.warning {
-    border-color: rgba(234, 179, 8, 0.4);
-}
+.debt-card.warning { border-color: rgba(234,179,8,0.4); }
 
 .debt-card.critical {
-    border-color: rgba(239, 68, 68, 0.4);
-    background: linear-gradient(135deg, rgba(239, 68, 68, 0.05) 0%, var(--mud-palette-surface) 100%);
+    border-color: rgba(239,68,68,0.4);
+    background: linear-gradient(135deg, rgba(239,68,68,0.05) 0%, var(--mud-palette-surface) 100%);
 }
 
 .debt-header {
@@ -228,20 +213,9 @@
     margin-bottom: 12px;
 }
 
-.debt-info {
-    flex: 1;
-}
-
-.debt-tournament {
-    font-size: 15px;
-    font-weight: 600;
-    margin-bottom: 2px;
-}
-
-.debt-date {
-    font-size: 11px;
-    color: var(--mud-palette-text-secondary);
-}
+.debt-info { flex: 1; }
+.debt-tournament { font-size: 15px; font-weight: 600; margin-bottom: 2px; }
+.debt-date { font-size: 11px; color: var(--mud-palette-text-secondary); }
 
 /* ===== TYPE BADGES ===== */
 .type-badge {
@@ -255,20 +229,9 @@
     text-transform: uppercase;
 }
 
-.type-badge.poker {
-    background: rgba(34, 197, 94, 0.15);
-    color: var(--accent-green);
-}
-
-.type-badge.lanches {
-    background: rgba(249, 115, 22, 0.15);
-    color: var(--accent-orange);
-}
-
-.type-badge.caixinha {
-    background: rgba(234, 179, 8, 0.15);
-    color: var(--accent-yellow);
-}
+.type-badge.poker   { background: rgba(34,197,94,0.15);  color: var(--accent-green); }
+.type-badge.lanches { background: rgba(249,115,22,0.15); color: var(--accent-orange); }
+.type-badge.caixinha { background: rgba(234,179,8,0.15); color: var(--accent-yellow); }
 
 .type-badge-small {
     display: flex;
@@ -282,9 +245,9 @@
     flex-shrink: 0;
 }
 
-.type-badge-small.poker { background: rgba(34, 197, 94, 0.15); }
-.type-badge-small.lanches { background: rgba(249, 115, 22, 0.15); }
-.type-badge-small.caixinha { background: rgba(234, 179, 8, 0.15); }
+.type-badge-small.poker   { background: rgba(34,197,94,0.15); }
+.type-badge-small.lanches { background: rgba(249,115,22,0.15); }
+.type-badge-small.caixinha { background: rgba(234,179,8,0.15); }
 
 /* ===== DEBT BODY ===== */
 .debt-body {
@@ -293,26 +256,10 @@
     align-items: flex-end;
 }
 
-.debt-recipient-label {
-    font-size: 11px;
-    color: var(--accent-yellow);
-    margin-bottom: 2px;
-}
-
-.debt-recipient-name {
-    font-size: 15px;
-    font-weight: 500;
-}
-
-.debt-amount {
-    text-align: right;
-}
-
-.debt-amount-label {
-    font-size: 11px;
-    color: var(--mud-palette-text-secondary);
-    margin-bottom: 2px;
-}
+.debt-recipient-label { font-size: 11px; color: var(--accent-yellow); margin-bottom: 2px; }
+.debt-recipient-name  { font-size: 15px; font-weight: 500; }
+.debt-amount          { text-align: right; }
+.debt-amount-label    { font-size: 11px; color: var(--mud-palette-text-secondary); margin-bottom: 2px; }
 
 .debt-amount-value {
     font-family: 'JetBrains Mono', monospace;
@@ -333,9 +280,7 @@
     font-size: 13px;
 }
 
-.debt-pix-label {
-    color: var(--mud-palette-text-secondary);
-}
+.debt-pix-label { color: var(--mud-palette-text-secondary); }
 
 .debt-pix-value {
     font-family: 'JetBrains Mono', monospace;
@@ -348,8 +293,8 @@
 .debt-no-pix {
     margin-top: 12px;
     padding: 10px 12px;
-    background: rgba(234, 179, 8, 0.1);
-    border: 1px solid rgba(234, 179, 8, 0.3);
+    background: rgba(234,179,8,0.1);
+    border: 1px solid rgba(234,179,8,0.3);
     border-radius: 8px;
     font-size: 12px;
     color: var(--accent-yellow);
@@ -357,17 +302,10 @@
     align-items: center;
 }
 
-/* ===== DEBT ACTION ===== */
-.debt-action {
-    margin-top: 14px;
-}
+.debt-action { margin-top: 14px; }
 
 /* ===== CREDIT LIST ===== */
-.credit-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
+.credit-list { display: flex; flex-direction: column; gap: 8px; }
 
 .credit-card {
     background: var(--mud-palette-surface);
@@ -377,12 +315,10 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    animation: fadeIn 0.3s ease-out;
 }
 
-.credit-info {
-    flex: 1;
-    min-width: 0;
-}
+.credit-info { flex: 1; min-width: 0; }
 
 .credit-tournament {
     font-size: 13px;
@@ -392,18 +328,9 @@
     text-overflow: ellipsis;
 }
 
-.credit-from {
-    font-size: 12px;
-    color: var(--mud-palette-text-secondary);
-    margin-top: 2px;
-}
+.credit-from { font-size: 12px; color: var(--mud-palette-text-secondary); margin-top: 2px; }
 
-.credit-status {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 4px;
-}
+.credit-status { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 
 .credit-amount {
     font-family: 'JetBrains Mono', monospace;
@@ -421,42 +348,21 @@
     text-transform: uppercase;
 }
 
-.status-badge.pending {
-    background: rgba(234, 179, 8, 0.15);
-    color: var(--accent-yellow);
-}
-
-.status-badge.paid {
-    background: rgba(59, 130, 246, 0.15);
-    color: var(--accent-blue);
-}
-
-.status-badge.confirmed {
-    background: rgba(34, 197, 94, 0.15);
-    color: var(--accent-green);
-}
+.status-badge.pending  { background: rgba(234,179,8,0.15); color: var(--accent-yellow); }
+.status-badge.paid     { background: rgba(59,130,246,0.15); color: var(--accent-blue); }
+.status-badge.confirmed { background: rgba(34,197,94,0.15); color: var(--accent-green); }
 
 /* ===== ADMIN SECTION ===== */
 .admin-section {
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, var(--mud-palette-surface) 100%);
-    border: 1px solid rgba(139, 92, 246, 0.3);
+    background: linear-gradient(135deg, rgba(139,92,246,0.1) 0%, var(--mud-palette-surface) 100%);
+    border: 1px solid rgba(139,92,246,0.3);
     border-radius: 14px;
     padding: 14px;
 }
 
-.admin-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
-}
+.admin-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 
-.admin-title {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--accent-purple);
-    flex: 1;
-}
+.admin-title { font-size: 15px; font-weight: 600; color: var(--accent-purple); flex: 1; }
 
 .admin-badge {
     background: var(--accent-purple);
@@ -468,12 +374,7 @@
     font-family: 'JetBrains Mono', monospace;
 }
 
-.admin-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    width: 100%;
-}
+.admin-list { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 
 .admin-card {
     background: var(--mud-palette-surface);
@@ -487,12 +388,7 @@
     box-sizing: border-box;
 }
 
-.admin-card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-}
+.admin-card-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 
 .admin-card-tournament {
     font-size: 12px;
@@ -504,11 +400,7 @@
     min-width: 0;
 }
 
-.admin-card-players {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
+.admin-card-players { display: flex; flex-direction: column; gap: 2px; }
 
 .admin-card-player-line {
     font-size: 13px;
@@ -518,17 +410,9 @@
     white-space: nowrap;
 }
 
-.player-label {
-    font-size: 11px;
-    color: var(--mud-palette-text-secondary);
-    font-weight: 400;
-}
+.player-label { font-size: 11px; color: var(--mud-palette-text-secondary); font-weight: 400; }
 
-.admin-card-footer {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
+.admin-card-footer { display: flex; align-items: center; gap: 10px; }
 
 .admin-card-amount {
     font-family: 'JetBrains Mono', monospace;
@@ -537,100 +421,33 @@
     white-space: nowrap;
 }
 
-.admin-card-amount.caixinha {
-    color: var(--accent-yellow);
-}
-
-.admin-card-days {
-    font-size: 10px;
-    color: var(--mud-palette-text-secondary);
-    white-space: nowrap;
-}
-
-.admin-card-actions {
-    margin-left: auto;
-    flex-shrink: 0;
-    display: flex;
-    gap: 6px;
-}
+.admin-card-amount.caixinha { color: var(--accent-yellow); }
+.admin-card-days { font-size: 10px; color: var(--mud-palette-text-secondary); white-space: nowrap; }
+.admin-card-actions { margin-left: auto; flex-shrink: 0; display: flex; gap: 6px; }
 
 /* ===== EMPTY STATE ===== */
-.empty-state {
-    text-align: center;
-    padding: 40px 20px;
-}
-
-.empty-state .empty-title {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 4px;
-}
-
-.empty-state .empty-text {
-    font-size: 13px;
-    color: var(--mud-palette-text-secondary);
-}
+.empty-state { text-align: center; padding: 40px 20px; }
+.empty-title  { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.empty-text   { font-size: 13px; color: var(--mud-palette-text-secondary); }
 
 /* ===== RESPONSIVE ===== */
 @media (min-width: 768px) {
-    .debts-page {
-        padding: 24px;
-        max-width: 900px;
-        margin: 0 auto;
-    }
-
-    .summary-value {
-        font-size: 26px;
-    }
-
-    .balance-value {
-        font-size: 24px;
-    }
-
-    .debt-card {
-        padding: 18px;
-    }
-
-    .debt-tournament {
-        font-size: 16px;
-    }
-
-    .debt-amount-value {
-        font-size: 24px;
-    }
-
-    .admin-list {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 10px;
-    }
+    .debts-page { padding: 24px; max-width: 900px; margin: 0 auto; }
+    .summary-value { font-size: 26px; }
+    .balance-value { font-size: 24px; }
+    .debt-card { padding: 18px; }
+    .debt-tournament { font-size: 16px; }
+    .debt-amount-value { font-size: 24px; }
+    .admin-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 }
 
 @media (min-width: 1024px) {
-    .debts-page {
-        max-width: 1100px;
-    }
-
-    .admin-list {
-        grid-template-columns: repeat(3, 1fr);
-    }
+    .debts-page { max-width: 1100px; }
+    .admin-list { grid-template-columns: repeat(3, 1fr); }
 }
 
 /* ===== ANIMATIONS ===== */
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
+    to   { opacity: 1; transform: translateY(0); }
 }
-
-.summary-card,
-.balance-card,
-.debt-card,
-.credit-card,
-.admin-section {
-    animation: fadeIn 0.3s ease-out;
-}
-
-.debt-card:nth-child(1) { animation-delay: 0.05s; }
-.debt-card:nth-child(2) { animation-delay: 0.1s; }
-.debt-card:nth-child(3) { animation-delay: 0.15s; }
-.debt-card:nth-child(4) { animation-delay: 0.2s; }

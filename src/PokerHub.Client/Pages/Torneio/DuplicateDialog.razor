@@ -1,0 +1,106 @@
+@inject ITournamentService TournamentService
+@inject ILeagueService LeagueService
+@inject AuthStateService AuthState
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.ContentCopy" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Duplicar Torneio</MudText>
+        </MudStack>
+    </TitleContent>
+    <DialogContent>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-4">
+            Sera criado um novo torneio com os mesmos parametros (blinds, valores, premiacao).
+        </MudText>
+
+        @if (_loading)
+        {
+            <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+        }
+        else
+        {
+            <MudSelect T="Guid" @bind-Value="_targetLeagueId"
+                      Label="Liga de Destino"
+                      Variant="Variant.Outlined"
+                      Class="mb-4">
+                @foreach (var league in _leagues)
+                {
+                    <MudSelectItem Value="@league.Id">@league.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <MudAlert Severity="Severity.Error" Dense="true">@_error</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancelar</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   OnClick="Duplicate"
+                   Disabled="_duplicating || _loading || _targetLeagueId == Guid.Empty">
+            @if (_duplicating)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+            }
+            Duplicar
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public Guid TournamentId { get; set; }
+    [Parameter] public Guid CurrentLeagueId { get; set; }
+
+    private List<LeagueDto> _leagues = new();
+    private Guid _targetLeagueId;
+    private bool _loading = true;
+    private bool _duplicating;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var userId = AuthState.GetUserId();
+            if (!string.IsNullOrEmpty(userId))
+                _leagues = (await LeagueService.GetLeaguesByUserAsync(userId)).ToList();
+
+            _targetLeagueId = CurrentLeagueId;
+        }
+        finally { _loading = false; }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task Duplicate()
+    {
+        _duplicating = true;
+        _error = null;
+        try
+        {
+            var result = await TournamentService.DuplicateTournamentAsync(TournamentId, _targetLeagueId);
+            if (result != null)
+            {
+                Snackbar.Add("Torneio duplicado com sucesso!", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(result.Id));
+            }
+            else
+            {
+                _error = "Erro ao duplicar torneio.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Erro: {ex.Message}";
+        }
+        finally
+        {
+            _duplicating = false;
+        }
+    }
+}

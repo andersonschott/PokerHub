@@ -1,6 +1,5 @@
 @page "/meus-debitos"
 @page "/jogador/{PlayerId:guid}/debitos"
-@rendermode InteractiveServer
 @attribute [Authorize]
 @inject IPaymentService PaymentService
 @inject IPlayerService PlayerService
@@ -8,7 +7,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject IJSRuntime JS
-@inject AuthenticationStateProvider AuthStateProvider
+@inject AuthStateService AuthState
 
 <PageTitle>Meus Débitos - PokerHub</PageTitle>
 
@@ -108,7 +107,6 @@
         @* ===== TAB CONTENT ===== *@
         @if (_activeTab == "pagar")
         {
-            @* ----- A PAGAR ----- *@
             @if (_debts == null || !_debts.Any())
             {
                 <div class="empty-state">
@@ -119,36 +117,29 @@
             }
             else
             {
-                @* Filters *@
                 <div class="filter-scroll">
                     <MudChipSet T="string" @bind-SelectedValue="_debtFilter" Class="filter-chips">
                         <MudChip T="string" Value="@("all")" Size="Size.Small"
                                  Variant="@(_debtFilter == "all" ? Variant.Filled : Variant.Outlined)"
-                                 Color="Color.Default">
-                            Todos
-                        </MudChip>
+                                 Color="Color.Default">Todos</MudChip>
                         <MudChip T="string" Value="@("poker")" Size="Size.Small"
                                  Variant="@(_debtFilter == "poker" ? Variant.Filled : Variant.Outlined)"
                                  Color="Color.Success">
-                            <MudIcon Icon="@Icons.Material.Filled.Casino" Size="Size.Small" Class="mr-1" />
-                            Poker
+                            <MudIcon Icon="@Icons.Material.Filled.Casino" Size="Size.Small" Class="mr-1" />Poker
                         </MudChip>
                         <MudChip T="string" Value="@("lanches")" Size="Size.Small"
                                  Variant="@(_debtFilter == "lanches" ? Variant.Filled : Variant.Outlined)"
                                  Color="Color.Warning">
-                            <MudIcon Icon="@Icons.Material.Filled.Fastfood" Size="Size.Small" Class="mr-1" />
-                            Lanches
+                            <MudIcon Icon="@Icons.Material.Filled.Fastfood" Size="Size.Small" Class="mr-1" />Lanches
                         </MudChip>
                         <MudChip T="string" Value="@("caixinha")" Size="Size.Small"
                                  Variant="@(_debtFilter == "caixinha" ? Variant.Filled : Variant.Outlined)"
                                  Color="Color.Info">
-                            <MudIcon Icon="@Icons.Material.Filled.Savings" Size="Size.Small" Class="mr-1" />
-                            Caixinha
+                            <MudIcon Icon="@Icons.Material.Filled.Savings" Size="Size.Small" Class="mr-1" />Caixinha
                         </MudChip>
                     </MudChipSet>
                 </div>
 
-                @* Debt Cards *@
                 <div class="debt-list">
                     @foreach (var debt in FilteredDebts)
                     {
@@ -183,7 +174,6 @@
                                     <MudIconButton Icon="@Icons.Material.Filled.ContentCopy"
                                                    Size="Size.Small"
                                                    Color="Color.Primary"
-                                                  
                                                    OnClick="@(() => CopyToClipboard(debt.CreditorPixKey))" />
                                 </div>
                             }
@@ -227,7 +217,6 @@
         }
         else if (_activeTab == "receber")
         {
-            @* ----- A RECEBER ----- *@
             @if (_toReceive == null || !_toReceive.Any())
             {
                 <div class="empty-state">
@@ -255,15 +244,11 @@
                             </div>
                             <div class="credit-info">
                                 <div class="credit-tournament">@payment.TournamentName</div>
-                                <div class="credit-from">
-                                    de <strong>@payment.FromPlayerName</strong>
-                                </div>
+                                <div class="credit-from">de <strong>@payment.FromPlayerName</strong></div>
                             </div>
                             <div class="credit-status">
                                 <div class="credit-amount">@payment.Amount.ToBrl()</div>
-                                <div class="status-badge @GetStatusClass(payment.Status)">
-                                    @GetStatusText(payment.Status)
-                                </div>
+                                <div class="status-badge @GetStatusClass(payment.Status)">@GetStatusText(payment.Status)</div>
                                 @if (payment.Status != PaymentStatus.Confirmed)
                                 {
                                     <MudButton Variant="Variant.Filled"
@@ -282,7 +267,6 @@
         }
         else if (_activeTab == "admin")
         {
-            @* ----- ADMIN ----- *@
             <div class="admin-section">
                 <div class="admin-header">
                     <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" Color="Color.Secondary" Size="Size.Medium" />
@@ -294,24 +278,17 @@
                     Como organizador, confirme os pagamentos das suas ligas.
                 </MudText>
 
-                @* Filters *@
                 <div class="filter-scroll mb-3">
                     <MudChipSet T="string" @bind-SelectedValue="_adminFilter" Class="filter-chips">
                         <MudChip T="string" Value="@("pending")" Size="Size.Small"
                                  Variant="@(_adminFilter == "pending" ? Variant.Filled : Variant.Outlined)"
-                                 Color="Color.Warning">
-                            Pendentes
-                        </MudChip>
+                                 Color="Color.Warning">Pendentes</MudChip>
                         <MudChip T="string" Value="@("paid")" Size="Size.Small"
                                  Variant="@(_adminFilter == "paid" ? Variant.Filled : Variant.Outlined)"
-                                 Color="Color.Info">
-                            Aguardando
-                        </MudChip>
+                                 Color="Color.Info">Aguardando</MudChip>
                         <MudChip T="string" Value="@("all")" Size="Size.Small"
                                  Variant="@(_adminFilter == "all" ? Variant.Filled : Variant.Outlined)"
-                                 Color="Color.Default">
-                            Todos
-                        </MudChip>
+                                 Color="Color.Default">Todos</MudChip>
                     </MudChipSet>
                 </div>
 
@@ -350,16 +327,12 @@
                                     <div class="admin-card-actions">
                                         @if (payment.Status == PaymentStatus.Pending)
                                         {
-                                            <MudButton Variant="Variant.Text"
-                                                       Color="Color.Info"
-                                                       Size="Size.Small"
+                                            <MudButton Variant="Variant.Text" Color="Color.Info" Size="Size.Small"
                                                        OnClick="@(() => AdminMarkPaid(payment.Id))"
                                                        Disabled="@(_processingPaymentId == payment.Id)">
                                                 Pago
                                             </MudButton>
-                                            <MudButton Variant="Variant.Filled"
-                                                       Color="Color.Success"
-                                                       Size="Size.Small"
+                                            <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
                                                        OnClick="@(() => AdminConfirm(payment.Id))"
                                                        Disabled="@(_processingPaymentId == payment.Id)">
                                                 Confirmar
@@ -367,9 +340,7 @@
                                         }
                                         else if (payment.Status == PaymentStatus.Paid)
                                         {
-                                            <MudButton Variant="Variant.Filled"
-                                                       Color="Color.Success"
-                                                       Size="Size.Small"
+                                            <MudButton Variant="Variant.Filled" Color="Color.Success" Size="Size.Small"
                                                        OnClick="@(() => AdminConfirm(payment.Id))"
                                                        Disabled="@(_processingPaymentId == payment.Id)">
                                                 Confirmar
@@ -402,19 +373,16 @@
     private string? _currentUserId;
     private Guid? _processingPaymentId;
 
-    // UI State
     private string _activeTab = "pagar";
     private string _debtFilter = "all";
     private string _adminFilter = "pending";
 
-    // Calculated values
     private decimal _totalDebt => _debts?.Sum(d => d.Amount) ?? 0;
     private decimal _totalCredit => _toReceive?.Where(p => p.Status != PaymentStatus.Confirmed).Sum(p => p.Amount) ?? 0;
     private decimal _netBalance => _totalCredit - _totalDebt;
     private int _debtCount => _debts?.Count ?? 0;
     private int _creditCount => _toReceive?.Count(p => p.Status != PaymentStatus.Confirmed) ?? 0;
 
-    // Filtered lists
     private IEnumerable<PendingDebtDto> FilteredDebts => _debtFilter switch
     {
         "poker" => _debts?.Where(d => d.Type == PaymentType.Poker && string.IsNullOrEmpty(d.Description)) ?? Enumerable.Empty<PendingDebtDto>(),
@@ -438,9 +406,7 @@
     private async Task LoadData()
     {
         _loading = true;
-
-        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
-        _currentUserId = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        _currentUserId = AuthState.GetUserId();
 
         if (!string.IsNullOrEmpty(_currentUserId))
         {
@@ -622,7 +588,7 @@
                 }
                 else
                 {
-                    Snackbar.Add("Erro ao confirmar pagamento. Verifique se o status está correto.", Severity.Error);
+                    Snackbar.Add("Erro ao confirmar pagamento.", Severity.Error);
                 }
             }
             catch (Exception ex)
@@ -641,10 +607,8 @@
         if (string.IsNullOrEmpty(_currentUserId)) return;
 
         var confirmed = await DialogService.ShowMessageBox(
-            "Confirmar Pagamento",
-            "Deseja marcar este pagamento como pago?",
+            "Confirmar Pagamento", "Deseja marcar este pagamento como pago?",
             yesText: "Sim", cancelText: "Cancelar");
-
         if (confirmed != true) return;
 
         _processingPaymentId = paymentId;
@@ -676,10 +640,8 @@
         if (string.IsNullOrEmpty(_currentUserId)) return;
 
         var confirmed = await DialogService.ShowMessageBox(
-            "Confirmar Recebimento",
-            "Deseja confirmar o recebimento deste pagamento?",
+            "Confirmar Recebimento", "Deseja confirmar o recebimento deste pagamento?",
             yesText: "Sim", cancelText: "Cancelar");
-
         if (confirmed != true) return;
 
         _processingPaymentId = paymentId;

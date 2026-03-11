@@ -1,4 +1,5 @@
 @page "/login"
+@layout Layout.EmptyLayout
 @inject HttpClient Http
 @inject AuthStateService AuthState
 @inject NavigationManager Navigation
@@ -6,87 +7,124 @@
 
 <PageTitle>Login - PokerHub</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-8">
-    <MudCard Elevation="4">
-        <MudCardContent Class="pa-6">
-            <MudStack AlignItems="AlignItems.Center" Class="mb-6">
-                <MudIcon Icon="@Icons.Material.Filled.Casino" Size="Size.Large" Color="Color.Primary" Style="font-size: 4rem;" />
-                <MudText Typo="Typo.h4">PokerHub</MudText>
-                <MudText Typo="Typo.subtitle1" Color="Color.Secondary">Entre na sua conta</MudText>
+<div class="login-page">
+    <MudPaper Elevation="8" Class="login-card pa-8">
+        <MudStack AlignItems="AlignItems.Center" Class="mb-6">
+            <MudIcon Icon="@Icons.Material.Filled.Casino" Size="Size.Large"
+                     Color="Color.Primary" Style="font-size: 3.5rem;" />
+            <MudText Typo="Typo.h4" Class="font-weight-bold">PokerHub</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Entre na sua conta</MudText>
+        </MudStack>
+
+        <EditForm Model="_model" OnValidSubmit="HandleLogin">
+            <DataAnnotationsValidator />
+            <MudStack Spacing="3">
+                <MudTextField @bind-Value="_model.Email"
+                              Label="E-mail"
+                              Variant="Variant.Outlined"
+                              InputType="InputType.Email"
+                              Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Email"
+                              Immediate="true" />
+
+                <MudTextField @bind-Value="_model.Password"
+                              Label="Senha"
+                              Variant="Variant.Outlined"
+                              InputType="@_passwordInputType"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@_passwordIcon"
+                              OnAdornmentClick="TogglePasswordVisibility" />
+
+                @if (!string.IsNullOrEmpty(_errorMessage))
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true">@_errorMessage</MudAlert>
+                }
+
+                <MudButton ButtonType="ButtonType.Submit"
+                           Variant="Variant.Filled"
+                           Color="Color.Primary"
+                           FullWidth="true"
+                           Size="Size.Large"
+                           Disabled="_loading"
+                           Class="mt-2">
+                    @if (_loading)
+                    {
+                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                    }
+                    Entrar
+                </MudButton>
+
+                <MudDivider />
+
+                <MudText Align="Align.Center" Typo="Typo.body2">
+                    Nao tem uma conta?
+                    <MudLink Href="/registrar" Color="Color.Primary">Criar conta</MudLink>
+                </MudText>
             </MudStack>
+        </EditForm>
+    </MudPaper>
+</div>
 
-            <EditForm Model="_model" OnValidSubmit="HandleLogin">
-                <DataAnnotationsValidator />
-                <MudStack Spacing="3">
-                    <MudTextField @bind-Value="_model.Email"
-                                  Label="E-mail"
-                                  Variant="Variant.Outlined"
-                                  InputType="InputType.Email"
-                                  Adornment="Adornment.Start"
-                                  AdornmentIcon="@Icons.Material.Filled.Email" />
-
-                    <MudTextField @bind-Value="_model.Password"
-                                  Label="Senha"
-                                  Variant="Variant.Outlined"
-                                  InputType="@_passwordInputType"
-                                  Adornment="Adornment.End"
-                                  AdornmentIcon="@_passwordIcon"
-                                  OnAdornmentClick="TogglePasswordVisibility" />
-
-                    <MudButton ButtonType="ButtonType.Submit"
-                               Variant="Variant.Filled"
-                               Color="Color.Primary"
-                               FullWidth="true"
-                               Size="Size.Large"
-                               Disabled="_loading">
-                        @if (_loading)
-                        {
-                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
-                        }
-                        Entrar
-                    </MudButton>
-                </MudStack>
-            </EditForm>
-        </MudCardContent>
-    </MudCard>
-</MudContainer>
+<style>
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--mud-palette-background);
+    padding: 16px;
+}
+.login-card {
+    width: 100%;
+    max-width: 420px;
+    border-radius: 20px;
+}
+</style>
 
 @code {
     private readonly LoginModel _model = new();
     private bool _loading;
     private bool _showPassword;
+    private string? _errorMessage;
     private InputType _passwordInputType => _showPassword ? InputType.Text : InputType.Password;
     private string _passwordIcon => _showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility;
 
     protected override void OnInitialized()
     {
         if (AuthState.IsAuthenticated)
-            Navigation.NavigateTo("/");
+            Navigation.NavigateTo("/", replace: true);
     }
 
     private async Task HandleLogin()
     {
         _loading = true;
+        _errorMessage = null;
         try
         {
-            var response = await Http.PostAsJsonAsync("api/auth/login", new { _model.Email, _model.Password });
+            var response = await Http.PostAsJsonAsync("api/auth/login",
+                new { _model.Email, _model.Password });
+
             if (response.IsSuccessStatusCode)
             {
                 var result = await response.Content.ReadFromJsonAsync<TokenResponse>();
                 if (result is not null)
                 {
                     AuthState.SetTokens(result.Token, result.RefreshToken);
-                    Navigation.NavigateTo("/");
+                    Navigation.NavigateTo("/", replace: true);
                 }
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                _errorMessage = "E-mail ou senha incorretos.";
             }
             else
             {
-                Snackbar.Add("E-mail ou senha incorretos.", Severity.Error);
+                _errorMessage = "Erro ao fazer login. Tente novamente.";
             }
         }
         catch
         {
-            Snackbar.Add("Erro de conexão com o servidor.", Severity.Error);
+            _errorMessage = "Erro de conexao com o servidor.";
         }
         finally
         {
@@ -98,7 +136,11 @@
 
     private class LoginModel
     {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "E-mail obrigatorio")]
+        [System.ComponentModel.DataAnnotations.EmailAddress(ErrorMessage = "E-mail invalido")]
         public string Email { get; set; } = "";
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Senha obrigatoria")]
         public string Password { get; set; } = "";
     }
 
