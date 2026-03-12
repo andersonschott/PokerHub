@@ -334,51 +334,60 @@ public class TournamentService : ITournamentService
         if (tournament.Status != TournamentStatus.InProgress && tournament.Status != TournamentStatus.Paused)
             return (false, "Torneio não está em andamento.");
 
-        // TournamentService and JackpotService must remain Scoped
-        // to share the same DbContext instance within this transaction.
-        await using var transaction = await _context.Database.BeginTransactionAsync();
+        var executionStrategy = _context.Database.CreateExecutionStrategy();
         try
         {
-            var prizePool = CalculatePrizePool(tournament);
-            var prizeResult = await _prizeTableService.CalculatePrizeDistributionAsync(
-                tournament.LeagueId, prizePool, tournament.PrizeStructure, tournament.UsePrizeTable);
-            var prizeAllocations = prizeResult.Allocations.ToDictionary(a => a.Position, a => a.Amount);
-
-            foreach (var (playerId, position) in positions)
+            return await executionStrategy.ExecuteAsync(async () =>
             {
-                var tp = tournament.Players.FirstOrDefault(p => p.PlayerId == playerId);
-                if (tp != null)
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    tp.Position = position;
-                    if (prizeAllocations.TryGetValue(position, out var prizeAmount))
-                        tp.Prize = Math.Round(prizeAmount, MidpointRounding.AwayFromZero);
-                }
-            }
+                    var prizePool = CalculatePrizePool(tournament);
+                    var prizeResult = await _prizeTableService.CalculatePrizeDistributionAsync(
+                        tournament.LeagueId, prizePool, tournament.PrizeStructure, tournament.UsePrizeTable);
+                    var prizeAllocations = prizeResult.Allocations.ToDictionary(a => a.Position, a => a.Amount);
 
-            if (!prizeResult.UsedPrizeTable)
-            {
-                var totalDistributed = tournament.Players.Sum(p => p.Prize) + prizeResult.JackpotContribution;
-                var roundingDiff = prizePool - totalDistributed;
-                if (roundingDiff != 0)
+                    foreach (var (playerId, position) in positions)
+                    {
+                        var tp = tournament.Players.FirstOrDefault(p => p.PlayerId == playerId);
+                        if (tp != null)
+                        {
+                            tp.Position = position;
+                            if (prizeAllocations.TryGetValue(position, out var prizeAmount))
+                                tp.Prize = Math.Round(prizeAmount, MidpointRounding.AwayFromZero);
+                        }
+                    }
+
+                    if (!prizeResult.UsedPrizeTable)
+                    {
+                        var totalDistributed = tournament.Players.Sum(p => p.Prize) + prizeResult.JackpotContribution;
+                        var roundingDiff = prizePool - totalDistributed;
+                        if (roundingDiff != 0)
+                        {
+                            var firstPlace = tournament.Players.FirstOrDefault(p => p.Position == 1);
+                            if (firstPlace != null) firstPlace.Prize += roundingDiff;
+                        }
+                    }
+
+                    tournament.Status = TournamentStatus.Finished;
+                    tournament.FinishedAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+
+                    if (prizeResult.JackpotContribution > 0)
+                        await _jackpotService.RecordContributionAsync(tournamentId, prizeResult.JackpotContribution);
+
+                    await transaction.CommitAsync();
+                    return (true, "Torneio finalizado com sucesso!");
+                }
+                catch
                 {
-                    var firstPlace = tournament.Players.FirstOrDefault(p => p.Position == 1);
-                    if (firstPlace != null) firstPlace.Prize += roundingDiff;
+                    await transaction.RollbackAsync();
+                    throw;
                 }
-            }
-
-            tournament.Status = TournamentStatus.Finished;
-            tournament.FinishedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
-
-            if (prizeResult.JackpotContribution > 0)
-                await _jackpotService.RecordContributionAsync(tournamentId, prizeResult.JackpotContribution);
-
-            await transaction.CommitAsync();
-            return (true, "Torneio finalizado com sucesso!");
+            });
         }
         catch
         {
-            await transaction.RollbackAsync();
             return (false, "Erro ao finalizar torneio. Tente novamente.");
         }
     }
@@ -396,32 +405,43 @@ public class TournamentService : ITournamentService
         if (tournament.Status != TournamentStatus.InProgress && tournament.Status != TournamentStatus.Paused)
             return (false, "Torneio não está em andamento.");
 
-        await using var transaction = await _context.Database.BeginTransactionAsync();
+        var executionStrategy = _context.Database.CreateExecutionStrategy();
         try
         {
-            foreach (var playerPrize in distribution.PlayerPrizes)
+            return await executionStrategy.ExecuteAsync(async () =>
             {
-                var tp = tournament.Players.FirstOrDefault(p => p.PlayerId == playerPrize.PlayerId);
-                if (tp != null)
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+                try
                 {
-                    tp.Position = playerPrize.Position;
-                    tp.Prize = playerPrize.Prize;
+                    foreach (var playerPrize in distribution.PlayerPrizes)
+                    {
+                        var tp = tournament.Players.FirstOrDefault(p => p.PlayerId == playerPrize.PlayerId);
+                        if (tp != null)
+                        {
+                            tp.Position = playerPrize.Position;
+                            tp.Prize = playerPrize.Prize;
+                        }
+                    }
+
+                    tournament.Status = TournamentStatus.Finished;
+                    tournament.FinishedAt = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+
+                    if (distribution.JackpotContribution > 0)
+                        await _jackpotService.RecordContributionAsync(tournamentId, distribution.JackpotContribution);
+
+                    await transaction.CommitAsync();
+                    return (true, "Torneio finalizado com sucesso!");
                 }
-            }
-
-            tournament.Status = TournamentStatus.Finished;
-            tournament.FinishedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
-
-            if (distribution.JackpotContribution > 0)
-                await _jackpotService.RecordContributionAsync(tournamentId, distribution.JackpotContribution);
-
-            await transaction.CommitAsync();
-            return (true, "Torneio finalizado com sucesso!");
+                catch
+                {
+                    await transaction.RollbackAsync();
+                    throw;
+                }
+            });
         }
         catch
         {
-            await transaction.RollbackAsync();
             return (false, "Erro ao finalizar torneio. Tente novamente.");
         }
     }
