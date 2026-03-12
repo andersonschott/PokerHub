@@ -41,9 +41,21 @@ public class JackpotService : IJackpotService
         var totalContributions = await _context.JackpotContributions
             .CountAsync(jc => jc.LeagueId == leagueId);
 
+        // Calculate balance dynamically from contribution and usage records
+        // instead of relying on the cached League.AccumulatedPrizePool field.
+        var totalContributed = await _context.JackpotContributions
+            .Where(jc => jc.LeagueId == leagueId)
+            .SumAsync(jc => (decimal?)jc.Amount) ?? 0m;
+
+        var totalUsed = await _context.JackpotUsages
+            .Where(ju => ju.LeagueId == leagueId)
+            .SumAsync(ju => (decimal?)ju.Amount) ?? 0m;
+
+        var currentBalance = totalContributed - totalUsed;
+
         return new JackpotStatusDto(
             leagueId,
-            league.AccumulatedPrizePool,
+            currentBalance,
             league.JackpotPercentage,
             totalContributions,
             contributions
@@ -125,12 +137,24 @@ public class JackpotService : IJackpotService
         var league = await _context.Leagues.FindAsync(leagueId);
         if (league == null) return false;
 
-        if (dto.Amount <= 0 || dto.Amount > league.AccumulatedPrizePool)
+        var totalContributed = await _context.JackpotContributions
+            .Where(jc => jc.LeagueId == leagueId)
+            .SumAsync(jc => (decimal?)jc.Amount) ?? 0m;
+
+        var totalUsed = await _context.JackpotUsages
+            .Where(ju => ju.LeagueId == leagueId)
+            .SumAsync(ju => (decimal?)ju.Amount) ?? 0m;
+
+        var currentBalance = totalContributed - totalUsed;
+
+        if (dto.Amount <= 0 || dto.Amount > currentBalance)
             throw new InvalidOperationException("Valor inválido para uso do jackpot");
 
-        var balanceBefore = league.AccumulatedPrizePool;
-        league.AccumulatedPrizePool -= dto.Amount;
-        var balanceAfter = league.AccumulatedPrizePool;
+        var balanceBefore = currentBalance;
+        var balanceAfter = currentBalance - dto.Amount;
+
+        // Keep AccumulatedPrizePool in sync for legacy callers (e.g. LeagueService DTOs).
+        league.AccumulatedPrizePool = balanceAfter;
 
         // Record the usage
         var usage = new JackpotUsage

@@ -101,6 +101,7 @@ public class PaymentService : IPaymentService
         _context.Payments.RemoveRange(existingPayments);
 
         var jackpotAmount = await ResolveJackpotAmountAsync(tournament, tournamentId);
+        await SyncJackpotContributionAsync(tournament, tournamentId, jackpotAmount);
 
         var playerBalances = tournament.Players
             .Where(tp => tp.IsCheckedIn)
@@ -157,6 +158,46 @@ public class PaymentService : IPaymentService
         var totalPrizes = checkedIn.Sum(tp => tp.Prize);
         var gap = totalInvestments - totalPrizes;
         return gap > 0 ? FinancialMath.FinancialRound(gap) : 0;
+    }
+
+    /// <summary>
+    /// Ensures the JackpotContribution record for the tournament matches the amount actually used in
+    /// payment calculation. Creates the record if missing, or adjusts it (and the league balance) if
+    /// it changed due to a recalculation.
+    /// </summary>
+    private async Task SyncJackpotContributionAsync(Tournament tournament, Guid tournamentId, int usedAmount)
+    {
+        var existing = await _context.JackpotContributions
+            .FirstOrDefaultAsync(j => j.TournamentId == tournamentId);
+
+        if (existing == null)
+        {
+            if (usedAmount <= 0) return;
+
+            var checkedIn = tournament.Players.Where(tp => tp.IsCheckedIn).ToList();
+            var prizePool = checkedIn.Count * tournament.BuyIn
+                + checkedIn.Sum(p => p.RebuyCount) * (tournament.RebuyValue ?? 0)
+                + checkedIn.Count(p => p.HasAddon) * (tournament.AddonValue ?? 0);
+
+            _context.JackpotContributions.Add(new JackpotContribution
+            {
+                Id = Guid.NewGuid(),
+                LeagueId = tournament.LeagueId,
+                TournamentId = tournamentId,
+                Amount = usedAmount,
+                TournamentPrizePool = prizePool,
+                PercentageApplied = prizePool > 0 ? ((decimal)usedAmount / prizePool) * 100 : 0,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            tournament.League.AccumulatedPrizePool += usedAmount;
+        }
+        else if (existing.Amount != usedAmount)
+        {
+            var diff = usedAmount - existing.Amount;
+            existing.Amount = usedAmount;
+            tournament.League.AccumulatedPrizePool += diff;
+        }
     }
 
     private async Task AddExpensePaymentsAsync(List<Payment> payments, Guid tournamentId)
