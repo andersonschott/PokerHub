@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using PokerHub.Application.DTOs.Tournament;
 using PokerHub.Application.Interfaces;
 using PokerHub.Domain.Entities;
@@ -13,13 +14,20 @@ public class TournamentService : ITournamentService
     private readonly IJackpotService _jackpotService;
     private readonly IPrizeTableService _prizeTableService;
     private readonly IPaymentService _paymentService;
+    private readonly ILogger<TournamentService> _logger;
 
-    public TournamentService(PokerHubDbContext context, IJackpotService jackpotService, IPrizeTableService prizeTableService, IPaymentService paymentService)
+    public TournamentService(
+        PokerHubDbContext context,
+        IJackpotService jackpotService,
+        IPrizeTableService prizeTableService,
+        IPaymentService paymentService,
+        ILogger<TournamentService> logger)
     {
         _context = context;
         _jackpotService = jackpotService;
         _prizeTableService = prizeTableService;
         _paymentService = paymentService;
+        _logger = logger;
     }
 
     public async Task<IReadOnlyList<TournamentDto>> GetTournamentsByLeagueAsync(Guid leagueId)
@@ -392,8 +400,11 @@ public class TournamentService : ITournamentService
         }
     }
 
-    public async Task<(bool Success, string Message)> FinishTournamentWithCustomPrizesAsync(Guid tournamentId, ConfirmedPrizeDistributionDto distribution)
+    public async Task<(bool Success, string Message)> FinishTournamentWithCustomPrizesAsync(Guid tournamentId, ConfirmedPrizeDistributionDto distribution, string userId)
     {
+        if (!await HasDelegatePermissionAsync(tournamentId, userId, DelegatePermissions.Finish))
+            return (false, "Sem permissão para finalizar este torneio.");
+
         var tournament = await _context.Tournaments
             .Include(t => t.Players)
             .Include(t => t.League)
@@ -404,6 +415,10 @@ public class TournamentService : ITournamentService
 
         if (tournament.Status != TournamentStatus.InProgress && tournament.Status != TournamentStatus.Paused)
             return (false, "Torneio não está em andamento.");
+
+        _logger.LogInformation(
+            "FinishTournamentWithCustomPrizes start. TournamentId={TournamentId}, UserId={UserId}, InputCount={Count}, JackpotContribution={Jackpot}",
+            tournamentId, userId, distribution.PlayerPrizes.Count, distribution.JackpotContribution);
 
         var executionStrategy = _context.Database.CreateExecutionStrategy();
         try
@@ -416,12 +431,19 @@ public class TournamentService : ITournamentService
                     foreach (var playerPrize in distribution.PlayerPrizes)
                     {
                         var tp = tournament.Players.FirstOrDefault(p => p.PlayerId == playerPrize.PlayerId);
-                        if (tp != null)
+                        if (tp == null)
                         {
-                            tp.Position = playerPrize.Position;
-                            tp.Prize = playerPrize.Prize;
+                            _logger.LogWarning(
+                                "FinishTournamentWithCustomPrizes: PlayerId {PlayerId} (Position={Position}, Prize={Prize}) not found among tournament players — skipping.",
+                                playerPrize.PlayerId, playerPrize.Position, playerPrize.Prize);
+                            continue;
                         }
+
+                        tp.Position = playerPrize.Position;
+                        tp.Prize = playerPrize.Prize;
                     }
+
+                    AssignMissingPositionsSafetyNet(tournament, tournamentId);
 
                     tournament.Status = TournamentStatus.Finished;
                     tournament.FinishedAt = DateTime.UtcNow;
@@ -440,9 +462,27 @@ public class TournamentService : ITournamentService
                 }
             });
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "FinishTournamentWithCustomPrizes failed for TournamentId={TournamentId}", tournamentId);
             return (false, "Erro ao finalizar torneio. Tente novamente.");
+        }
+    }
+
+    /// <summary>
+    /// Safety-net: ensures every checked-in player with Prize > 0 also has a Position.
+    /// If the dialog omits the winner or any prized player, assigns the next free Position
+    /// (lowest unused integer starting from 1). Logs at Warning so a live bug is detectable.
+    /// </summary>
+    private void AssignMissingPositionsSafetyNet(Tournament tournament, Guid tournamentId)
+    {
+        var fixedIds = FinishTournamentPositionSafetyNet.AssignMissingPositions(tournament.Players);
+
+        if (fixedIds.Count > 0)
+        {
+            _logger.LogWarning(
+                "FinishTournament safety-net auto-assigned Position for {Count} prized players in tournament {TournamentId}. Dialog likely omitted them. PlayerIds={PlayerIds}",
+                fixedIds.Count, tournamentId, fixedIds.ToArray());
         }
     }
 
@@ -554,8 +594,11 @@ public class TournamentService : ITournamentService
         return tournament.IsRebuyAllowed(tournament.CurrentLevel, minutesElapsed);
     }
 
-    public async Task<(bool Success, string Message)> EliminatePlayerAsync(Guid tournamentId, Guid playerId, Guid? eliminatedByPlayerId, int? position = null)
+    public async Task<(bool Success, string Message)> EliminatePlayerAsync(Guid tournamentId, Guid playerId, Guid? eliminatedByPlayerId, string userId, int? position = null)
     {
+        if (!await HasDelegatePermissionAsync(tournamentId, userId, DelegatePermissions.Eliminate))
+            return (false, "Sem permissão para eliminar jogadores neste torneio.");
+
         var tp = await _context.TournamentPlayers
             .FirstOrDefaultAsync(tp => tp.TournamentId == tournamentId && tp.PlayerId == playerId);
         if (tp == null) return (false, "Jogador não encontrado no torneio.");
@@ -766,6 +809,27 @@ public class TournamentService : ITournamentService
             level.IsBreak,
             level.IsBreak ? "Intervalo" : null
         )).ToList();
+    }
+
+    /// <summary>
+    /// True if the user is the league organizer, OR is a tournament delegate whose
+    /// permissions include the required flag. Used for action-specific authorization
+    /// (finish, eliminate, etc.).
+    /// </summary>
+    public async Task<bool> HasDelegatePermissionAsync(Guid tournamentId, string userId, DelegatePermissions required)
+    {
+        if (string.IsNullOrEmpty(userId)) return false;
+
+        var isOrganizer = await _context.Tournaments
+            .AnyAsync(t => t.Id == tournamentId && t.League.OrganizerId == userId);
+        if (isOrganizer) return true;
+
+        var delegatePerms = await _context.TournamentDelegates
+            .Where(td => td.TournamentId == tournamentId && td.UserId == userId)
+            .Select(td => (DelegatePermissions?)td.Permissions)
+            .FirstOrDefaultAsync();
+
+        return delegatePerms.HasValue && delegatePerms.Value.HasFlag(required);
     }
 
     public async Task<bool> CanUserManageTournamentAsync(Guid tournamentId, string userId)

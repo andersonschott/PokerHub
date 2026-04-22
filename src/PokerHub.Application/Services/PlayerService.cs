@@ -213,9 +213,11 @@ public class PlayerService : IPlayerService
 
     public async Task<IReadOnlyList<PendingDebtDto>> GetPendingDebtsAsync(Guid playerId)
     {
-        // Filter out jackpot payments (ToPlayerId == null) - those are not player-to-player debts
+        // Includes jackpot/caixinha (ToPlayerId == null) — those show as a debt to "Caixinha".
+        // Status explicit: only Pending or Paid are pending from the debtor's perspective.
         var debts = await _context.Payments
-            .Where(p => p.FromPlayerId == playerId && p.Status != PaymentStatus.Confirmed && p.ToPlayerId != null)
+            .Where(p => p.FromPlayerId == playerId
+                     && (p.Status == PaymentStatus.Pending || p.Status == PaymentStatus.Paid))
             .Include(p => p.Tournament)
             .Include(p => p.ToPlayer)
             .OrderBy(p => p.CreatedAt)
@@ -225,9 +227,9 @@ public class PlayerService : IPlayerService
                 p.Tournament.Name,
                 p.Tournament.ScheduledDateTime,
                 p.FromPlayerId,
-                p.ToPlayerId!.Value,
-                p.ToPlayer!.Name,
-                p.ToPlayer!.PixKey,
+                p.ToPlayerId ?? Guid.Empty,
+                p.ToPlayer != null ? p.ToPlayer.Name : "Caixinha",
+                p.ToPlayer != null ? p.ToPlayer.PixKey : null,
                 p.Amount,
                 (DateTime.UtcNow - p.CreatedAt).Days,
                 p.Type,

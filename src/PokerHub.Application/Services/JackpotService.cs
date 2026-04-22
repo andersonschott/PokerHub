@@ -41,13 +41,28 @@ public class JackpotService : IJackpotService
         var totalContributions = await _context.JackpotContributions
             .CountAsync(jc => jc.LeagueId == leagueId);
 
+        var derivedBalance = await GetDerivedBalanceAsync(leagueId);
+
         return new JackpotStatusDto(
             leagueId,
-            league.AccumulatedPrizePool,
+            derivedBalance,
             league.JackpotPercentage,
             totalContributions,
             contributions
         );
+    }
+
+    private async Task<decimal> GetDerivedBalanceAsync(Guid leagueId)
+    {
+        var totalContribs = await _context.JackpotContributions
+            .Where(jc => jc.LeagueId == leagueId)
+            .SumAsync(jc => (decimal?)jc.Amount) ?? 0m;
+
+        var totalUsages = await _context.JackpotUsages
+            .Where(ju => ju.LeagueId == leagueId)
+            .SumAsync(ju => (decimal?)ju.Amount) ?? 0m;
+
+        return totalContribs - totalUsages;
     }
 
     public async Task<IReadOnlyList<JackpotContributionDto>> GetContributionHistoryAsync(Guid leagueId)
@@ -86,26 +101,36 @@ public class JackpotService : IJackpotService
             .FirstOrDefaultAsync(t => t.Id == tournamentId);
 
         if (tournament == null) return null;
-
-        var league = tournament.League;
         if (amount <= 0) return null;
 
         var prizePool = await CalculatePrizePoolAsync(tournament);
 
-        var contribution = new JackpotContribution
+        var existing = await _context.JackpotContributions
+            .FirstOrDefaultAsync(jc => jc.TournamentId == tournamentId);
+
+        JackpotContribution contribution;
+        if (existing != null)
         {
-            Id = Guid.NewGuid(),
-            LeagueId = league.Id,
-            TournamentId = tournamentId,
-            Amount = amount,
-            TournamentPrizePool = prizePool,
-            PercentageApplied = prizePool > 0 ? (amount / prizePool) * 100 : 0,
-            CreatedAt = DateTime.UtcNow
-        };
+            existing.Amount = amount;
+            existing.TournamentPrizePool = prizePool;
+            existing.PercentageApplied = prizePool > 0 ? (amount / prizePool) * 100 : 0;
+            contribution = existing;
+        }
+        else
+        {
+            contribution = new JackpotContribution
+            {
+                Id = Guid.NewGuid(),
+                LeagueId = tournament.LeagueId,
+                TournamentId = tournamentId,
+                Amount = amount,
+                TournamentPrizePool = prizePool,
+                PercentageApplied = prizePool > 0 ? (amount / prizePool) * 100 : 0,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.JackpotContributions.Add(contribution);
+        }
 
-        league.AccumulatedPrizePool += amount;
-
-        _context.JackpotContributions.Add(contribution);
         await _context.SaveChangesAsync();
 
         return new JackpotContributionDto(
@@ -125,14 +150,13 @@ public class JackpotService : IJackpotService
         var league = await _context.Leagues.FindAsync(leagueId);
         if (league == null) return false;
 
-        if (dto.Amount <= 0 || dto.Amount > league.AccumulatedPrizePool)
+        var balanceBefore = await GetDerivedBalanceAsync(leagueId);
+
+        if (dto.Amount <= 0 || dto.Amount > balanceBefore)
             throw new InvalidOperationException("Valor inválido para uso do jackpot");
 
-        var balanceBefore = league.AccumulatedPrizePool;
-        league.AccumulatedPrizePool -= dto.Amount;
-        var balanceAfter = league.AccumulatedPrizePool;
+        var balanceAfter = balanceBefore - dto.Amount;
 
-        // Record the usage
         var usage = new JackpotUsage
         {
             Id = Guid.NewGuid(),

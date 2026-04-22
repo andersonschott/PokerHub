@@ -1305,7 +1305,7 @@
         {
             try
             {
-                var (success, message) = await TournamentService.EliminatePlayerAsync(TournamentId, player.PlayerId, null, position);
+                var (success, message) = await TournamentService.EliminatePlayerAsync(TournamentId, player.PlayerId, null, _currentUserId ?? string.Empty, position);
                 if (!success)
                 {
                     Snackbar.Add(message, Severity.Error);
@@ -1414,7 +1414,7 @@
         {
             try
             {
-                var (finishSuccess, finishMessage) = await TournamentService.FinishTournamentWithCustomPrizesAsync(TournamentId, distribution);
+                var (finishSuccess, finishMessage) = await TournamentService.FinishTournamentWithCustomPrizesAsync(TournamentId, distribution, _currentUserId ?? string.Empty);
                 if (!finishSuccess)
                 {
                     Snackbar.Add(finishMessage, Severity.Error);

@@ -42,9 +42,11 @@ public class PaymentService : IPaymentService
 
     public async Task<IReadOnlyList<PendingDebtDto>> GetPendingDebtsByPlayerAsync(Guid playerId)
     {
-        // Filter out jackpot payments (ToPlayerId == null) - those are not player-to-player debts
+        // Includes jackpot/caixinha (ToPlayerId == null). Status explicit so only truly
+        // unclosed payments appear (Confirmed payments must disappear immediately).
         return await _context.Payments
-            .Where(p => p.FromPlayerId == playerId && p.Status != PaymentStatus.Confirmed && p.ToPlayerId != null)
+            .Where(p => p.FromPlayerId == playerId
+                     && (p.Status == PaymentStatus.Pending || p.Status == PaymentStatus.Paid))
             .Include(p => p.Tournament)
             .Include(p => p.ToPlayer)
             .OrderBy(p => p.CreatedAt)
@@ -54,9 +56,9 @@ public class PaymentService : IPaymentService
                 p.Tournament.Name,
                 p.Tournament.ScheduledDateTime,
                 p.FromPlayerId,
-                p.ToPlayerId!.Value,
-                p.ToPlayer!.Name,
-                p.ToPlayer!.PixKey,
+                p.ToPlayerId ?? Guid.Empty,
+                p.ToPlayer != null ? p.ToPlayer.Name : "Caixinha",
+                p.ToPlayer != null ? p.ToPlayer.PixKey : null,
                 p.Amount,
                 (DateTime.UtcNow - p.CreatedAt).Days,
                 p.Type,
@@ -69,7 +71,8 @@ public class PaymentService : IPaymentService
     public async Task<IReadOnlyList<PaymentDto>> GetPendingPaymentsToReceiveAsync(Guid playerId)
     {
         return await _context.Payments
-            .Where(p => p.ToPlayerId == playerId && p.Status != PaymentStatus.Confirmed)
+            .Where(p => p.ToPlayerId == playerId
+                     && (p.Status == PaymentStatus.Pending || p.Status == PaymentStatus.Paid))
             .Include(p => p.Tournament)
             .Include(p => p.FromPlayer)
             .Include(p => p.ToPlayer)
@@ -126,6 +129,9 @@ public class PaymentService : IPaymentService
         await AddExpensePaymentsAsync(payments, tournamentId);
 
         _context.Payments.AddRange(payments);
+
+        await UpsertJackpotContributionAsync(tournament, jackpotAmount);
+
         await _context.SaveChangesAsync();
 
         var createdPayments = await _context.Payments
@@ -157,6 +163,53 @@ public class PaymentService : IPaymentService
         var totalPrizes = checkedIn.Sum(tp => tp.Prize);
         var gap = totalInvestments - totalPrizes;
         return gap > 0 ? FinancialMath.FinancialRound(gap) : 0;
+    }
+
+    /// <summary>
+    /// Upserts the JackpotContribution row for this tournament using the same integer (cents)
+    /// value the engine used, so the caixinha extract sum matches the Jackpot Payment rows exactly.
+    /// If jackpotAmount is 0, removes any existing contribution for the tournament.
+    /// </summary>
+    private async Task UpsertJackpotContributionAsync(Tournament tournament, int jackpotAmount)
+    {
+        var existing = await _context.JackpotContributions
+            .FirstOrDefaultAsync(j => j.TournamentId == tournament.Id);
+
+        if (jackpotAmount <= 0)
+        {
+            if (existing != null)
+                _context.JackpotContributions.Remove(existing);
+            return;
+        }
+
+        var checkedIn = tournament.Players.Where(tp => tp.IsCheckedIn).ToList();
+        var buyIns = checkedIn.Count * tournament.BuyIn;
+        var rebuys = checkedIn.Sum(p => p.RebuyCount) * (tournament.RebuyValue ?? 0);
+        var addons = checkedIn.Count(p => p.HasAddon) * (tournament.AddonValue ?? 0);
+        var prizePool = buyIns + rebuys + addons;
+
+        decimal amountDecimal = jackpotAmount;
+        decimal percentage = prizePool > 0 ? (amountDecimal / prizePool) * 100 : 0;
+
+        if (existing != null)
+        {
+            existing.Amount = amountDecimal;
+            existing.TournamentPrizePool = prizePool;
+            existing.PercentageApplied = percentage;
+        }
+        else
+        {
+            _context.JackpotContributions.Add(new JackpotContribution
+            {
+                Id = Guid.NewGuid(),
+                LeagueId = tournament.LeagueId,
+                TournamentId = tournament.Id,
+                Amount = amountDecimal,
+                TournamentPrizePool = prizePool,
+                PercentageApplied = percentage,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
     }
 
     private async Task AddExpensePaymentsAsync(List<Payment> payments, Guid tournamentId)

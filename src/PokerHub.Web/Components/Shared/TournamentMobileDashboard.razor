@@ -729,7 +729,8 @@
 
     private bool CanFinish()
     {
-        var activePlayers = Detail?.Players?.Count(p => p.IsCheckedIn && !p.EliminatedAt.HasValue) ?? 0;
+        var activePlayers = Detail?.Players?.Count(p =>
+            p.IsCheckedIn && !p.Position.HasValue && !p.EliminatedAt.HasValue) ?? 0;
         return activePlayers <= 1;
     }
 

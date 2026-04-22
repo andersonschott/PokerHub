@@ -18,7 +18,7 @@ public interface ITournamentService
     Task<bool> PauseTournamentAsync(Guid tournamentId);
     Task<bool> ResumeTournamentAsync(Guid tournamentId);
     Task<(bool Success, string Message)> FinishTournamentAsync(Guid tournamentId, IList<(Guid playerId, int position)> positions);
-    Task<(bool Success, string Message)> FinishTournamentWithCustomPrizesAsync(Guid tournamentId, ConfirmedPrizeDistributionDto distribution);
+    Task<(bool Success, string Message)> FinishTournamentWithCustomPrizesAsync(Guid tournamentId, ConfirmedPrizeDistributionDto distribution, string userId);
     Task<bool> CancelTournamentAsync(Guid tournamentId);
 
     // Player Management
@@ -34,7 +34,7 @@ public interface ITournamentService
     Task<bool> IsRebuyAllowedAsync(Guid tournamentId);
 
     // Elimination
-    Task<(bool Success, string Message)> EliminatePlayerAsync(Guid tournamentId, Guid playerId, Guid? eliminatedByPlayerId, int? position = null);
+    Task<(bool Success, string Message)> EliminatePlayerAsync(Guid tournamentId, Guid playerId, Guid? eliminatedByPlayerId, string userId, int? position = null);
     Task<bool> RestoreEliminatedPlayerAsync(Guid tournamentId, Guid playerId);
 
     // Timer State
@@ -53,6 +53,12 @@ public interface ITournamentService
     /// Checks if a user can manage a tournament (organizer or checked-in player).
     /// </summary>
     Task<bool> CanUserManageTournamentAsync(Guid tournamentId, string userId);
+
+    /// <summary>
+    /// Checks whether the user has a specific delegate permission flag for the tournament.
+    /// League organizers always return true regardless of the flag.
+    /// </summary>
+    Task<bool> HasDelegatePermissionAsync(Guid tournamentId, string userId, DelegatePermissions required);
 
     /// <summary>
     /// Checks if a user is an organizer or delegate of a tournament (for payment management).
