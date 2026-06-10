@@ -26,7 +26,15 @@ public class League
 
     public static string GenerateInviteCode()
     {
-        return Convert.ToBase64String(Guid.NewGuid().ToByteArray())[..8].ToUpperInvariant();
+        // Use base64url alphabet (no '+', '/', '=') so the code is safe as a URL
+        // path segment. Standard base64 has ~11.6% chance of containing '/', which
+        // breaks route matching on POST /api/leagues/join/{inviteCode}.
+        var bytes = Guid.NewGuid().ToByteArray();
+        return Convert.ToBase64String(bytes)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_')[..8]
+            .ToUpperInvariant();
     }
 
     public void RegenerateInviteCode()

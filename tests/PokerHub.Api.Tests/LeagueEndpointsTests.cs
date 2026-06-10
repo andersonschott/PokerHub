@@ -32,6 +32,18 @@ public class LeagueEndpointsTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task GetLeagues_WithInvalidBearerToken_Returns401()
+    {
+        // Protects ValidateIssuerSigningKey / RequireSignedTokens JWT config from regression:
+        // a tampered or garbage token must be rejected with 401, not accidentally accepted.
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", "foo.bar.baz");
+        var resp = await client.GetAsync("/api/leagues");
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    [Fact]
     public async Task CreateLeague_ThenList_ReturnsIt()
     {
         var client = await AuthenticatedClientAsync("organizer@test.com");
