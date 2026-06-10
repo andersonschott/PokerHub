@@ -1,6 +1,10 @@
 using System.Globalization;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using PokerHub.Api.Auth;
 using PokerHub.Application;
 using PokerHub.Domain.Entities;
 using PokerHub.Infrastructure.Data;
@@ -38,10 +42,45 @@ builder.Services.AddIdentityCore<User>(options =>
 
 builder.Services.AddApplicationServices();
 
+// --- JWT bearer ---
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
+var jwtOpts = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
+    ?? throw new InvalidOperationException("Jwt configuration section is missing.");
+if (string.IsNullOrWhiteSpace(jwtOpts.SigningKey) || jwtOpts.SigningKey.Length < 32)
+    throw new InvalidOperationException("Jwt:SigningKey must be at least 32 characters.");
+
+builder.Services.AddSingleton<JwtTokenService>();
+builder.Services.AddSingleton<RefreshTokenService>();
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(opts =>
+    {
+        // Mantém os nomes originais das claims (sub, name, email) sem remap XML.
+        opts.MapInboundClaims = false;
+        opts.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtOpts.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwtOpts.Audience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOpts.SigningKey)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromMinutes(2),
+            NameClaimType = "name"
+        };
+    });
+builder.Services.AddAuthorization();
+
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<PokerHubDbContext>("database");
 
 var app = builder.Build();
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+AuthEndpoints.Map(app);
 
 app.MapHealthChecks("/health");
 
