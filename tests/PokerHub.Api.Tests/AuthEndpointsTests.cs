@@ -125,4 +125,38 @@ public class AuthEndpointsTests : IClassFixture<ApiFactory>
         Assert.DoesNotContain("already registered", body, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("already in use", body, StringComparison.OrdinalIgnoreCase);
     }
+
+    // --- null-field guard tests (issue: non-nullable record properties can carry null
+    //     at runtime when System.Text.Json deserialises a JSON null literal) ---
+
+    [Theory]
+    [InlineData("""{"Name":null,"Email":"a@b.com","Password":"Senha123!"}""")]
+    [InlineData("""{"Name":"X","Email":null,"Password":"Senha123!"}""")]
+    [InlineData("""{"Name":"X","Email":"a@b.com","Password":null}""")]
+    public async Task Register_NullFields_Returns400(string json)
+    {
+        using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+        var resp = await _client.PostAsync("/api/auth/register", content);
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("""{"Email":null,"Password":"Senha123!"}""")]
+    [InlineData("""{"Email":"a@b.com","Password":null}""")]
+    public async Task Login_NullFields_Returns400(string json)
+    {
+        using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+        var resp = await _client.PostAsync("/api/auth/login", content);
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task Refresh_NullToken_Returns401()
+    {
+        using var content = new StringContent("""{"RefreshToken":null}""", System.Text.Encoding.UTF8, "application/json");
+        var resp = await _client.PostAsync("/api/auth/refresh", content);
+        // The /refresh endpoint treats a null/empty token the same as an unknown
+        // token — always 401 (no 400) to avoid leaking information.
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
 }

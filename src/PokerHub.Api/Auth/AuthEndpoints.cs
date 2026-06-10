@@ -25,6 +25,16 @@ public static class AuthEndpoints
             RefreshTokenService refreshSvc,
             PokerHubDbContext db) =>
         {
+            if (string.IsNullOrWhiteSpace(req.Name)
+                || string.IsNullOrWhiteSpace(req.Email)
+                || string.IsNullOrWhiteSpace(req.Password))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["register"] = ["Name, Email e Password são obrigatórios."]
+                });
+            }
+
             var email = req.Email.Trim().ToLowerInvariant();
             var user = new User { UserName = email, Email = email, Name = req.Name.Trim() };
 
@@ -77,6 +87,12 @@ public static class AuthEndpoints
             PokerHubDbContext db) =>
         {
             const string invalid = "E-mail ou senha inválidos.";
+
+            if (string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["login"] = ["Email e Password são obrigatórios."]
+                });
 
             var user = await userManager.FindByEmailAsync(req.Email.Trim().ToLowerInvariant());
 
