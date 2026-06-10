@@ -30,10 +30,40 @@ public static class AuthEndpoints
 
             var result = await userManager.CreateAsync(user, req.Password);
             if (!result.Succeeded)
+            {
+                // Map Identity error codes to opaque, localised messages so that
+                // raw Identity descriptions (e.g. "Email 'x@y.com' is already taken.")
+                // are never forwarded to the caller — preventing e-mail enumeration.
+                var errors = result.Errors
+                    .Select(e => e.Code switch
+                    {
+                        // Duplicate account — same vague message for both variants.
+                        "DuplicateEmail" or "DuplicateUserName" =>
+                            "E-mail ou nome de usuário já cadastrado.",
+                        // Password policy violations — keep the code name so the
+                        // client can show helpful hints without leaking existence.
+                        "PasswordTooShort" =>
+                            "Senha muito curta.",
+                        "PasswordRequiresNonAlphanumeric" =>
+                            "Senha deve conter ao menos um caractere especial.",
+                        "PasswordRequiresDigit" =>
+                            "Senha deve conter ao menos um número.",
+                        "PasswordRequiresLower" =>
+                            "Senha deve conter ao menos uma letra minúscula.",
+                        "PasswordRequiresUpper" =>
+                            "Senha deve conter ao menos uma letra maiúscula.",
+                        "PasswordRequiresUniqueChars" =>
+                            "Senha deve conter mais caracteres distintos.",
+                        // Fallback for any future/unexpected Identity error code.
+                        _ => "Requisição inválida."
+                    })
+                    .ToArray();
+
                 return Results.ValidationProblem(new Dictionary<string, string[]>
                 {
-                    ["register"] = result.Errors.Select(e => e.Description).ToArray()
+                    ["register"] = errors
                 });
+            }
 
             return Results.Ok(await IssueTokensAsync(user, jwt, refreshSvc, db));
         });

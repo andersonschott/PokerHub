@@ -103,4 +103,26 @@ public class AuthEndpointsTests : IClassFixture<ApiFactory>
             new { RefreshToken = "token-fantasma" });
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
     }
+
+    [Fact]
+    public async Task Register_DuplicateEmail_Returns400_WithoutLeakingEmailExistence()
+    {
+        // Register once successfully.
+        await RegisterAsync("dup@test.com");
+
+        // Attempt to register again with the same e-mail.
+        var resp = await _client.PostAsJsonAsync("/api/auth/register",
+            new { Name = "Other User", Email = "dup@test.com", Password = "Senha123!" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+
+        // The response body must NOT contain the e-mail address or any message that
+        // reveals the account already exists (e.g. Identity's default
+        // "Email 'dup@test.com' is already taken.").
+        var body = await resp.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("dup@test.com", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("already taken", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("already registered", body, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("already in use", body, StringComparison.OrdinalIgnoreCase);
+    }
 }
