@@ -3,3 +3,5 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
+# Api dev settings contêm connection string real — manter fora do git (copiar de PokerHub.Web ao clonar)
+src/PokerHub.Api/appsettings.Development.json
