@@ -25,6 +25,7 @@ public class PokerHubDbContext : IdentityDbContext<User>
     public DbSet<LeaguePrizeTableEntry> LeaguePrizeTableEntries => Set<LeaguePrizeTableEntry>();
     public DbSet<PlayerSeasonStats> PlayerSeasonStats => Set<PlayerSeasonStats>();
     public DbSet<TournamentDelegate> TournamentDelegates => Set<TournamentDelegate>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

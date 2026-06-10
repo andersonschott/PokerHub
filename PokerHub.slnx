@@ -1,11 +1,13 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/PokerHub.Api/PokerHub.Api.csproj" />
     <Project Path="src/PokerHub.Application/PokerHub.Application.csproj" />
     <Project Path="src/PokerHub.Domain/PokerHub.Domain.csproj" />
     <Project Path="src/PokerHub.Infrastructure/PokerHub.Infrastructure.csproj" />
     <Project Path="src/PokerHub.Web/PokerHub.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/PokerHub.Api.Tests/PokerHub.Api.Tests.csproj" />
     <Project Path="tests/PokerHub.Application.Tests/PokerHub.Application.Tests.csproj" />
   </Folder>
 </Solution>
