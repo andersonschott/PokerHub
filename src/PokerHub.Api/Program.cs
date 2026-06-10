@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PokerHub.Api.Auth;
+using PokerHub.Api.Leagues;
 using PokerHub.Application;
 using PokerHub.Domain.Entities;
 using PokerHub.Infrastructure.Data;
@@ -81,6 +82,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 AuthEndpoints.Map(app);
+LeagueEndpoints.Map(app);
 
 app.MapHealthChecks("/health");
 
