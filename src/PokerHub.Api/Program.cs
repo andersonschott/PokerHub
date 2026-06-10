@@ -73,10 +73,26 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
+builder.Services.AddOpenApi();
+
+// CORS para o front (SWA em prod, Vite em dev usa proxy mas registramos por robustez).
+// Origens vêm de config: "Cors:AllowedOrigins": ["http://localhost:5173", "https://<swa>.azurestaticapps.net"]
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+builder.Services.AddCors(options => options.AddPolicy("web", policy =>
+    policy.WithOrigins(allowedOrigins)
+          .AllowAnyHeader()
+          .AllowAnyMethod()
+          .AllowCredentials()));
+
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<PokerHubDbContext>("database");
 
 var app = builder.Build();
+
+app.MapOpenApi(); // /openapi/v1.json — fonte para geração de tipos TS na Fase 1
+
+if (allowedOrigins.Length > 0)
+    app.UseCors("web");
 
 app.UseAuthentication();
 app.UseAuthorization();
