@@ -46,6 +46,21 @@ public class AuthEndpointsTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Login_UnknownEmail_Returns401_WithoutLeakingEmailExistence()
+    {
+        // Must return 401 for an email that was never registered — same status as
+        // wrong password — so callers cannot enumerate registered addresses.
+        var resp = await _client.PostAsJsonAsync("/api/auth/login",
+            new { Email = "nao-existe@test.com", Password = "qualquersenha!" });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+        // Body must use the same opaque message used for wrong-password so the two
+        // paths are indistinguishable to the caller.
+        var body = await resp.Content.ReadAsStringAsync();
+        Assert.Contains("E-mail ou senha inválidos", body);
+    }
+
+    [Fact]
     public async Task Refresh_RotatesToken_OldOneStopsWorking()
     {
         var auth = await RegisterAsync("rotate@test.com");

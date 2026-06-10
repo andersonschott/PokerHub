@@ -7,6 +7,13 @@ namespace PokerHub.Api.Auth;
 
 public static class AuthEndpoints
 {
+    // Pre-computed ASP.NET Identity v3 password hash of a fixed dummy string.
+    // Used to keep login response time constant regardless of whether the email
+    // exists, preventing timing-based email enumeration attacks.
+    // Generated once: new PasswordHasher<User>().HashPassword(new User(), "_dummy_pokerhub_")
+    private const string DummyPasswordHash =
+        "AQAAAAIAAYagAAAAEEFWQMScAYn6Hvde1Oc/NT2yu+yscgKOtA9m6/oSeV2d4ZL/iMe7WDrvfwobnKFoPA==";
+
     public static void Map(WebApplication app)
     {
         var group = app.MapGroup("/api/auth").WithTags("Auth").AllowAnonymous();
@@ -34,13 +41,26 @@ public static class AuthEndpoints
         group.MapPost("/login", async (
             LoginRequest req,
             UserManager<User> userManager,
+            IPasswordHasher<User> passwordHasher,
             JwtTokenService jwt,
             RefreshTokenService refreshSvc,
             PokerHubDbContext db) =>
         {
+            const string invalid = "E-mail ou senha inválidos.";
+
             var user = await userManager.FindByEmailAsync(req.Email.Trim().ToLowerInvariant());
-            if (user is null || !user.IsActive || !await userManager.CheckPasswordAsync(user, req.Password))
-                return Results.Problem(detail: "E-mail ou senha inválidos.", statusCode: 401);
+
+            if (user is null)
+            {
+                // Run a dummy hash verification to equalise response time and
+                // prevent timing-based enumeration of registered e-mail addresses.
+                // The result is always discarded — we always return 401 here.
+                passwordHasher.VerifyHashedPassword(new User(), DummyPasswordHash, req.Password);
+                return Results.Problem(detail: invalid, statusCode: 401);
+            }
+
+            if (!user.IsActive || !await userManager.CheckPasswordAsync(user, req.Password))
+                return Results.Problem(detail: invalid, statusCode: 401);
 
             return Results.Ok(await IssueTokensAsync(user, jwt, refreshSvc, db));
         });
