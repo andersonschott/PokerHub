@@ -16,31 +16,13 @@
 
 import { Outlet } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
-import { LogOut } from 'lucide-react';
+import { LogOut, Sun, MoonStar } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { cn } from '@/lib/utils';
 import { Sidebar } from './sidebar';
 import { BottomNav } from './bottom-nav';
 import { Logo } from './logo';
-
-function ThemeToggleIcon({ theme }: { theme: 'dark' | 'light' }) {
-  // Inline SVG for sun/moon to avoid extra lucide bundle for tiny use
-  if (theme === 'dark') {
-    // Sun icon
-    return (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>
-      </svg>
-    );
-  }
-  // Moon-star icon
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/><path d="M20 3v4"/><path d="M22 5h-4"/>
-    </svg>
-  );
-}
 
 export function AppShell() {
   const { clear } = useAuth();
@@ -85,7 +67,7 @@ export function AppShell() {
               'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--ring)] focus-visible:outline-offset-[-2px]',
             )}
           >
-            <ThemeToggleIcon theme={theme} />
+            {theme === 'dark' ? <Sun className="w-5 h-5" aria-hidden="true" /> : <MoonStar className="w-5 h-5" aria-hidden="true" />}
           </button>
 
           {/* Sign out */}
