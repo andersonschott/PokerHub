@@ -7,6 +7,8 @@ using Microsoft.IdentityModel.Tokens;
 using PokerHub.Api.Auth;
 using PokerHub.Api.Leagues;
 using PokerHub.Api.Payments;
+using PokerHub.Api.Players;
+using PokerHub.Api.Seasons;
 using PokerHub.Api.Tournaments;
 using PokerHub.Application;
 using PokerHub.Domain.Entities;
@@ -103,6 +105,8 @@ AuthEndpoints.Map(app);
 LeagueEndpoints.Map(app);
 TournamentEndpoints.Map(app);
 PaymentEndpoints.Map(app);
+PlayerEndpoints.Map(app);
+SeasonEndpoints.Map(app);
 
 app.MapHealthChecks("/health");
 
