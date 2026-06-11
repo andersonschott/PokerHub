@@ -22,9 +22,9 @@ export function JoinSheet({ onClose, onJoined }: JoinSheetProps) {
     const trimmed = code.trim().toUpperCase();
     if (!trimmed) return;
     mutation.mutate(trimmed, {
-      onSuccess: (league) => {
-        toast.success(`Você entrou em "${league.name}"!`);
-        onJoined(league.id);
+      onSuccess: (res) => {
+        toast.success(res.message || 'Você entrou na liga!');
+        onJoined(res.id);
         onClose();
       },
       onError: (err) => {

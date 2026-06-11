@@ -9,7 +9,7 @@
  */
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ChevronsUpDown, Settings2, CalendarPlus, Plus, CalendarClock, PiggyBank, ChevronRight, Users } from 'lucide-react';
+import { ChevronsUpDown, Settings2, CalendarPlus, Plus, CalendarClock, PiggyBank, ChevronRight, Users, Sun, Moon, Bell, Trophy } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { useLeague, useLeaguePlayers } from '@/lib/api/hooks/use-leagues';
@@ -27,7 +27,7 @@ import { mockData } from '@/mocks/data';
 // ---------------------------------------------------------------------------
 // Segmented control
 // ---------------------------------------------------------------------------
-type TabKey = 'torneios' | 'jogadores';
+type TabKey = 'torneios' | 'jogadores' | 'ranking';
 
 function Segmented({
   value,
@@ -39,6 +39,7 @@ function Segmented({
   const tabs: { key: TabKey; label: string }[] = [
     { key: 'torneios', label: 'Torneios' },
     { key: 'jogadores', label: 'Jogadores' },
+    { key: 'ranking', label: 'Ranking' },
   ];
   return (
     <div className="flex gap-1 bg-secondary p-1 rounded-[var(--radius-md)]">
@@ -180,54 +181,15 @@ export default function LeagueHomeRoute() {
             aria-label={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
           >
             {theme === 'dark' ? (
-              // sun icon — inline to avoid an extra import
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="12" r="4" />
-                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-              </svg>
+              <Sun className="w-[18px] h-[18px]" />
             ) : (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />
-              </svg>
+              <Moon className="w-[18px] h-[18px]" />
             )}
           </button>
 
           {/* Notifications placeholder */}
           <div className="w-10 h-10 rounded-full shrink-0 bg-secondary border border-border flex items-center justify-center text-muted-foreground">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-            </svg>
+            <Bell className="w-[18px] h-[18px]" />
           </div>
         </div>
       )}
@@ -474,6 +436,42 @@ export default function LeagueHomeRoute() {
                 </div>
               </Card>
             ))}
+        </div>
+      )}
+
+      {/* Tab: Ranking (mock summary → link to /app/ranking) */}
+      {tab === 'ranking' && (
+        <div className="flex flex-col gap-2">
+          <SectionTitle icon={Trophy}>Ranking da temporada</SectionTitle>
+
+          {mockData.ranking.map((r, idx) => (
+            <Card key={r.position} pad="md">
+              <div className="flex items-center gap-3">
+                <Avatar
+                  name={r.name}
+                  podium={idx < 3 ? (['gold', 'silver', 'bronze'] as const)[idx] : undefined}
+                  badge={idx < 3 ? String(idx + 1) : undefined}
+                  badgeGold={idx === 0}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="font-sans font-semibold text-[15px]">{r.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {r.tournaments} torneio{r.tournaments !== 1 ? 's' : ''} · ITM {r.itm}%
+                  </div>
+                </div>
+                <MoneyValue value={r.profit} signed size="15px" />
+              </div>
+            </Card>
+          ))}
+
+          <Link
+            to="/app/ranking"
+            className="mt-2 flex items-center justify-center gap-2 h-10 rounded-[var(--radius-md)] border border-border text-[13px] font-semibold text-muted-foreground hover:text-foreground hover:border-[var(--ring)] transition-colors no-underline"
+          >
+            <Trophy className="w-4 h-4" />
+            Ver ranking completo
+            <ChevronRight className="w-4 h-4" />
+          </Link>
         </div>
       )}
     </div>

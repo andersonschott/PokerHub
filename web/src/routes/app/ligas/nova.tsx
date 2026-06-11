@@ -63,7 +63,6 @@ export default function NovaLigaRoute() {
         name: data.name,
         description: data.description || null,
         blockCheckInWithDebt: data.blockCheckInWithDebt,
-        jackpotPercentage: data.jackpotPercentage,
       },
       {
         onSuccess: (league) => {

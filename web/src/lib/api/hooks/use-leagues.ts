@@ -70,7 +70,6 @@ export interface CreateLeagueDto {
   name: string;
   description?: string | null;
   blockCheckInWithDebt: boolean;
-  jackpotPercentage?: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,11 +104,12 @@ export function useLeague(id: string) {
   });
 }
 
-/** GET /api/leagues/{id}/players — league member list */
+/** GET /api/leagues/{id}/players — league member list (endpoint returns LeagueWithPlayersDto) */
 export function useLeaguePlayers(id: string) {
   return useQuery({
     queryKey: leagueKeys.players(id),
-    queryFn: () => api<PlayerDto[]>(`/leagues/${id}/players`),
+    queryFn: () =>
+      api<LeagueWithPlayersDto>(`/leagues/${id}/players`).then((r) => r.players),
     enabled: !!id,
   });
 }
@@ -126,12 +126,18 @@ export function useCreateLeague() {
   });
 }
 
+/** Response shape from POST /api/leagues/join/{inviteCode} — returns { id, message }, not a full LeagueDto */
+export interface JoinLeagueResponse {
+  id: string;
+  message: string;
+}
+
 /** POST /api/leagues/join/{inviteCode} — join a league via invite code */
 export function useJoinLeague() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (inviteCode: string) =>
-      api<LeagueDto>(`/leagues/join/${inviteCode}`, { method: 'POST' }),
+      api<JoinLeagueResponse>(`/leagues/join/${inviteCode}`, { method: 'POST' }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: leagueKeys.list() });
     },
