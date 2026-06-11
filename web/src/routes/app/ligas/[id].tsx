@@ -284,7 +284,7 @@ export default function LeagueHomeRoute() {
                         {u.when} · {u.confirmed} confirmados
                       </div>
                     </div>
-                    <Badge tone="neutral">R$ {u.buyIn}</Badge>
+                    <Badge tone="neutral"><MoneyValue value={u.buyIn} cents={false} color="none" /></Badge>
                     <ChevronRight className="text-muted-foreground w-4 h-4" />
                   </div>
                 </Card>
@@ -354,9 +354,7 @@ export default function LeagueHomeRoute() {
                     confirmados
                   </div>
                   <div className="mt-3">
-                    <Badge tone="neutral">
-                      R$ {mockData.upcoming[0].buyIn}
-                    </Badge>
+                    <Badge tone="neutral"><MoneyValue value={mockData.upcoming[0].buyIn} cents={false} color="none" /></Badge>
                   </div>
                 </Card>
               ) : (
