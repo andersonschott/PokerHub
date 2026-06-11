@@ -1,0 +1,91 @@
+<!-- @dsCard group="PokerHub App" viewport="1040x840" name="PokerHub app — click-through" subtitle="Home · Timer (mobile+TV) · Live dashboard · Settlement/PIX" -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PokerHub — App</title>
+<link rel="stylesheet" href="../../styles.css" />
+<link rel="stylesheet" href="palettes.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script src="data.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--background); }
+  .ph-page {
+    position: relative; min-height: 100vh; width: 100%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; padding: 24px 16px;
+    background:
+      radial-gradient(80% 60% at 50% -10%, var(--felt-800) 0%, transparent 60%),
+      var(--felt-950);
+  }
+  /* Desktop / preview: render inside a phone mockup. */
+  .ph-phone {
+    position: relative; width: 390px; height: min(836px, calc(100vh - 96px));
+    background: var(--background); border: 1px solid var(--felt-700);
+    border-radius: 40px; overflow: hidden; box-shadow: var(--shadow-lg);
+    display: flex; flex-direction: column;
+  }
+  .ph-screen { flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; container-type: inline-size; }
+  .ph-hint {
+    font-family: var(--font-mono); font-size: 11px; color: var(--muted-foreground);
+    max-width: 390px; text-align: center; line-height: 1.5;
+  }
+  .ph-hint b { color: var(--gold-400); font-weight: 600; }
+  /* Bundle-independent guard: keep card titles on one line (matches Card.jsx). */
+  .ph-card__title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ph-card__head > .ph-statuspill, .ph-card__head > .ph-badge { flex-shrink: 0; }
+
+  /* Real phones: drop the mockup, fill the whole screen. */
+  @media (max-width: 640px) {
+    .ph-page { display: block; padding: 0; min-height: 100dvh; background: var(--background); }
+    .ph-phone {
+      width: 100%; height: 100dvh; max-height: none;
+      border: 0; border-radius: 0; box-shadow: none;
+    }
+    .ph-hint { display: none; }
+  }
+  @supports not (height: 100dvh) {
+    @media (max-width: 640px) { .ph-phone { height: 100vh; } }
+  }
+</style>
+</head>
+<body>
+  <script>
+    /* Apply saved theme before paint (no flash). Default: dark. */
+    (function () {
+      try {
+        var t = localStorage.getItem('ph-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+        var p = localStorage.getItem('ph-palette');
+        if (p && p !== 'meia-noite') document.documentElement.setAttribute('data-palette', p);
+        var a = localStorage.getItem('ph-accent');
+        if (a && a !== 'champanhe') document.documentElement.setAttribute('data-accent', a);
+      } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+    })();
+  </script>
+  <div id="root"></div>
+  <script type="text/babel" data-presets="react" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" data-presets="react" src="Splash.jsx"></script>
+  <script type="text/babel" data-presets="react" src="Home.jsx"></script>
+  <script type="text/babel" data-presets="react" src="Lobby.jsx"></script>
+  <script type="text/babel" data-presets="react" src="Timer.jsx"></script>
+  <script type="text/babel" data-presets="react" src="TimerTV.jsx"></script>
+  <script type="text/babel" data-presets="react" src="Dashboard.jsx"></script>
+  <script type="text/babel" data-presets="react" src="Settlement.jsx"></script>
+  <script type="text/babel" data-presets="react" src="Forms.jsx"></script>
+  <script type="text/babel" data-presets="react" src="TorneioWizard.jsx"></script>
+  <script type="text/babel" data-presets="react" src="Pagamentos.jsx"></script>
+  <script type="text/babel" data-presets="react" src="Historico.jsx"></script>
+  <script type="text/babel" data-presets="react" src="Caixinha.jsx"></script>
+  <script type="text/babel" data-presets="react" src="Admin.jsx"></script>
+  <script type="text/babel" data-presets="react" src="Ranking.jsx"></script>
+  <script type="text/babel" data-presets="react" src="App.jsx"></script>
+  <script type="text/babel" data-presets="react" src="PaletteTweaks.jsx"></script>
+</body>
+</html>

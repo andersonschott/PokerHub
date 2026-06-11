@@ -1,0 +1,86 @@
+/* PokerHub — Spacing, radius, shadow & motion tokens
+   Compact, card-dense, generously rounded (chip-like softness).
+   Mobile-first with iOS safe-area awareness. */
+
+:root {
+  /* Spacing scale (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;   /* default card padding */
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Semantic */
+  --gap-card-grid: 12px;
+  --gap-section: 20px;
+  --pad-card: 16px;
+  --pad-screen: 16px;        /* mobile gutter */
+  --pad-screen-md: 24px;
+
+  /* iOS safe areas */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  /* Bottom nav */
+  --bottom-nav-h: 64px;
+
+  /* Radius — shadcn derives sm/md/lg from --radius */
+  --radius: 1rem;            /* 16px — soft, banking-app feel */
+  --radius-sm: calc(var(--radius) - 6px);   /* 10px chips/badges */
+  --radius-md: calc(var(--radius) - 4px);   /* 12px inputs */
+  --radius-lg: var(--radius);               /* 16px cards */
+  --radius-xl: calc(var(--radius) + 6px);   /* 22px hero / sheets */
+  --radius-pill: 999px;
+  --radius-round: 50%;
+
+  /* Hit targets — never below 44px on touch */
+  --hit-target: 44px;   /* @kind spacing */
+
+  /* Shadows — soft, dark-friendly, low spread */
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.35);
+  --shadow-md: 0 6px 18px oklch(0 0 0 / 0.40);
+  --shadow-lg: 0 18px 48px oklch(0 0 0 / 0.50);
+  --shadow-sheet: 0 -12px 40px oklch(0 0 0 / 0.55);
+
+  /* Accent shadows — a *hint* of warmth under featured cards.
+     (No neon: these are soft, low-alpha, near-invisible.) */
+  --glow-gold: 0 6px 18px -10px oklch(0.795 0.092 86 / 0.18);
+  --glow-emerald: 0 6px 18px -10px oklch(0.715 0.095 158 / 0.14);
+  --glow-amber: 0 6px 18px -10px oklch(0.780 0.095 78 / 0.18);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);       /* @kind other */
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* @kind other */
+  --dur-fast: 0.15s;    /* @kind other */
+  --dur-base: 0.22s;    /* @kind other */
+  --dur-slow: 0.32s;    /* @kind other */
+}
+
+/* Card entrance — staggered rise. */
+@keyframes ph-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Bottom-sheet entrance. */
+@keyframes ph-sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* Live pulse for the timer / AO VIVO dot. */
+@keyframes ph-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Level-change emphasis. */
+@keyframes ph-level-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
