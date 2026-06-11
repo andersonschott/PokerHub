@@ -305,9 +305,7 @@ export default function LeagueHomeRoute() {
                         {league.jackpotPercentage}% de cada prize pool · despesas da liga
                       </div>
                     </div>
-                    <span className="font-mono font-bold text-[14.5px] text-gold-400 whitespace-nowrap shrink-0">
-                      R$ {mockData.caixinha.balance.toLocaleString('pt-BR')}
-                    </span>
+                    <MoneyValue value={mockData.caixinha.balance} cents={false} size="14.5px" />
                     <ChevronRight className="text-muted-foreground w-4 h-4" />
                   </div>
                 </Card>
@@ -406,36 +404,87 @@ export default function LeagueHomeRoute() {
             </div>
           )}
 
-          {!playersLoading &&
-            players &&
-            players.map((p, idx) => (
-              <Card key={p.id} pad="md">
-                {/* Desktop: table row on lg */}
-                <div className="flex items-center gap-3">
-                  <Avatar
-                    name={p.name}
-                    podium={idx < 3 ? (['gold', 'silver', 'bronze'] as const)[idx] : undefined}
-                    badge={idx < 3 ? String(idx + 1) : undefined}
-                    badgeGold={idx === 0}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-sans font-semibold text-[15px]">
-                      {p.name}
-                      {p.nickname ? (
-                        <span className="text-muted-foreground font-normal text-sm ml-1">
-                          @{p.nickname}
-                        </span>
-                      ) : null}
+          {/* Mobile cards (hidden on lg) */}
+          {!playersLoading && players && (
+            <div className="flex flex-col gap-2 lg:hidden">
+              {players.map((p, idx) => (
+                <Card key={p.id} pad="md">
+                  <div className="flex items-center gap-3">
+                    <Avatar
+                      name={p.name}
+                      podium={idx < 3 ? (['gold', 'silver', 'bronze'] as const)[idx] : undefined}
+                      badge={idx < 3 ? String(idx + 1) : undefined}
+                      badgeGold={idx === 0}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-sans font-semibold text-[15px]">
+                        {p.name}
+                        {p.nickname ? (
+                          <span className="text-muted-foreground font-normal text-sm ml-1">
+                            @{p.nickname}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {p.tournamentsPlayed} torneio{p.tournamentsPlayed !== 1 ? 's' : ''} ·{' '}
+                        {p.wins} vitória{p.wins !== 1 ? 's' : ''}
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {p.tournamentsPlayed} torneio{p.tournamentsPlayed !== 1 ? 's' : ''} ·{' '}
-                      {p.wins} vitória{p.wins !== 1 ? 's' : ''}
-                    </div>
+                    <MoneyValue value={p.totalProfit} signed size="15px" />
                   </div>
-                  <MoneyValue value={p.totalProfit} signed size="15px" />
-                </div>
-              </Card>
-            ))}
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* Desktop table (visible only on lg+) */}
+          {!playersLoading && players && players.length > 0 && (
+            <div className="hidden lg:block">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground w-12">#</th>
+                    <th className="text-left py-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Jogador</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Torneios</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vitórias</th>
+                    <th className="text-right py-2 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Resultado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {players.map((p, idx) => (
+                    <tr key={p.id} className="border-b border-border/50 hover:bg-secondary/40 transition-colors">
+                      <td className="py-3 px-3">
+                        <span className={`font-mono font-bold text-[13px] ${idx === 0 ? 'text-gold-400' : 'text-muted-foreground'}`}>
+                          {idx + 1}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3">
+                        <div className="flex items-center gap-2">
+                          <Avatar
+                            name={p.name}
+                            podium={idx < 3 ? (['gold', 'silver', 'bronze'] as const)[idx] : undefined}
+                            badge={idx < 3 ? String(idx + 1) : undefined}
+                            badgeGold={idx === 0}
+                          />
+                          <div className="min-w-0">
+                            <div className="font-sans font-semibold text-[14px] leading-tight">{p.name}</div>
+                            {p.nickname ? (
+                              <div className="text-xs text-muted-foreground">@{p.nickname}</div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono text-[13px] text-muted-foreground">{p.tournamentsPlayed}</td>
+                      <td className="py-3 px-3 text-right font-mono text-[13px] text-muted-foreground">{p.wins}</td>
+                      <td className="py-3 px-3 text-right">
+                        <MoneyValue value={p.totalProfit} signed size="14px" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
