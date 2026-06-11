@@ -9,8 +9,8 @@ const posVariants: Record<number, string> = {
 
 const posChipVariants: Record<number, string> = {
   1: 'bg-[var(--podium-gold)] text-primary-foreground',
-  2: 'bg-[var(--podium-silver)] text-[#1a1a1a]',
-  3: 'bg-[var(--podium-bronze)] text-[#1a1a1a]',
+  2: 'bg-[var(--podium-silver)] text-felt-950',
+  3: 'bg-[var(--podium-bronze)] text-felt-950',
 };
 
 const prizeVariants: Record<number, string> = {
