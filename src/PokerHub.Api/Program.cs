@@ -8,6 +8,8 @@ using PokerHub.Api.Auth;
 using PokerHub.Api.Leagues;
 using PokerHub.Api.Payments;
 using PokerHub.Api.Players;
+using PokerHub.Api.PrizeTables;
+using PokerHub.Api.Rankings;
 using PokerHub.Api.Seasons;
 using PokerHub.Api.Tournaments;
 using PokerHub.Application;
@@ -107,6 +109,8 @@ TournamentEndpoints.Map(app);
 PaymentEndpoints.Map(app);
 PlayerEndpoints.Map(app);
 SeasonEndpoints.Map(app);
+RankingEndpoints.Map(app);
+PrizeTableEndpoints.Map(app);
 
 app.MapHealthChecks("/health");
 
