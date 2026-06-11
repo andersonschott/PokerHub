@@ -16,6 +16,10 @@ const LigasRoute = lazy(() => import('@/routes/app/ligas/index'));
 const NovaLigaRoute = lazy(() => import('@/routes/app/ligas/nova'));
 const LeagueHomeRoute = lazy(() => import('@/routes/app/ligas/[id]'));
 
+// Task 10: timer screens (mock clock)
+const TorneioRoute = lazy(() => import('@/routes/app/torneio/index'));
+const TvRoute = lazy(() => import('@/routes/app/tv'));
+
 const RouteFallback = () => (
   <div className="flex min-h-dvh items-center justify-center">
     <div className="animate-ph-pulse text-sm text-muted-foreground">Carregando…</div>
@@ -55,7 +59,7 @@ export default function App() {
                     path="/app/tv"
                     element={
                       <Protected>
-                        <EmBreveRoute title="Timer TV" />
+                        <TvRoute />
                       </Protected>
                     }
                   />
@@ -72,7 +76,7 @@ export default function App() {
                     <Route path="ligas" element={<LigasRoute />} />
                     <Route path="ligas/nova" element={<NovaLigaRoute />} />
                     <Route path="ligas/:leagueId" element={<LeagueHomeRoute />} />
-                    <Route path="torneio" element={<EmBreveRoute title="Torneio" />} />
+                    <Route path="torneio" element={<TorneioRoute />} />
                     <Route path="torneio/dashboard" element={<EmBreveRoute title="Painel ao vivo" />} />
                     <Route path="torneio/novo" element={<EmBreveRoute title="Criar torneio" />} />
                     <Route path="torneio/historico/:tournamentId" element={<EmBreveRoute title="Torneio realizado" />} />
