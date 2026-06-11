@@ -119,13 +119,27 @@ public static class PaymentEndpoints
             return Results.Ok(list);
         });
 
-        // POST /api/payments/bulk-confirm
+        // POST /api/payments/bulk-confirm — organizer-only action.
+        // Resolves authorization by cross-checking the requested payment IDs against the
+        // set of payments belonging to leagues organized by the caller. Any ID not in that
+        // authorized set means the caller lacks organizer rights for the target league(s).
         p.MapPost("/bulk-confirm", async (
             BulkConfirmRequest req,
             ClaimsPrincipal user,
             IPaymentService payments) =>
         {
-            var confirmed = await payments.BulkConfirmPaymentsAsync(req.PaymentIds, user.GetUserId());
+            var userId = user.GetUserId();
+
+            // Fetch all payments the caller is authorized to manage as organizer.
+            var authorizedPayments = await payments.GetPaymentsForOrganizerAsync(userId);
+            var authorizedIds = authorizedPayments.Select(p => p.Id).ToHashSet();
+
+            // If any requested ID is outside the authorized set, the caller is not
+            // an organizer for that payment's league — deny the whole request.
+            if (req.PaymentIds.Any(id => !authorizedIds.Contains(id)))
+                return Results.Forbid();
+
+            var confirmed = await payments.BulkConfirmPaymentsAsync(req.PaymentIds, userId);
             return Results.Ok(new { Confirmed = confirmed });
         });
 
@@ -196,11 +210,15 @@ public static class PaymentEndpoints
         pl.MapGet("/{playerId:guid}/payments", async (
             Guid playerId,
             ClaimsPrincipal user,
+            ILeagueService leagues,
             IPlayerService players,
             IPaymentService payments) =>
         {
             var player = await players.GetPlayerByIdAsync(playerId);
             if (player is null) return Results.NotFound();
+
+            if (!await leagues.CanUserAccessLeagueAsync(player.LeagueId, user.GetUserId()))
+                return Results.Forbid();
 
             var list = await payments.GetPaymentsByPlayerAsync(playerId);
             return Results.Ok(list);
@@ -210,11 +228,15 @@ public static class PaymentEndpoints
         pl.MapGet("/{playerId:guid}/payments/pending-debts", async (
             Guid playerId,
             ClaimsPrincipal user,
+            ILeagueService leagues,
             IPlayerService players,
             IPaymentService payments) =>
         {
             var player = await players.GetPlayerByIdAsync(playerId);
             if (player is null) return Results.NotFound();
+
+            if (!await leagues.CanUserAccessLeagueAsync(player.LeagueId, user.GetUserId()))
+                return Results.Forbid();
 
             var debts = await payments.GetPendingDebtsByPlayerAsync(playerId);
             return Results.Ok(debts);
@@ -224,11 +246,15 @@ public static class PaymentEndpoints
         pl.MapGet("/{playerId:guid}/payments/pending-to-receive", async (
             Guid playerId,
             ClaimsPrincipal user,
+            ILeagueService leagues,
             IPlayerService players,
             IPaymentService payments) =>
         {
             var player = await players.GetPlayerByIdAsync(playerId);
             if (player is null) return Results.NotFound();
+
+            if (!await leagues.CanUserAccessLeagueAsync(player.LeagueId, user.GetUserId()))
+                return Results.Forbid();
 
             var pending = await payments.GetPendingPaymentsToReceiveAsync(playerId);
             return Results.Ok(pending);

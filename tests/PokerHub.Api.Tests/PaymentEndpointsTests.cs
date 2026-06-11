@@ -17,6 +17,7 @@ public class PaymentEndpointsTests : IClassFixture<ApiFactory>
     private sealed record PaymentDto(Guid Id, Guid TournamentId, decimal Amount, string Status);
     private sealed record PendingDebtDto(Guid PaymentId, decimal Amount);
     private sealed record PlayerBalanceDto(Guid PlayerId, string PlayerName, decimal Balance);
+    private sealed record PlayerResponse(Guid Id, Guid LeagueId, string Name, string? Nickname, string? Email, bool IsActive);
 
     private async Task<(HttpClient client, AuthResponse auth)> RegisteredClientAsync(string email)
     {
@@ -322,5 +323,93 @@ public class PaymentEndpointsTests : IClassFixture<ApiFactory>
         var client = _factory.CreateClient();
         var resp = await client.PostAsync($"/api/payments/{Guid.NewGuid()}/admin-confirm", null);
         Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    // -------------------------------------------------------------------------
+    // C1-IDOR: GET /api/players/{playerId}/payments — outsider gets 403
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task GetPlayerPayments_AsOutsider_Returns403()
+    {
+        // Arrange: organizer creates a league and a player in it
+        var (organizer, _) = await RegisteredClientAsync("idor-pay-org@test.com");
+        var league = await CreateLeagueAsync(organizer, "Liga IDOR Pay");
+
+        var createResp = await organizer.PostAsJsonAsync($"/api/leagues/{league.Id}/players-list",
+            new { Name = "Jogador IDOR", Nickname = (string?)null, Email = (string?)null, Phone = (string?)null, PixKey = (string?)null, PixKeyType = (object?)null });
+        Assert.Equal(HttpStatusCode.Created, createResp.StatusCode);
+        var player = (await createResp.Content.ReadFromJsonAsync<PlayerResponse>())!;
+
+        // Act: outsider (no membership in this league) tries to read the player's payments
+        var (outsider, _) = await RegisteredClientAsync("idor-pay-out@test.com");
+        var resp = await outsider.GetAsync($"/api/players/{player.Id}/payments");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    // -------------------------------------------------------------------------
+    // C1-IDOR: GET /api/players/{playerId}/payments/pending-debts — outsider gets 403
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task GetPlayerPendingDebts_AsOutsider_Returns403()
+    {
+        var (organizer, _) = await RegisteredClientAsync("idor-debts-org@test.com");
+        var league = await CreateLeagueAsync(organizer, "Liga IDOR Debts");
+
+        var createResp = await organizer.PostAsJsonAsync($"/api/leagues/{league.Id}/players-list",
+            new { Name = "Jogador IDOR Debts", Nickname = (string?)null, Email = (string?)null, Phone = (string?)null, PixKey = (string?)null, PixKeyType = (object?)null });
+        Assert.Equal(HttpStatusCode.Created, createResp.StatusCode);
+        var player = (await createResp.Content.ReadFromJsonAsync<PlayerResponse>())!;
+
+        var (outsider, _) = await RegisteredClientAsync("idor-debts-out@test.com");
+        var resp = await outsider.GetAsync($"/api/players/{player.Id}/payments/pending-debts");
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    // -------------------------------------------------------------------------
+    // C1-IDOR: GET /api/players/{playerId}/payments/pending-to-receive — outsider gets 403
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task GetPlayerPendingToReceive_AsOutsider_Returns403()
+    {
+        var (organizer, _) = await RegisteredClientAsync("idor-recv-org@test.com");
+        var league = await CreateLeagueAsync(organizer, "Liga IDOR Recv");
+
+        var createResp = await organizer.PostAsJsonAsync($"/api/leagues/{league.Id}/players-list",
+            new { Name = "Jogador IDOR Recv", Nickname = (string?)null, Email = (string?)null, Phone = (string?)null, PixKey = (string?)null, PixKeyType = (object?)null });
+        Assert.Equal(HttpStatusCode.Created, createResp.StatusCode);
+        var player = (await createResp.Content.ReadFromJsonAsync<PlayerResponse>())!;
+
+        var (outsider, _) = await RegisteredClientAsync("idor-recv-out@test.com");
+        var resp = await outsider.GetAsync($"/api/players/{player.Id}/payments/pending-to-receive");
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    // -------------------------------------------------------------------------
+    // I1: POST /api/payments/bulk-confirm — non-organizer (plain member) gets 403
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task BulkConfirm_AsNonOrganizer_Returns403()
+    {
+        // Arrange: member joins a league (not as organizer) and tries to bulk-confirm
+        // arbitrary payment IDs. GetPaymentsForOrganizerAsync returns empty for a
+        // non-organizer, so any requested ID falls outside the authorized set → 403.
+        var (organizer, _) = await RegisteredClientAsync("bulk-org@test.com");
+        var league = await CreateLeagueAsync(organizer, "Liga Bulk Confirm Auth");
+
+        var (member, _) = await RegisteredClientAsync("bulk-member@test.com");
+        await member.PostAsync($"/api/leagues/join/{league.InviteCode}", null);
+
+        var resp = await member.PostAsJsonAsync("/api/payments/bulk-confirm",
+            new { PaymentIds = new[] { Guid.NewGuid() } });
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
     }
 }
