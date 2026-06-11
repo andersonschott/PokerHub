@@ -392,6 +392,48 @@ public class PaymentEndpointsTests : IClassFixture<ApiFactory>
     }
 
     // -------------------------------------------------------------------------
+    // POST /api/payments/{paymentId}/admin-mark-paid — non-organizer gets 403
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task AdminMarkAsPaid_AsNonOrganizer_Returns403()
+    {
+        // Arrange: a plain member (not organizer of any league) tries to admin-mark-paid.
+        // GetPaymentsForOrganizerAsync returns empty for non-organizers, so any paymentId
+        // falls outside the authorized set → 403.
+        var (organizer, _) = await RegisteredClientAsync("admin-mark-org@test.com");
+        var league = await CreateLeagueAsync(organizer, "Liga AdminMark Auth");
+
+        var (member, _) = await RegisteredClientAsync("admin-mark-member@test.com");
+        await member.PostAsync($"/api/leagues/join/{league.InviteCode}", null);
+
+        var resp = await member.PostAsync($"/api/payments/{Guid.NewGuid()}/admin-mark-paid", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    // -------------------------------------------------------------------------
+    // POST /api/payments/{paymentId}/admin-confirm — non-organizer gets 403
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task AdminConfirmPayment_AsNonOrganizer_Returns403()
+    {
+        // Arrange: a plain member (not organizer of any league) tries to admin-confirm.
+        // GetPaymentsForOrganizerAsync returns empty for non-organizers, so any paymentId
+        // falls outside the authorized set → 403.
+        var (organizer, _) = await RegisteredClientAsync("admin-confirm-org@test.com");
+        var league = await CreateLeagueAsync(organizer, "Liga AdminConfirm Auth");
+
+        var (member, _) = await RegisteredClientAsync("admin-confirm-member@test.com");
+        await member.PostAsync($"/api/leagues/join/{league.InviteCode}", null);
+
+        var resp = await member.PostAsync($"/api/payments/{Guid.NewGuid()}/admin-confirm", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    // -------------------------------------------------------------------------
     // I1: POST /api/payments/bulk-confirm — non-organizer (plain member) gets 403
     // -------------------------------------------------------------------------
 

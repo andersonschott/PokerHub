@@ -181,7 +181,15 @@ public static class PaymentEndpoints
             ClaimsPrincipal user,
             IPaymentService payments) =>
         {
-            var (success, message) = await payments.AdminMarkAsPaidAsync(paymentId, user.GetUserId());
+            var userId = user.GetUserId();
+
+            // Check that the caller is an organizer for the league that owns this payment
+            // before delegating to the service, so non-organizers receive 403 not 400.
+            var authorizedPayments = await payments.GetPaymentsForOrganizerAsync(userId);
+            if (authorizedPayments.All(p => p.Id != paymentId))
+                return Results.Forbid();
+
+            var (success, message) = await payments.AdminMarkAsPaidAsync(paymentId, userId);
             return success
                 ? Results.Ok(new { Message = message })
                 : Results.BadRequest(new { Message = message });
@@ -193,7 +201,15 @@ public static class PaymentEndpoints
             ClaimsPrincipal user,
             IPaymentService payments) =>
         {
-            var (success, message) = await payments.AdminConfirmPaymentAsync(paymentId, user.GetUserId());
+            var userId = user.GetUserId();
+
+            // Check that the caller is an organizer for the league that owns this payment
+            // before delegating to the service, so non-organizers receive 403 not 400.
+            var authorizedPayments = await payments.GetPaymentsForOrganizerAsync(userId);
+            if (authorizedPayments.All(p => p.Id != paymentId))
+                return Results.Forbid();
+
+            var (success, message) = await payments.AdminConfirmPaymentAsync(paymentId, userId);
             return success
                 ? Results.Ok(new { Message = message })
                 : Results.BadRequest(new { Message = message });
