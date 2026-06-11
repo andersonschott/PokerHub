@@ -194,7 +194,7 @@ export default function TvRoute() {
                     width: 44,
                     height: 44,
                     background: ring,
-                    color: '#1a1a1a',
+                    color: 'var(--felt-950)',
                   } as CSSProperties}
                 >
                   {p.position}º
@@ -277,7 +277,6 @@ export default function TvRoute() {
               { v: `${t.remaining}/${t.players}`, l: 'Jogadores' },
               { v: t.rebuys, l: 'Rebuys' },
               { v: t.addons, l: 'Add-ons' },
-              { v: `R$ ${t.buyIn}`, l: 'Buy-in' },
             ].map((s, i) => (
               <div
                 key={i}
@@ -292,6 +291,17 @@ export default function TvRoute() {
                 </div>
               </div>
             ))}
+            <div
+              className="rounded-2xl p-5 text-center bg-card"
+              style={{ border: '1px solid var(--border)' } as CSSProperties}
+            >
+              <div className="font-mono font-bold tracking-[-0.02em] text-[38px] leading-none">
+                <MoneyValue value={t.buyIn} cents={false} size="38px" />
+              </div>
+              <div className="text-[14px] text-muted-foreground uppercase tracking-[0.06em] mt-1">
+                Buy-in
+              </div>
+            </div>
           </div>
 
           {/* Eliminations list */}
@@ -327,7 +337,7 @@ export default function TvRoute() {
             {t.remaining}/{t.players} na mesa
           </span>
           <span className="text-emerald-400">
-            R$ {t.prizePool.toLocaleString('pt-BR')} pool
+            <MoneyValue value={t.prizePool} cents={false} color="none" className="text-emerald-400" />{' '}pool
           </span>
         </div>
       )}

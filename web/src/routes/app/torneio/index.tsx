@@ -249,7 +249,7 @@ function TorneioVazio() {
                   {u.when} · {u.confirmed} confirmados
                 </div>
               </div>
-              <Badge tone="neutral">R$ {u.buyIn}</Badge>
+              <Badge tone="neutral"><MoneyValue value={u.buyIn} cents={false} color="none" /></Badge>
             </div>
           </Card>
         ))}
