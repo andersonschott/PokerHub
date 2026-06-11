@@ -103,7 +103,7 @@ export function Sidebar() {
                     {item.dot && (
                       <span
                         className="absolute -top-[2px] -right-[3px] w-[7px] h-[7px] rounded-full border-[1.5px] border-[var(--felt-850)]"
-                        style={{ background: 'var(--positive)' }}
+                        style={{ background: 'var(--negative)' }}
                         aria-hidden="true"
                       />
                     )}
