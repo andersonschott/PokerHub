@@ -1,3 +1,10 @@
+import { AuthLayout } from '@/features/auth/auth-layout';
+import { RegisterForm } from '@/features/auth/register-form';
+
 export default function CadastroRoute() {
-  return <div className="p-8">cadastro — em construção (Task 6)</div>;
+  return (
+    <AuthLayout>
+      <RegisterForm />
+    </AuthLayout>
+  );
 }

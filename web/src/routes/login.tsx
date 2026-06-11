@@ -1,3 +1,10 @@
+import { AuthLayout } from '@/features/auth/auth-layout';
+import { LoginForm } from '@/features/auth/login-form';
+
 export default function LoginRoute() {
-  return <div className="p-8">login — em construção (Task 6)</div>;
+  return (
+    <AuthLayout>
+      <LoginForm />
+    </AuthLayout>
+  );
 }
