@@ -8,7 +8,7 @@
  */
 import { useState, useCallback, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings2, Flag, Users, Trophy, Repeat, Undo2 } from 'lucide-react';
+import { ArrowLeft, Settings2, Flag, Users, Trophy, Repeat, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
@@ -138,11 +138,10 @@ export default function DashboardRoute() {
         {/* ---- Header ---- */}
         <div className="flex items-center gap-[10px] mb-[14px] pt-1">
           <IconButton
-            icon={Settings2}
-            aria-label="Configurar torneio"
-            variant="solid"
-            size="sm"
-            onClick={() => navigate('/app/torneio/novo?edit=1')}
+            icon={ArrowLeft}
+            aria-label="Voltar"
+            size="md"
+            onClick={() => navigate('/app/torneio')}
             className="shrink-0"
           />
           <div className="flex-1 min-w-0">
@@ -154,107 +153,121 @@ export default function DashboardRoute() {
             </div>
             <div className="text-[12px] text-muted-foreground">Você controla a mesa e o nível</div>
           </div>
+          <IconButton
+            icon={Settings2}
+            aria-label="Configurar torneio"
+            variant="solid"
+            size="sm"
+            onClick={() => navigate('/app/torneio/novo?edit=1')}
+            className="shrink-0"
+          />
           <StatusPill status={clock.paused ? 'paused' : 'live'} className="shrink-0" />
         </div>
 
-        {/* ---- Level control ---- */}
-        <LevelControl
-          state={clock}
-          onPrev={prevLevel}
-          onTogglePause={togglePause}
-          onNext={nextLevel}
-        />
+        {/* ---- Desktop lg: two-column layout ---- */}
+        {/* Left col: control + stats | Right col: players. Sheets stay as sheets (plan step 3). */}
+        <div className="lg:grid lg:grid-cols-[minmax(320px,0.9fr)_minmax(0,1.3fr)] lg:gap-5 lg:items-start">
+          {/* Left column: level control + stats + encerrar */}
+          <div className="flex flex-col gap-3">
+            {/* ---- Level control ---- */}
+            <LevelControl
+              state={clock}
+              onPrev={prevLevel}
+              onTogglePause={togglePause}
+              onNext={nextLevel}
+            />
 
-        {/* ---- Live stats ---- */}
-        <div className="grid grid-cols-3 gap-[10px] my-3">
-          <StatTile
-            value={`${inPlay.length}/${t.players}`}
-            label="Na mesa"
-            icon={Users}
-            center
-            valueSize="17px"
-          />
-          <StatTile
-            value={<MoneyValue value={prizePool} cents={false} color="none" size="17px" />}
-            label="Prize pool"
-            icon={Trophy}
-            tone="emerald"
-            center
-            valueSize="17px"
-          />
-          <StatTile
-            value={totalRebuys}
-            label="Rebuys"
-            icon={Repeat}
-            center
-            valueSize="17px"
-          />
-        </div>
-
-        {/* ---- Players in play ---- */}
-        <div className="font-sans text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-2">
-          Na mesa · {inPlay.length}
-        </div>
-        <div className="flex flex-col gap-2">
-          {inPlay.map((p) => (
-            <PlayerRow key={p.id} player={p} onSelect={openSheet} />
-          ))}
-        </div>
-
-        {/* ---- Eliminated — with undo ---- */}
-        <div className="font-sans text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mt-[18px] mb-2">
-          Eliminados · {out.length}
-        </div>
-        <div className="flex flex-col gap-2">
-          {out.length === 0 ? (
-            <div className="text-[12.5px] text-muted-foreground px-[2px] py-1">
-              Ninguém eliminado ainda.
+            {/* ---- Live stats ---- */}
+            <div className="grid grid-cols-3 gap-[10px]">
+              <StatTile
+                value={`${inPlay.length}/${t.players}`}
+                label="Na mesa"
+                icon={Users}
+                center
+                valueSize="17px"
+              />
+              <StatTile
+                value={<MoneyValue value={prizePool} cents={false} color="none" size="17px" />}
+                label="Prize pool"
+                icon={Trophy}
+                tone="emerald"
+                center
+                valueSize="17px"
+              />
+              <StatTile
+                value={totalRebuys}
+                label="Rebuys"
+                icon={Repeat}
+                center
+                valueSize="17px"
+              />
             </div>
-          ) : (
-            out.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]"
-              >
-                <span className="w-[30px] h-[30px] rounded-[8px] bg-secondary flex items-center justify-center font-mono font-bold text-[13px] text-muted-foreground shrink-0">
-                  {p.place}º
-                </span>
-                <span className="flex-1 min-w-0 font-sans font-medium text-[14px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">
-                  {p.name}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => undoElimination(p)}
-                  title="Desfazer eliminação"
-                  aria-label={`Desfazer eliminação de ${p.name}`}
-                  className="inline-flex items-center gap-1.5 h-8 px-[10px] rounded-[var(--radius-sm)] border border-border bg-transparent cursor-pointer text-muted-foreground font-sans font-semibold text-[12.5px] shrink-0 hover:bg-secondary transition-colors duration-[var(--dur-fast,120ms)]"
-                >
-                  <Undo2 className="w-[13px] h-[13px]" />
-                  Desfazer
-                </button>
-              </div>
-            ))
-          )}
-        </div>
 
-        {/* ---- Encerrar torneio ---- */}
-        <div className="mt-[22px]">
-          <Button
-            variant="primary"
-            icon={Flag}
-            block
-            onClick={() => navigate('/app/debitos/pagamentos')}
-          >
-            Encerrar torneio
-          </Button>
-          <div className="text-[12px] text-muted-foreground text-center mt-2">
-            Calcula prêmios, caixinha e quem paga quem.
+            {/* ---- Encerrar torneio ---- */}
+            <div className="mt-1">
+              <Button
+                variant="primary"
+                icon={Flag}
+                block
+                onClick={() => navigate('/app/debitos/pagamentos')}
+              >
+                Encerrar torneio
+              </Button>
+              <div className="text-[12px] text-muted-foreground text-center mt-2">
+                Calcula prêmios, caixinha e quem paga quem.
+              </div>
+            </div>
+          </div>
+
+          {/* Right column: players */}
+          <div className="mt-3 lg:mt-0">
+            {/* ---- Players in play ---- */}
+            <div className="font-sans text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-2">
+              Na mesa · {inPlay.length}
+            </div>
+            <div className="flex flex-col gap-2">
+              {inPlay.map((p) => (
+                <PlayerRow key={p.id} player={p} onSelect={openSheet} />
+              ))}
+            </div>
+
+            {/* ---- Eliminated — with undo ---- */}
+            <div className="font-sans text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mt-[18px] mb-2">
+              Eliminados · {out.length}
+            </div>
+            <div className="flex flex-col gap-2">
+              {out.length === 0 ? (
+                <div className="text-[12.5px] text-muted-foreground px-[2px] py-1">
+                  Ninguém eliminado ainda.
+                </div>
+              ) : (
+                out.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)]"
+                  >
+                    <span className="w-[30px] h-[30px] rounded-[8px] bg-secondary flex items-center justify-center font-mono font-bold text-[13px] text-muted-foreground shrink-0">
+                      {p.place}º
+                    </span>
+                    <span className="flex-1 min-w-0 font-sans font-medium text-[14px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">
+                      {p.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => undoElimination(p)}
+                      title="Desfazer eliminação"
+                      aria-label={`Desfazer eliminação de ${p.name}`}
+                      className="inline-flex items-center gap-1.5 h-8 px-[10px] rounded-[var(--radius-sm)] border border-border bg-transparent cursor-pointer text-muted-foreground font-sans font-semibold text-[12.5px] shrink-0 hover:bg-secondary transition-colors duration-[var(--dur-fast,120ms)]"
+                    >
+                      <Undo2 className="w-[13px] h-[13px]" />
+                      Desfazer
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
-
-        {/* ---- Desktop lg: two-column layout ---- */}
-        {/* Note: as per plan step 3, sheets stay as sheets (consistency) and layout goes 2-col */}
-        {/* The 2-col layout is achieved via CSS grid on lg: — content above stacks naturally */}
       </div>
 
       {/* ---- Action sheet (step: actions) ---- */}
