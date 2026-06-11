@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.Extensions.DependencyInjection;
 using PokerHub.Domain.Enums;
 
 namespace PokerHub.Api.Tests;
@@ -122,6 +123,28 @@ public class JackpotAndExpenseEndpointsTests : IClassFixture<ApiFactory>
     }
 
     // =========================================================================
+    // Jackpot — 401 without token (write endpoints)
+    // =========================================================================
+
+    [Fact]
+    public async Task UpdateJackpotSettings_WithoutToken_Returns401()
+    {
+        var client = _factory.CreateClient();
+        var resp = await client.PutAsJsonAsync($"/api/leagues/{Guid.NewGuid()}/jackpot/settings",
+            new { JackpotPercentage = 5m });
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task UseJackpot_WithoutToken_Returns401()
+    {
+        var client = _factory.CreateClient();
+        var resp = await client.PostAsJsonAsync($"/api/leagues/{Guid.NewGuid()}/jackpot/use",
+            new { Amount = 50m, Description = "Prize" });
+        Assert.Equal(HttpStatusCode.Unauthorized, resp.StatusCode);
+    }
+
+    // =========================================================================
     // Jackpot — 403 non-member
     // =========================================================================
 
@@ -212,6 +235,27 @@ public class JackpotAndExpenseEndpointsTests : IClassFixture<ApiFactory>
 
         var resp = await organizer.PutAsJsonAsync($"/api/leagues/{league.Id}/jackpot/settings",
             new { JackpotPercentage = 5m });
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task UseJackpot_AsOrganizer_ReturnsOk()
+    {
+        var (organizer, _) = await RegisteredClientAsync("jackpot-useok-org@test.com");
+        var league = await CreateLeagueAsync(organizer, "Liga Jackpot UseOk");
+        var tournament = await CreateTournamentAsync(organizer, league.Id, "Torneio UseJackpot");
+
+        // Seed a jackpot contribution directly via the service so there is a positive balance.
+        using (var scope = _factory.Services.CreateScope())
+        {
+            var jackpotService = scope.ServiceProvider
+                .GetRequiredService<PokerHub.Application.Interfaces.IJackpotService>();
+            var contribution = await jackpotService.RecordContributionAsync(tournament.Id, 100m);
+            Assert.NotNull(contribution);
+        }
+
+        var resp = await organizer.PostAsJsonAsync($"/api/leagues/{league.Id}/jackpot/use",
+            new { Amount = 50m, Description = "Prize payout" });
         Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
     }
 
