@@ -20,6 +20,9 @@ const LeagueHomeRoute = lazy(() => import('@/routes/app/ligas/[id]'));
 const TorneioRoute = lazy(() => import('@/routes/app/torneio/index'));
 const TvRoute = lazy(() => import('@/routes/app/tv'));
 
+// Task 11: live organizer dashboard
+const DashboardRoute = lazy(() => import('@/routes/app/torneio/dashboard'));
+
 const RouteFallback = () => (
   <div className="flex min-h-dvh items-center justify-center">
     <div className="animate-ph-pulse text-sm text-muted-foreground">Carregando…</div>
@@ -77,7 +80,7 @@ export default function App() {
                     <Route path="ligas/nova" element={<NovaLigaRoute />} />
                     <Route path="ligas/:leagueId" element={<LeagueHomeRoute />} />
                     <Route path="torneio" element={<TorneioRoute />} />
-                    <Route path="torneio/dashboard" element={<EmBreveRoute title="Painel ao vivo" />} />
+                    <Route path="torneio/dashboard" element={<DashboardRoute />} />
                     <Route path="torneio/novo" element={<EmBreveRoute title="Criar torneio" />} />
                     <Route path="torneio/historico/:tournamentId" element={<EmBreveRoute title="Torneio realizado" />} />
                     <Route path="debitos" element={<EmBreveRoute title="Débitos" />} />
