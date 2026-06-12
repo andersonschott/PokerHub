@@ -15,8 +15,8 @@ interface PodiumMeta {
 
 const META: Record<number, PodiumMeta> = {
   1: { h: 132, ring: 'gold',   tint: 'var(--gold-500)',            glow: 'var(--glow-gold)' },
-  2: { h: 108, ring: 'silver', tint: 'oklch(0.78 0.02 250)',       glow: 'none' },
-  3: { h: 92,  ring: 'bronze', tint: 'oklch(0.62 0.08 60)',        glow: 'none' },
+  2: { h: 108, ring: 'silver', tint: 'var(--podium-silver)',        glow: 'none' },
+  3: { h: 92,  ring: 'bronze', tint: 'var(--podium-bronze)',        glow: 'none' },
 };
 
 interface PodiumHeroProps {
