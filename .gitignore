@@ -9,3 +9,4 @@ src/PokerHub.Api/appsettings.Development.json
 # front (web/)
 web/node_modules/
 web/dist/
+web/*.tsbuildinfo
