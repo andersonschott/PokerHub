@@ -250,7 +250,7 @@ export default function PerfilRoute() {
           <ProfileRow
             icon={<PiggyBank />}
             label="Caixinha da liga"
-            trailing={`R$ ${caixinhaBalance.toLocaleString('pt-BR')}`}
+            trailing={<MoneyValue value={caixinhaBalance} cents={false} />}
             to="/app/perfil/caixinha"
           />
 

@@ -166,7 +166,7 @@ export default function CaixinhaRoute() {
                     {e.tournament}
                   </div>
                   <div className="font-mono text-[11.5px] text-muted-foreground mt-0.5">
-                    {e.date} · pool R$ {e.prizePool.toLocaleString('pt-BR')} · {e.pct}%
+                    {e.date} · pool <MoneyValue value={e.prizePool} cents={false} size="11.5px" color="none" /> · {e.pct}%
                   </div>
                 </div>
                 <MoneyValue value={e.amount} signed cents={false} size="15px" />
@@ -190,7 +190,7 @@ export default function CaixinhaRoute() {
                   <div className="flex-1 min-w-0">
                     <div className="font-sans font-semibold text-[14.5px] truncate">{u.desc}</div>
                     <div className="font-mono text-[11.5px] text-muted-foreground mt-0.5">
-                      {u.date} · saldo após R$ {u.balanceAfter.toLocaleString('pt-BR')}
+                      {u.date} · saldo após <MoneyValue value={u.balanceAfter} cents={false} size="11.5px" color="none" />
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
