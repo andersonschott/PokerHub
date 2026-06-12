@@ -69,9 +69,7 @@ function DetailPanel({ h, onDuplicate, onViewPayments }: DetailPanelProps) {
       >
         <PiggyBank className="size-4 text-gold-400 shrink-0" />
         <span className="flex-1 text-[13.5px] font-medium">Contribuição para a caixinha</span>
-        <span className="font-mono font-bold text-[14.5px] text-gold-400 whitespace-nowrap">
-          R$ {h.caixinha.toLocaleString('pt-BR')}
-        </span>
+        <MoneyValue value={h.caixinha} cents={false} color="none" size="14.5px" className="font-bold text-gold-400" />
       </div>
 
       {/* Actions */}
@@ -169,7 +167,7 @@ function DesktopHistorico({ tournamentId }: { tournamentId: string }) {
                 {sel.name}
               </div>
               <div className="text-[12.5px] text-muted-foreground mt-0.5">
-                {sel.date} · buy-in R$ {sel.buyIn}
+                {sel.date} · buy-in <MoneyValue value={sel.buyIn} cents={false} color="none" size="12.5px" />
               </div>
             </div>
             <Badge tone="neutral">Encerrado</Badge>
@@ -297,7 +295,7 @@ export default function HistoricoDetalheRoute() {
               {h.name}
             </div>
             <div className="text-[12px] text-muted-foreground">
-              <span className="font-mono">{h.date}</span> · buy-in R$ {h.buyIn}
+              <span className="font-mono">{h.date}</span> · buy-in <MoneyValue value={h.buyIn} cents={false} color="none" size="12px" />
             </div>
           </div>
           <Badge tone="neutral" className="shrink-0">

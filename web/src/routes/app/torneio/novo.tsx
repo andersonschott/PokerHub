@@ -6,7 +6,7 @@
  * Estado todo local (useState por passo).
  * Na Fase 2+: substituir o handler de submit por mutation real.
  */
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Check } from 'lucide-react';
 import { toast } from 'sonner';
@@ -27,6 +27,7 @@ import {
   getTemplateConfig,
   type BlindTemplate,
 } from '@/features/tournaments/blind-utils';
+import { MoneyValue } from '@/components/ui/money-value';
 import { mockData } from '@/mocks/data';
 import { cn } from '@/lib/utils';
 
@@ -93,7 +94,7 @@ function NumStep({ label, value, onChange, min = 1, max = 99, suffix }: NumStepP
 // SummaryRow — row de confirmação
 // ---------------------------------------------------------------------------
 
-function SummaryRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
+function SummaryRow({ label, value, last }: { label: string; value: ReactNode; last?: boolean }) {
   return (
     <div
       className={cn(
@@ -251,13 +252,13 @@ export default function NovoTorneioRoute() {
     setter(e.target.value.replace(/\D/g, ''));
 
   // Confirmation summary rows
-  const summaryRows: [string, string][] = [
+  const summaryRows: [string, ReactNode][] = [
     ['Nome', name || '—'],
     ['Data · hora', `${tourDate} · ${tourTime}`],
     ['Local', local || '—'],
-    ['Buy-in', `R$ ${buyIn || 0} · stack ${Number(stack || 0).toLocaleString('pt-BR')}`],
-    ['Rebuy', rebuy ? `R$ ${rebuyVal} · até nível ${rebuyLvl}` : 'não'],
-    ['Add-on', addon ? `R$ ${addonVal}` : 'não'],
+    ['Buy-in', <><MoneyValue value={Number(buyIn) || 0} cents={false} color="none" size="13.5px" /> · stack {Number(stack || 0).toLocaleString('pt-BR')}</>],
+    ['Rebuy', rebuy ? <><MoneyValue value={Number(rebuyVal) || 0} cents={false} color="none" size="13.5px" /> · até nível {rebuyLvl}</> : 'não'],
+    ['Add-on', addon ? <MoneyValue value={Number(addonVal) || 0} cents={false} color="none" size="13.5px" /> : 'não'],
     ['Check-in tardio', lateCheckin ? `até nível ${lateLvl}` : 'não'],
     ['Blinds', `${blindCfg.label} · ${blindCfg.min} min · ${gamelevels} níveis`],
     ['Premiação', usePrizeTable ? 'tabela da liga (50/30/20)' : positions.map((p, i) => `${i + 1}º ${p}${prizeMode === 'pct' ? '%' : ''}`).join(' · ')],

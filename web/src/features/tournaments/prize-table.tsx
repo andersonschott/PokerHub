@@ -6,6 +6,7 @@ import { Plus, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { MoneyValue } from '@/components/ui/money-value';
 import { cn } from '@/lib/utils';
 
 interface PrizeTableProps {
@@ -122,7 +123,7 @@ export function PrizeTable({ positions, onChange, mode = 'pct', variant = 'mobil
 
       {mode === 'fixo' ? (
         <p className="text-[12px] text-muted-foreground px-0.5">
-          Total fixo: R$ {total.toLocaleString('pt-BR')} — o restante do prize pool segue para o 1º lugar.
+          Total fixo: <MoneyValue value={total} cents={false} color="none" size="12px" /> — o restante do prize pool segue para o 1º lugar.
         </p>
       ) : null}
     </div>
