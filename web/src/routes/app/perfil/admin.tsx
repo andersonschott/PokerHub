@@ -11,6 +11,9 @@
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import {
   ArrowLeft,
   Pencil,
@@ -41,6 +44,21 @@ import { useActiveLeague } from '@/features/leagues/league-context';
 import { useLeague, useRegenerateInvite, leagueKeys } from '@/lib/api/hooks/use-leagues';
 import { api } from '@/lib/api/client';
 import { mockData } from '@/mocks/data';
+
+// ---------------------------------------------------------------------------
+// Edit-liga form schema (RHF + Zod)
+// ---------------------------------------------------------------------------
+
+const EditSchema = z.object({
+  name: z
+    .string()
+    .min(3, 'O nome deve ter pelo menos 3 caracteres.')
+    .max(200, 'O nome deve ter no máximo 200 caracteres.'),
+  blockCheckInWithDebt: z.boolean(),
+  jackpotPercentage: z.number().min(0).max(100),
+});
+
+type EditFormData = z.infer<typeof EditSchema>;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -111,21 +129,43 @@ export default function AdminRoute() {
   const [players, setPlayers] = useState(() =>
     mockData.ranking.map((p) => ({ name: p.name, nick: p.nick })),
   );
-  const [name, setName] = useState(league?.name ?? mockData.league.name);
-  const [blockDebt, setBlockDebt] = useState(league?.blockCheckInWithDebt ?? true);
   const [pct, setPct] = useState(mockData.caixinha.percent);
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<{ name: string; nick: string } | null>(null);
 
-  // Sync name when real data loads
-  const displayName = league?.name ?? name;
+  const displayName = league?.name ?? mockData.league.name;
   const inviteCode = league?.inviteCode ?? 'AMIGOS-2K6';
   const caixinhaBalance = mockData.caixinha.balance;
+
+  // RHF form for edit-liga sheet
+  const {
+    register,
+    handleSubmit,
+    control,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<EditFormData>({
+    resolver: zodResolver(EditSchema),
+    defaultValues: {
+      name: displayName,
+      blockCheckInWithDebt: league?.blockCheckInWithDebt ?? true,
+      jackpotPercentage: mockData.caixinha.percent,
+    },
+  });
 
   const fire = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 2400);
+  };
+
+  const openEditSheet = () => {
+    reset({
+      name: league?.name ?? mockData.league.name,
+      blockCheckInWithDebt: league?.blockCheckInWithDebt ?? true,
+      jackpotPercentage: pct,
+    });
+    setSheet('edit');
   };
 
   // Copy invite code
@@ -153,16 +193,20 @@ export default function AdminRoute() {
 
   // Update league (REAL if active league is API league, mock fallback)
   const updateMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (data: EditFormData) => {
       if (activeLeagueId) {
         await api(`/leagues/${activeLeagueId}`, {
           method: 'PUT',
-          body: { name, description: null, blockCheckInWithDebt: blockDebt },
+          body: {
+            name: data.name,
+            description: null,
+            blockCheckInWithDebt: data.blockCheckInWithDebt,
+          },
         });
         void qc.invalidateQueries({ queryKey: leagueKeys.detail(activeLeagueId) });
         void qc.invalidateQueries({ queryKey: leagueKeys.list() });
       }
-      // mock: just update local state
+      setPct(data.jackpotPercentage);
     },
     onSuccess: () => {
       setSheet(null);
@@ -174,6 +218,8 @@ export default function AdminRoute() {
       fire('Liga atualizada (local)');
     },
   });
+
+  const onEditSubmit = handleSubmit((data) => updateMutation.mutate(data));
 
   const removePlayer = (p: { name: string; nick: string }) => {
     setPlayers((prev) => prev.filter((x) => x.nick !== p.nick));
@@ -210,11 +256,7 @@ export default function AdminRoute() {
           icon={<Pencil />}
           label="Editar dados da liga"
           sub="Nome, descrição, regras de check-in"
-          onClick={() => {
-            setName(displayName);
-            setBlockDebt(league?.blockCheckInWithDebt ?? blockDebt);
-            setSheet('edit');
-          }}
+          onClick={openEditSheet}
         />
         <AdminRow
           icon={<Ticket />}
@@ -321,7 +363,7 @@ export default function AdminRoute() {
         </Button>
       </div>
 
-      {/* --- Edit league sheet --- */}
+      {/* --- Edit league sheet (RHF form) --- */}
       {sheet === 'edit' && (
         <Sheet
           fixed
@@ -330,40 +372,54 @@ export default function AdminRoute() {
           title="Editar dados da liga"
           subtitle="As mudanças valem para os próximos torneios"
         >
-          <div className="flex flex-col gap-3.5">
+          <form onSubmit={onEditSubmit} className="flex flex-col gap-3.5">
             <div className="flex flex-col gap-1.5">
               <label className="block font-sans text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
                 Nome da liga
               </label>
               <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                {...register('name')}
                 autoFocus
               />
+              {errors.name ? (
+                <p className="text-[12px] text-negative">{errors.name.message}</p>
+              ) : null}
             </div>
-            <Switch
-              label="Bloquear check-in com débitos"
-              sub="Jogador com pagamento pendente não entra"
-              checked={blockDebt}
-              onChange={setBlockDebt}
+            <Controller
+              name="blockCheckInWithDebt"
+              control={control}
+              render={({ field }) => (
+                <Switch
+                  label="Bloquear check-in com débitos"
+                  sub="Jogador com pagamento pendente não entra"
+                  checked={field.value}
+                  onChange={field.onChange}
+                />
+              )}
             />
-            <Chips
-              label="Caixinha — % do prize pool"
-              options={[0, 5, 10, 15]}
-              value={pct}
-              onChange={setPct}
-              render={(o) => `${o}%`}
+            <Controller
+              name="jackpotPercentage"
+              control={control}
+              render={({ field }) => (
+                <Chips
+                  label="Caixinha — % do prize pool"
+                  options={[0, 5, 10, 15]}
+                  value={field.value}
+                  onChange={field.onChange}
+                  render={(o) => `${o}%`}
+                />
+              )}
             />
             <Button
+              type="submit"
               variant="primary"
               icon={Check}
               block
-              disabled={!name.trim() || updateMutation.isPending}
-              onClick={() => updateMutation.mutate()}
+              disabled={isSubmitting || updateMutation.isPending}
             >
               {updateMutation.isPending ? 'Salvando…' : 'Salvar'}
             </Button>
-          </div>
+          </form>
         </Sheet>
       )}
 

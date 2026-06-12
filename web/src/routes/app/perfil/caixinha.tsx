@@ -237,7 +237,7 @@ export default function CaixinhaRoute() {
           open
           onClose={() => setSheet(null)}
           title={sheet === 'expense' ? 'Registrar gasto da liga' : 'Usar em torneio especial'}
-          subtitle={`Saldo disponível: R$ ${balance.toLocaleString('pt-BR')},00`}
+          subtitle={<>Saldo disponível: <MoneyValue value={balance} cents={false} color="none" /></>}
         >
           <div className="flex flex-col gap-3.5">
             <div className="flex flex-col gap-1.5">

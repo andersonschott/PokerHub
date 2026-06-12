@@ -6,7 +6,7 @@ export interface SheetProps extends HTMLAttributes<HTMLDivElement> {
   open?: boolean;
   onClose?: () => void;
   title?: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   leading?: ReactNode;
   fixed?: boolean;
   children?: ReactNode;
