@@ -220,8 +220,9 @@ export default function PagamentosRoute() {
                   <div className="font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis">
                     {p.name}
                   </div>
-                  <div className="text-[11.5px] text-muted-foreground font-mono">
-                    inv R$ {p.inv} · prêmio R$ {p.prize}
+                  <div className="text-[11.5px] text-muted-foreground font-mono inline-flex items-center gap-1 flex-wrap">
+                    inv <MoneyValue value={p.inv} cents={false} color="none" size="11.5px" />
+                    {' · '}prêmio <MoneyValue value={p.prize} cents={false} color="none" size="11.5px" />
                   </div>
                 </div>
                 <MoneyValue value={saldoOf(p)} signed cents={false} size="15px" />
@@ -236,7 +237,8 @@ export default function PagamentosRoute() {
                 Saldo do torneio
               </span>
               <Badge tone="gold" icon={PiggyBank}>
-                Caixinha R$ {P.caixinha}
+                Caixinha{' '}
+                <MoneyValue value={P.caixinha} cents={false} color="none" size="11px" />
               </Badge>
             </div>
             <table className="w-full" style={{ borderCollapse: 'collapse' }}>
@@ -266,10 +268,12 @@ export default function PagamentosRoute() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-2 text-right font-mono text-[12.5px] text-muted-foreground">
-                        {s.inv}
+                      <td className="px-2 text-right">
+                        <MoneyValue value={s.inv} cents={false} color="muted" size="12.5px" />
                       </td>
-                      <td className="px-2 text-right font-mono text-[12.5px]">{s.prize}</td>
+                      <td className="px-2 text-right">
+                        <MoneyValue value={s.prize} cents={false} color="none" size="12.5px" />
+                      </td>
                       <td className="py-2 pl-2 text-right">
                         <MoneyValue value={net} signed cents={false} size="13px" />
                       </td>
@@ -297,9 +301,7 @@ export default function PagamentosRoute() {
               <span className="flex-1 text-[13.5px] font-medium">
                 Contribuição para a caixinha
               </span>
-              <span className="font-mono font-bold text-[14.5px] text-gold-400">
-                R$ {P.caixinha}
-              </span>
+              <MoneyValue value={P.caixinha} cents={false} color="none" size="14.5px" className="font-bold text-gold-400" />
             </div>
           </Card>
 
