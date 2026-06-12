@@ -23,6 +23,10 @@ const TvRoute = lazy(() => import('@/routes/app/tv'));
 // Task 11: live organizer dashboard
 const DashboardRoute = lazy(() => import('@/routes/app/torneio/dashboard'));
 
+// Task 12: débitos — settlement + pagamentos
+const DebitosRoute = lazy(() => import('@/routes/app/debitos/index'));
+const PagamentosRoute = lazy(() => import('@/routes/app/debitos/pagamentos'));
+
 const RouteFallback = () => (
   <div className="flex min-h-dvh items-center justify-center">
     <div className="animate-ph-pulse text-sm text-muted-foreground">Carregando…</div>
@@ -83,8 +87,8 @@ export default function App() {
                     <Route path="torneio/dashboard" element={<DashboardRoute />} />
                     <Route path="torneio/novo" element={<EmBreveRoute title="Criar torneio" />} />
                     <Route path="torneio/historico/:tournamentId" element={<EmBreveRoute title="Torneio realizado" />} />
-                    <Route path="debitos" element={<EmBreveRoute title="Débitos" />} />
-                    <Route path="debitos/pagamentos" element={<EmBreveRoute title="Pagamentos do torneio" />} />
+                    <Route path="debitos" element={<DebitosRoute />} />
+                    <Route path="debitos/pagamentos" element={<PagamentosRoute />} />
                     <Route path="ranking" element={<EmBreveRoute title="Ranking" />} />
                     <Route path="perfil" element={<EmBreveRoute title="Perfil" />} />
                     <Route path="perfil/caixinha" element={<EmBreveRoute title="Caixinha" />} />
