@@ -30,6 +30,11 @@ const PagamentosRoute = lazy(() => import('@/routes/app/debitos/pagamentos'));
 // Task 13: ranking + player stats
 const RankingRoute = lazy(() => import('@/routes/app/ranking'));
 
+// Task 14: perfil + caixinha + admin
+const PerfilRoute = lazy(() => import('@/routes/app/perfil/index'));
+const CaixinhaRoute = lazy(() => import('@/routes/app/perfil/caixinha'));
+const AdminRoute = lazy(() => import('@/routes/app/perfil/admin'));
+
 const RouteFallback = () => (
   <div className="flex min-h-dvh items-center justify-center">
     <div className="animate-ph-pulse text-sm text-muted-foreground">Carregando…</div>
@@ -93,9 +98,9 @@ export default function App() {
                     <Route path="debitos" element={<DebitosRoute />} />
                     <Route path="debitos/pagamentos" element={<PagamentosRoute />} />
                     <Route path="ranking" element={<RankingRoute />} />
-                    <Route path="perfil" element={<EmBreveRoute title="Perfil" />} />
-                    <Route path="perfil/caixinha" element={<EmBreveRoute title="Caixinha" />} />
-                    <Route path="perfil/admin" element={<EmBreveRoute title="Administração da liga" />} />
+                    <Route path="perfil" element={<PerfilRoute />} />
+                    <Route path="perfil/caixinha" element={<CaixinhaRoute />} />
+                    <Route path="perfil/admin" element={<AdminRoute />} />
                     <Route path="*" element={<Navigate to="/app" replace />} />
                   </Route>
                   <Route path="*" element={<Navigate to="/login" replace />} />
