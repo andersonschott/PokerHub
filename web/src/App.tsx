@@ -8,7 +8,7 @@ import { Splash } from '@/components/splash';
 import LoginRoute from '@/routes/login';
 import CadastroRoute from '@/routes/cadastro';
 import { AppShell } from '@/components/app-shell/app-shell';
-import EmBreveRoute from '@/routes/app/em-breve';
+
 import { ActiveLeagueProvider } from '@/features/leagues/league-context';
 
 // Task 9: leagues screens (API real)
@@ -34,6 +34,10 @@ const RankingRoute = lazy(() => import('@/routes/app/ranking'));
 const PerfilRoute = lazy(() => import('@/routes/app/perfil/index'));
 const CaixinhaRoute = lazy(() => import('@/routes/app/perfil/caixinha'));
 const AdminRoute = lazy(() => import('@/routes/app/perfil/admin'));
+
+// Task 15: wizard de torneio + histórico
+const NovoTorneioRoute = lazy(() => import('@/routes/app/torneio/novo'));
+const HistoricoDetalheRoute = lazy(() => import('@/routes/app/torneio/historico/[id]'));
 
 const RouteFallback = () => (
   <div className="flex min-h-dvh items-center justify-center">
@@ -93,8 +97,8 @@ export default function App() {
                     <Route path="ligas/:leagueId" element={<LeagueHomeRoute />} />
                     <Route path="torneio" element={<TorneioRoute />} />
                     <Route path="torneio/dashboard" element={<DashboardRoute />} />
-                    <Route path="torneio/novo" element={<EmBreveRoute title="Criar torneio" />} />
-                    <Route path="torneio/historico/:tournamentId" element={<EmBreveRoute title="Torneio realizado" />} />
+                    <Route path="torneio/novo" element={<NovoTorneioRoute />} />
+                    <Route path="torneio/historico/:tournamentId" element={<HistoricoDetalheRoute />} />
                     <Route path="debitos" element={<DebitosRoute />} />
                     <Route path="debitos/pagamentos" element={<PagamentosRoute />} />
                     <Route path="ranking" element={<RankingRoute />} />
