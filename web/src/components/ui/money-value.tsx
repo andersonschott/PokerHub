@@ -12,7 +12,7 @@ export interface MoneyValueProps extends HTMLAttributes<HTMLSpanElement> {
   dimCents?: boolean;
 }
 
-function formatBRL(n: number, cents: boolean): string {
+export function formatBRL(n: number, cents = false): string {
   const abs = Math.abs(n);
   return abs.toLocaleString('pt-BR', {
     minimumFractionDigits: cents ? 2 : 0,

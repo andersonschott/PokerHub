@@ -7,7 +7,7 @@
  * Tabs: Torneios (lista mock + Caixinha) / Jogadores (REAL: useLeaguePlayers).
  * Variante desktop Step 5: grid 2 colunas no lg:.
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ChevronsUpDown, Settings2, CalendarPlus, Plus, CalendarClock, PiggyBank, ChevronRight, Users, Sun, Moon, Bell, Trophy } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
@@ -123,7 +123,9 @@ export default function LeagueHomeRoute() {
   const liveTournament = league ? false : false; // No live tournament endpoint yet — always show empty hero
 
   // Set the active league when this page loads with a valid id
-  if (id) setActiveLeagueId(id);
+  useEffect(() => {
+    if (id) setActiveLeagueId(id);
+  }, [id]);
 
   const isOrganizer = league?.organizerId === user?.userId;
 

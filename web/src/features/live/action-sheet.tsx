@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
 import type { MockTablePlayer } from '@/mocks/data';
 import { cn } from '@/lib/utils';
+import { formatBRL } from '@/components/ui/money-value';
 
 // ---------------------------------------------------------------------------
 // Stepper
@@ -76,8 +77,8 @@ export function ActionSheet({
   onEliminate,
   onCheckIn,
 }: ActionSheetProps) {
-  const rebuysSub = `R$ ${buyIn},00 cada · toque − para desfazer`;
-  const addonsSub = `R$ ${buyIn},00 cada · toque − para desfazer`;
+  const rebuysSub = `R$ ${formatBRL(buyIn)} cada · toque − para desfazer`;
+  const addonsSub = `R$ ${formatBRL(buyIn)} cada · toque − para desfazer`;
   const rebuysCount = player.rebuys;
   const addonsCount = player.addons;
 

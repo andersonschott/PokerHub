@@ -7,7 +7,7 @@ import { IconButton } from '@/components/ui/icon-button';
 import { Avatar } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { StatTile } from '@/components/ui/stat-tile';
-import { MoneyValue } from '@/components/ui/money-value';
+import { MoneyValue, formatBRL } from '@/components/ui/money-value';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import type { MockRankingEntry } from '@/mocks/data';
 
@@ -217,7 +217,7 @@ export function PlayerStats({ player: p, rank, onBack }: PlayerStatsProps) {
                   <div className="flex-1 min-w-0">
                     <div className="font-sans font-semibold text-[14px]">{r.name}</div>
                     <div className="text-[11.5px] text-muted-foreground font-mono">
-                      {r.date} · invest {r.invest > 0 ? `R$ ${r.invest}` : '—'}
+                      {r.date} · invest {r.invest > 0 ? `R$ ${formatBRL(r.invest)}` : '—'}
                     </div>
                   </div>
                   <MoneyValue value={r.profit} signed size="15px" />

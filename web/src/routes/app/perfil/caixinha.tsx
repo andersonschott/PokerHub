@@ -16,6 +16,7 @@ import { StatTile } from '@/components/ui/stat-tile';
 import { MoneyValue } from '@/components/ui/money-value';
 import { Input } from '@/components/ui/input';
 import { mockData, type MockCaixinhaUsage, type MockCaixinhaUsageType } from '@/mocks/data';
+import { formatBRL } from '@/components/ui/money-value';
 
 type SheetKind = 'expense' | 'tournament' | null;
 
@@ -62,7 +63,7 @@ export default function CaixinhaRoute() {
     setUsages((prev) => [...prev, newUsage]);
     setSheet(null);
     fire(
-      `${type === 'expense' ? 'Gasto registrado' : 'Uso em torneio registrado'}: R$ ${amount},00`,
+      `${type === 'expense' ? 'Gasto registrado' : 'Uso em torneio registrado'}: R$ ${formatBRL(amount)}`,
     );
   };
 
