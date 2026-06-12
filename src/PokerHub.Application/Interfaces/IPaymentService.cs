@@ -65,4 +65,10 @@ public interface IPaymentService
     /// Returns the count of confirmed payments.
     /// </summary>
     Task<int> BulkConfirmPaymentsAsync(IList<Guid> paymentIds, string userId);
+
+    /// <summary>
+    /// Returns a single payment by its ID, or null if not found.
+    /// Used for targeted existence/ownership checks to avoid loading full organizer lists.
+    /// </summary>
+    Task<PaymentDto?> GetPaymentByIdAsync(Guid paymentId);
 }

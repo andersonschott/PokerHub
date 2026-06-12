@@ -94,20 +94,26 @@ public static class PaymentEndpoints
             .WithTags("Payments")
             .RequireAuthorization();
 
-        // GET /api/payments/my-debts  — logged-in user's pending debts
-        // Resolves the player across all leagues via GetPlayerByUserIdAsync.
-        // If the user has no linked player, returns an empty list.
+        // GET /api/payments/my-debts  — logged-in user's pending debts across ALL leagues.
+        // Uses GetAllPlayersByUserAsync so users linked to players in multiple leagues see
+        // debts from every league (not just the first player record found).
         p.MapGet("/my-debts", async (
             ClaimsPrincipal user,
             IPlayerService players,
             IPaymentService payments) =>
         {
-            var player = await players.GetPlayerByUserIdAsync(user.GetUserId());
-            if (player is null)
+            var userPlayers = await players.GetAllPlayersByUserAsync(user.GetUserId());
+            if (userPlayers.Count == 0)
                 return Results.Ok(Array.Empty<object>());
 
-            var debts = await payments.GetPendingDebtsByPlayerAsync(player.Id);
-            return Results.Ok(debts);
+            var allDebts = new List<object>();
+            foreach (var player in userPlayers)
+            {
+                var debts = await payments.GetPendingDebtsByPlayerAsync(player.Id);
+                allDebts.AddRange(debts.Cast<object>());
+            }
+
+            return Results.Ok(allDebts);
         });
 
         // GET /api/payments/organizer  — payments for leagues organized by current user
@@ -143,50 +149,69 @@ public static class PaymentEndpoints
             return Results.Ok(new { Confirmed = confirmed });
         });
 
-        // POST /api/payments/{paymentId}/mark-paid  — debtor self-marks payment as paid
-        // Resolves the player via GetPlayerByUserIdAsync; returns 404 if payment not found
-        // (service returns false when payment or player not found).
+        // POST /api/payments/{paymentId}/mark-paid  — debtor self-marks payment as paid.
+        // Iterates ALL players linked to the user (across leagues) and tries each until one
+        // succeeds, so users with players in multiple leagues are never incorrectly denied.
         p.MapPost("/{paymentId:guid}/mark-paid", async (
             Guid paymentId,
             ClaimsPrincipal user,
             IPlayerService players,
             IPaymentService payments) =>
         {
-            var player = await players.GetPlayerByUserIdAsync(user.GetUserId());
-            if (player is null)
+            var userPlayers = await players.GetAllPlayersByUserAsync(user.GetUserId());
+            if (userPlayers.Count == 0)
                 return Results.NotFound();
 
-            var ok = await payments.MarkAsPaidAsync(paymentId, player.Id);
-            return ok ? Results.Ok() : Results.NotFound();
+            foreach (var player in userPlayers)
+            {
+                var ok = await payments.MarkAsPaidAsync(paymentId, player.Id);
+                if (ok) return Results.Ok();
+            }
+
+            return Results.NotFound();
         });
 
-        // POST /api/payments/{paymentId}/confirm  — creditor confirms receipt
+        // POST /api/payments/{paymentId}/confirm  — creditor confirms receipt.
+        // Iterates ALL players linked to the user (across leagues) and tries each until one
+        // succeeds, so users with players in multiple leagues are never incorrectly denied.
         p.MapPost("/{paymentId:guid}/confirm", async (
             Guid paymentId,
             ClaimsPrincipal user,
             IPlayerService players,
             IPaymentService payments) =>
         {
-            var player = await players.GetPlayerByUserIdAsync(user.GetUserId());
-            if (player is null)
+            var userPlayers = await players.GetAllPlayersByUserAsync(user.GetUserId());
+            if (userPlayers.Count == 0)
                 return Results.NotFound();
 
-            var ok = await payments.ConfirmPaymentAsync(paymentId, player.Id);
-            return ok ? Results.Ok() : Results.NotFound();
+            foreach (var player in userPlayers)
+            {
+                var ok = await payments.ConfirmPaymentAsync(paymentId, player.Id);
+                if (ok) return Results.Ok();
+            }
+
+            return Results.NotFound();
         });
 
-        // POST /api/payments/{paymentId}/admin-mark-paid  — organizer marks paid on behalf
+        // POST /api/payments/{paymentId}/admin-mark-paid  — organizer marks paid on behalf.
+        // Uses a targeted GetPaymentByIdAsync + IsUserOrganizerAsync instead of loading the
+        // full organizer payment list just for an existence/ownership check.
         p.MapPost("/{paymentId:guid}/admin-mark-paid", async (
             Guid paymentId,
             ClaimsPrincipal user,
-            IPaymentService payments) =>
+            IPaymentService payments,
+            ITournamentService tournaments,
+            ILeagueService leagues) =>
         {
             var userId = user.GetUserId();
 
-            // Check that the caller is an organizer for the league that owns this payment
-            // before delegating to the service, so non-organizers receive 403 not 400.
-            var authorizedPayments = await payments.GetPaymentsForOrganizerAsync(userId);
-            if (authorizedPayments.All(p => p.Id != paymentId))
+            var payment = await payments.GetPaymentByIdAsync(paymentId);
+            if (payment is null) return Results.NotFound();
+
+            var tournament = await tournaments.GetTournamentByIdAsync(payment.TournamentId);
+            if (tournament is null) return Results.NotFound();
+
+            if (!await leagues.IsUserOrganizerAsync(tournament.LeagueId, userId))
                 return Results.Forbid();
 
             var (success, message) = await payments.AdminMarkAsPaidAsync(paymentId, userId);
@@ -195,18 +220,25 @@ public static class PaymentEndpoints
                 : Results.BadRequest(new { Message = message });
         });
 
-        // POST /api/payments/{paymentId}/admin-confirm  — organizer confirms on behalf
+        // POST /api/payments/{paymentId}/admin-confirm  — organizer confirms on behalf.
+        // Uses a targeted GetPaymentByIdAsync + IsUserOrganizerAsync instead of loading the
+        // full organizer payment list just for an existence/ownership check.
         p.MapPost("/{paymentId:guid}/admin-confirm", async (
             Guid paymentId,
             ClaimsPrincipal user,
-            IPaymentService payments) =>
+            IPaymentService payments,
+            ITournamentService tournaments,
+            ILeagueService leagues) =>
         {
             var userId = user.GetUserId();
 
-            // Check that the caller is an organizer for the league that owns this payment
-            // before delegating to the service, so non-organizers receive 403 not 400.
-            var authorizedPayments = await payments.GetPaymentsForOrganizerAsync(userId);
-            if (authorizedPayments.All(p => p.Id != paymentId))
+            var payment = await payments.GetPaymentByIdAsync(paymentId);
+            if (payment is null) return Results.NotFound();
+
+            var tournament = await tournaments.GetTournamentByIdAsync(payment.TournamentId);
+            if (tournament is null) return Results.NotFound();
+
+            if (!await leagues.IsUserOrganizerAsync(tournament.LeagueId, userId))
                 return Results.Forbid();
 
             var (success, message) = await payments.AdminConfirmPaymentAsync(paymentId, userId);

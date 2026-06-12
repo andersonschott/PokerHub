@@ -407,6 +407,17 @@ public class PaymentService : IPaymentService
         return count;
     }
 
+    public async Task<PaymentDto?> GetPaymentByIdAsync(Guid paymentId)
+    {
+        var payment = await _context.Payments
+            .Include(p => p.Tournament)
+            .Include(p => p.FromPlayer)
+            .Include(p => p.ToPlayer)
+            .FirstOrDefaultAsync(p => p.Id == paymentId);
+
+        return payment is null ? null : MapToDto(payment);
+    }
+
     private static PaymentDto MapToDto(Payment p)
     {
         // Handle legacy payments: check ToPlayerId == null for old jackpot payments
