@@ -16,8 +16,7 @@ interface PlayerStatsModalProps {
 export function PlayerStatsModal({ player, rank, onClose }: PlayerStatsModalProps) {
   return (
     <div
-      className="fixed inset-0 z-[90] flex items-center justify-center p-6"
-      style={{ background: 'oklch(0 0 0 / 0.55)' }}
+      className="fixed inset-0 z-[90] flex items-center justify-center p-6 bg-black/55"
       onClick={onClose}
     >
       <div
