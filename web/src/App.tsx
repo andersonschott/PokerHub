@@ -27,6 +27,9 @@ const DashboardRoute = lazy(() => import('@/routes/app/torneio/dashboard'));
 const DebitosRoute = lazy(() => import('@/routes/app/debitos/index'));
 const PagamentosRoute = lazy(() => import('@/routes/app/debitos/pagamentos'));
 
+// Task 13: ranking + player stats
+const RankingRoute = lazy(() => import('@/routes/app/ranking'));
+
 const RouteFallback = () => (
   <div className="flex min-h-dvh items-center justify-center">
     <div className="animate-ph-pulse text-sm text-muted-foreground">Carregando…</div>
@@ -89,7 +92,7 @@ export default function App() {
                     <Route path="torneio/historico/:tournamentId" element={<EmBreveRoute title="Torneio realizado" />} />
                     <Route path="debitos" element={<DebitosRoute />} />
                     <Route path="debitos/pagamentos" element={<PagamentosRoute />} />
-                    <Route path="ranking" element={<EmBreveRoute title="Ranking" />} />
+                    <Route path="ranking" element={<RankingRoute />} />
                     <Route path="perfil" element={<EmBreveRoute title="Perfil" />} />
                     <Route path="perfil/caixinha" element={<EmBreveRoute title="Caixinha" />} />
                     <Route path="perfil/admin" element={<EmBreveRoute title="Administração da liga" />} />
