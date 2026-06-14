@@ -1,0 +1,54 @@
+/* PokerHub — base layer.
+   Element defaults so a bare page already reads as "private club at midnight". */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-normal);
+  color: var(--foreground);
+  background: var(--background);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--lh-snug);
+  margin: 0;
+}
+
+/* Money helper — always paired with sign + color in product. */
+.ph-money { font-family: var(--font-mono); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; letter-spacing: var(--tracking-snug); }
+.ph-money.is-positive { color: var(--money-positive); }
+.ph-money.is-negative { color: var(--money-negative); }
+
+::selection {
+  background: color-mix(in oklab, var(--gold-500) 28%, transparent);
+}
+
+/* Themed thin scrollbars on dark surfaces */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--felt-700) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--felt-700); border-radius: 999px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

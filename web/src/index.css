@@ -1,0 +1,410 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* ============================================================
+   :root — Tema escuro (padrão "clube privado à meia-noite")
+   ============================================================ */
+:root {
+  /* ===== Raw graphite ramp (warm charcoal, candlelight hue ~80) ===== */
+  --felt-950: oklch(0.160 0.004 80);
+  --felt-900: oklch(0.192 0.005 80);
+  --felt-850: oklch(0.225 0.006 80);
+  --felt-800: oklch(0.255 0.006 80);
+  --felt-750: oklch(0.288 0.007 80);
+  --felt-700: oklch(0.335 0.007 80);
+  --felt-600: oklch(0.415 0.008 80);
+
+  /* ===== Accent ouro dark (fixado — accent "ouro") ===== */
+  --gold-400: oklch(0.820 0.130 84);
+  --gold-500: oklch(0.770 0.142 80);
+  --gold-600: oklch(0.700 0.148 74);
+
+  /* ===== Sober emerald ===== */
+  --emerald-500: oklch(0.660 0.080 158);
+  --emerald-400: oklch(0.730 0.082 156);
+
+  /* ===== Money + status semantics ===== */
+  --positive: oklch(0.715 0.095 158);
+  --negative: oklch(0.625 0.150 25);
+  --warning:  oklch(0.780 0.095 78);
+  --info:     oklch(0.690 0.075 240);
+
+  /* ===== Podium ===== */
+  --podium-gold:   oklch(0.800 0.095 90);
+  --podium-silver: oklch(0.790 0.008 240);
+  --podium-bronze: oklch(0.625 0.075 56);
+
+  /* ===== Suits ===== */
+  --suit-red:  oklch(0.615 0.150 25);
+  --suit-dark: oklch(0.930 0.004 85);
+
+  /* ===== Neutral text ===== */
+  --ink-100: oklch(0.950 0.004 85);
+  --ink-300: oklch(0.795 0.006 85);
+  --ink-500: oklch(0.680 0.007 85);
+  --ink-600: oklch(0.580 0.007 85);
+
+  /* ===== shadcn semantic tokens (dark = default) ===== */
+  --background: var(--felt-900);
+  --foreground: var(--ink-100);
+
+  --card: var(--felt-850);
+  --card-foreground: var(--ink-100);
+
+  --popover: var(--felt-800);
+  --popover-foreground: var(--ink-100);
+
+  --primary: var(--gold-500);
+  --primary-foreground: oklch(0.185 0.015 80);
+
+  --secondary: var(--felt-750);
+  --secondary-foreground: var(--ink-100);
+
+  --muted: var(--felt-800);
+  --muted-foreground: var(--ink-500);
+
+  --accent: var(--felt-750);
+  --accent-foreground: var(--ink-100);
+
+  --destructive: var(--negative);
+  --destructive-foreground: oklch(0.985 0 0);
+
+  --success: var(--positive);
+  --success-foreground: oklch(0.185 0.015 80);
+
+  --border: var(--felt-700);
+  --input: var(--felt-700);
+  --ring: var(--gold-500);
+
+  /* ===== Typography ===== */
+  --font-display: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Geist Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SFMono-Regular', 'JetBrains Mono', monospace;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-black: 800;
+
+  --fs-overline: 11px;
+  --fs-caption: 12px;
+  --fs-body-sm: 13px;
+  --fs-body: 15px;
+  --fs-subtitle: 17px;
+  --fs-h6: 19px;
+  --fs-h5: 22px;
+  --fs-h4: 26px;
+  --fs-h3: 32px;
+  --fs-stat: 30px;
+  --fs-display: 40px;
+  --fs-hero: 56px;
+
+  --tracking-tight: -0.02em;
+  --tracking-snug: -0.01em;
+  --tracking-label: 0.04em;
+  --tracking-caps: 0.08em;
+
+  --lh-tight: 1.05;
+  --lh-snug: 1.2;
+  --lh-normal: 1.5;
+
+  /* ===== Spacing ===== */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  --gap-card-grid: 12px;
+  --gap-section: 20px;
+  --pad-card: 16px;
+  --pad-screen: 16px;
+  --pad-screen-md: 24px;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
+  --bottom-nav-h: 64px;
+
+  /* ===== Radius ===== */
+  --radius: 1rem;
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 6px);
+  --radius-pill: 999px;
+  --radius-round: 50%;
+
+  --hit-target: 44px;
+
+  /* ===== Shadows ===== */
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.35);
+  --shadow-md: 0 6px 18px oklch(0 0 0 / 0.40);
+  --shadow-lg: 0 18px 48px oklch(0 0 0 / 0.50);
+  --shadow-sheet: 0 -12px 40px oklch(0 0 0 / 0.55);
+
+  --glow-gold: 0 6px 18px -10px oklch(0.795 0.092 86 / 0.18);
+  --glow-emerald: 0 6px 18px -10px oklch(0.715 0.095 158 / 0.14);
+  --glow-amber: 0 6px 18px -10px oklch(0.780 0.095 78 / 0.18);
+
+  /* ===== Motion ===== */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 0.15s;
+  --dur-base: 0.22s;
+  --dur-slow: 0.32s;
+
+  /* ===== PokerHub domain aliases ===== */
+  --felt: var(--emerald-500);
+  --gold: var(--gold-500);
+  --money-positive: var(--positive);
+  --money-negative: var(--negative);
+  --live: var(--positive);
+  --paused: var(--warning);
+
+  /* ===== TV / Splash backgrounds (dark theme) ===== */
+  --tv-bg: radial-gradient(120% 90% at 50% 0%, oklch(0.235 0.007 80) 0%, oklch(0.150 0.005 80) 60%, oklch(0.122 0.004 80) 100%);
+  --tv-paused-bg: radial-gradient(120% 90% at 50% 0%, oklch(0.245 0.026 80) 0%, oklch(0.158 0.013 85) 55%, oklch(0.125 0.008 90) 100%);
+
+  /* color-scheme */
+  color-scheme: dark;
+}
+
+/* ============================================================
+   [data-theme="light"] — Paleta "Clube diurno" (única, fixada)
+   + Accent ouro light (fixado)
+   ============================================================ */
+[data-theme="light"] {
+  --felt-950: oklch(0.878 0.034 88);
+  --felt-900: oklch(0.922 0.030 88);
+  --felt-850: oklch(0.988 0.012 90);
+  --felt-800: oklch(0.988 0.012 90);
+  --felt-750: oklch(0.898 0.034 88);
+  --felt-700: oklch(0.832 0.040 86);
+  --felt-600: oklch(0.765 0.044 84);
+
+  --ink-100: oklch(0.215 0.022 70);
+  --ink-300: oklch(0.315 0.026 72);
+  --ink-500: oklch(0.450 0.034 74);
+  --ink-600: oklch(0.515 0.036 74);
+
+  /* ===== Accent ouro light (fixado) ===== */
+  --gold-400: oklch(0.580 0.135 76);
+  --gold-500: oklch(0.620 0.140 78);
+  --gold-600: oklch(0.520 0.140 72);
+
+  --emerald-400: oklch(0.475 0.090 160);
+  --emerald-500: oklch(0.530 0.095 160);
+  --positive: oklch(0.525 0.100 158);
+  --negative: oklch(0.530 0.172 25);
+  --warning:  oklch(0.595 0.115 70);
+  --suit-red:  oklch(0.530 0.172 25);
+  --suit-dark: oklch(0.235 0.022 70);
+  --podium-gold:   oklch(0.625 0.125 84);
+  --podium-silver: oklch(0.570 0.012 240);
+  --podium-bronze: oklch(0.530 0.085 56);
+
+  --background: oklch(0.936 0.028 88);
+  --foreground: var(--ink-100);
+  --card: oklch(0.988 0.012 90);
+  --card-foreground: var(--ink-100);
+  --popover: oklch(0.988 0.012 90);
+  --popover-foreground: var(--ink-100);
+  --primary: var(--gold-600);
+  --primary-foreground: oklch(0.990 0.008 90);
+  --secondary: oklch(0.898 0.034 88);
+  --secondary-foreground: oklch(0.235 0.024 72);
+  --muted: oklch(0.918 0.030 88);
+  --muted-foreground: var(--ink-500);
+  --accent: oklch(0.882 0.040 86);
+  --accent-foreground: oklch(0.235 0.024 72);
+  --border: oklch(0.832 0.040 86);
+  --input: oklch(0.808 0.042 86);
+  --ring: var(--gold-500);
+
+  --tv-bg: radial-gradient(120% 90% at 50% 0%, oklch(0.978 0.018 90) 0%, oklch(0.935 0.024 88) 60%, oklch(0.900 0.028 86) 100%);
+  --tv-paused-bg: radial-gradient(120% 90% at 50% 0%, oklch(0.978 0.026 84) 0%, oklch(0.935 0.030 82) 55%, oklch(0.900 0.030 80) 100%);
+
+  color-scheme: light;
+}
+
+/* ============================================================
+   @theme inline — tokens → Tailwind utilities
+   ============================================================ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-gold-400: var(--gold-400);
+  --color-gold-500: var(--gold-500);
+  --color-gold-600: var(--gold-600);
+  --color-emerald-400: var(--emerald-400);
+  --color-emerald-500: var(--emerald-500);
+  --color-podium-gold: var(--podium-gold);
+  --color-podium-silver: var(--podium-silver);
+  --color-podium-bronze: var(--podium-bronze);
+  --color-suit-red: var(--suit-red);
+  --color-suit-dark: var(--suit-dark);
+  --color-felt-950: var(--felt-950);
+  --color-felt-900: var(--felt-900);
+  --color-felt-850: var(--felt-850);
+  --color-felt-800: var(--felt-800);
+  --color-felt-750: var(--felt-750);
+  --color-felt-700: var(--felt-700);
+  --color-felt-600: var(--felt-600);
+  --color-ink-100: var(--ink-100);
+  --color-ink-300: var(--ink-300);
+  --color-ink-500: var(--ink-500);
+  --color-ink-600: var(--ink-600);
+
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-sheet: var(--shadow-sheet);
+  --shadow-glow-gold: var(--glow-gold);
+  --shadow-glow-emerald: var(--glow-emerald);
+  --shadow-glow-amber: var(--glow-amber);
+
+  --animate-ph-fade-in: ph-fade-in 0.3s var(--ease-out) both;
+  --animate-ph-sheet-up: ph-sheet-up 0.32s var(--ease-out) both;
+  --animate-ph-pulse: ph-pulse 1.6s ease-in-out infinite;
+  --animate-ph-level-pop: ph-level-pop 0.4s var(--ease-spring);
+}
+
+/* ============================================================
+   Keyframes
+   ============================================================ */
+@keyframes ph-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ph-sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes ph-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes ph-level-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+/* ============================================================
+   @layer base
+   ============================================================ */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-body);
+    font-size: var(--fs-body);
+    line-height: var(--lh-normal);
+    color: var(--foreground);
+    background: var(--background);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    font-weight: var(--fw-bold);
+    letter-spacing: var(--tracking-tight);
+    line-height: var(--lh-snug);
+    margin: 0;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--gold-500) 28%, transparent);
+  }
+
+  /* Thin scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--felt-700) transparent;
+  }
+  *::-webkit-scrollbar { width: 8px; height: 8px; }
+  *::-webkit-scrollbar-thumb { background: var(--felt-700); border-radius: 999px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* ============================================================
+   @layer utilities
+   ============================================================ */
+@layer utilities {
+  /* Tabular numbers shorthand */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* iOS safe-area helpers */
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Money / numeric recipe — mono, semibold, tabular, tight tracking */
+  .ph-num {
+    font-family: var(--font-mono);
+    font-weight: var(--fw-semibold);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-snug);
+  }
+}
