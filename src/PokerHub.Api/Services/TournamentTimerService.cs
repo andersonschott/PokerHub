@@ -23,6 +23,15 @@ public class TournamentTimerService : BackgroundService
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(5);
     private readonly ConcurrentDictionary<Guid, int> _persistFailureCounts = new();
 
+    // Strictly-increasing sequence for ordering TimerStateSync messages on the client. A monotonic
+    // counter (not DateTime.UtcNow.Ticks) avoids two problems: Ticks (~6.4e17) exceeds
+    // Number.MAX_SAFE_INTEGER (9e15) so it loses precision as a JS double, and two ops within the
+    // same DateTime resolution tick would collide — with the client's `seq <= last` discard, a real
+    // update would be dropped. Interlocked.Increment guarantees a unique, ordered value per emission.
+    private static long _sequenceCounter;
+
+    private static long NextSeq() => Interlocked.Increment(ref _sequenceCounter);
+
     public TournamentTimerService(
         IServiceProvider serviceProvider,
         IHubContext<TournamentHub> hubContext,
@@ -216,13 +225,22 @@ public class TournamentTimerService : BackgroundService
 
         var dto = new TimerStateSyncDto
         {
-            Seq = DateTime.UtcNow.Ticks,
+            Seq = NextSeq(),
             TournamentId = tournamentId,
             Status = tournament.Status.ToString(),
             CurrentLevel = timerState.CurrentLevel,
             CurrentBlindLevel = currentBlind?.Order,
             NextBlindLevel = nextBlind?.Order,
-            LevelEndsAtUtc = timerState.LevelStartedAt.AddMinutes(currentBlind?.DurationMinutes ?? 0),
+            CurrentBlind = MapBlind(currentBlind),
+            NextBlind = MapBlind(nextBlind),
+            // No anchor while paused: a non-null LevelEndsAtUtc would make the client tick down a
+            // frozen level. SpecifyKind(Utc) ensures the date serializes with 'Z' even when built from
+            // a persisted (Kind=Unspecified) LevelStartedAt, so the client parses it as UTC, not local.
+            LevelEndsAtUtc = timerState.IsPaused
+                ? null
+                : DateTime.SpecifyKind(
+                    timerState.LevelStartedAt.AddMinutes(currentBlind?.DurationMinutes ?? 0),
+                    DateTimeKind.Utc),
             PausedRemainingSeconds = timerState.IsPaused ? timerState.TimeRemainingSeconds : null,
             ServerNowUtc = DateTime.UtcNow
         };
@@ -498,17 +516,38 @@ public class TournamentTimerService : BackgroundService
 
         return new TimerStateSyncDto
         {
-            Seq = DateTime.UtcNow.Ticks,
+            Seq = NextSeq(),
             TournamentId = tournamentId,
             Status = tournament.Status.ToString(),
             CurrentLevel = timerState.CurrentLevel,
             CurrentBlindLevel = currentBlind?.Order,
             NextBlindLevel = nextBlind?.Order,
-            LevelEndsAtUtc = timerState.LevelStartedAt.AddMinutes(currentBlind?.DurationMinutes ?? 0),
+            CurrentBlind = MapBlind(currentBlind),
+            NextBlind = MapBlind(nextBlind),
+            // See SyncState: null anchor while paused (client must not tick down a frozen level) and
+            // SpecifyKind(Utc) so the date serializes with 'Z' even from a persisted LevelStartedAt.
+            LevelEndsAtUtc = timerState.IsPaused
+                ? null
+                : DateTime.SpecifyKind(
+                    timerState.LevelStartedAt.AddMinutes(currentBlind?.DurationMinutes ?? 0),
+                    DateTimeKind.Utc),
             PausedRemainingSeconds = timerState.IsPaused ? timerState.TimeRemainingSeconds : null,
             ServerNowUtc = DateTime.UtcNow
         };
     }
+
+    /// <summary>Maps a <see cref="Domain.Entities.BlindLevel"/> to its sync projection (null-safe).</summary>
+    private static TimerBlindInfoDto? MapBlind(Domain.Entities.BlindLevel? blindLevel) =>
+        blindLevel is null
+            ? null
+            : new TimerBlindInfoDto
+            {
+                Sb = blindLevel.SmallBlind,
+                Bb = blindLevel.BigBlind,
+                Ante = blindLevel.Ante,
+                DurationMinutes = blindLevel.DurationMinutes,
+                IsBreak = blindLevel.IsBreak
+            };
 
     private class TournamentTimerState
     {

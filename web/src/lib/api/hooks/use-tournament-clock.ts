@@ -1,55 +1,37 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as signalR from '@microsoft/signalr';
-import { type MockClockState, type BlindInfo } from '@/features/timer/use-mock-clock';
-import { mockData } from '@/mocks/data';
+import { type MockClockState } from '@/features/timer/use-mock-clock';
+import {
+  type TimerStateSyncDto,
+  type ClockSyncState,
+  EMPTY_SYNC_STATE,
+  LOADING_CLOCK_STATE,
+  projectClock,
+  reduceSync,
+} from './clock-projection';
 
-export interface TimerStateSyncDto {
-  seq: number;
-  tournamentId: string;
-  status: string;
-  currentLevel: number;
-  currentBlindLevel?: number;
-  nextBlindLevel?: number;
-  levelEndsAtUtc?: string;
-  pausedRemainingSeconds?: number;
-  serverNowUtc: string;
-}
+export type { TimerStateSyncDto } from './clock-projection';
 
-function roundBlind(v: number): number {
-  return Math.round(v / 25) * 25;
-}
-
-function blindsForLevel(baseLevel: number, currentLevel: number): BlindInfo {
-  const t = mockData.tournament;
-  const delta = currentLevel - baseLevel;
-  const factor = Math.pow(1.5, delta);
-  return {
-    sb: roundBlind(t.sb * factor),
-    bb: roundBlind(t.bb * factor),
-    ante: roundBlind(t.ante * (delta > 0 ? factor : 1)),
-  };
-}
-
+/**
+ * useTournamentClock — relógio fiel do torneio alimentado por SignalR.
+ *
+ * Blinds e duração vêm REAIS do DTO (dto.currentBlind / dto.nextBlind); não há mais
+ * extrapolação mock. O estado inicial é "carregando" (LOADING_CLOCK_STATE) até o 1º sync.
+ * Mensagens fora de ordem (seq <= último aceito) são descartadas — ver reduceSync.
+ * A projeção por âncora (offset + clamp) roda a cada 250ms — ver projectClock.
+ */
 export function useTournamentClock(tournamentId: string) {
-  const t = mockData.tournament;
-  const levelSeconds = t.levelSeconds;
-
-  const [state, setState] = useState<MockClockState>({
-    level: t.level,
-    remainingSeconds: t.secondsRemaining,
-    levelSeconds,
-    paused: true,
-    blinds: blindsForLevel(t.level, t.level),
-    nextBlinds: blindsForLevel(t.level, t.level + 1),
-    elapsedPct: 0,
-  });
+  const [state, setState] = useState<MockClockState>(LOADING_CLOCK_STATE);
 
   const connectionRef = useRef<signalR.HubConnection | null>(null);
-  const dtoRef = useRef<TimerStateSyncDto | null>(null);
-  const offsetRef = useRef<number>(0);
+  const syncRef = useRef<ClockSyncState>(EMPTY_SYNC_STATE);
 
   useEffect(() => {
     if (!tournamentId) return;
+
+    // Ao (re)conectar ou trocar de torneio, volta para "carregando" para não exibir o
+    // relógio do torneio anterior até o 1º sync chegar.
+    setState(LOADING_CLOCK_STATE);
 
     const url = import.meta.env.VITE_API_URL + '/hub/tournaments';
     const connection = new signalR.HubConnectionBuilder()
@@ -59,84 +41,52 @@ export function useTournamentClock(tournamentId: string) {
 
     connectionRef.current = connection;
 
-    connection.on("TimerStateSync", (dto: TimerStateSyncDto) => {
-      const serverTime = new Date(dto.serverNowUtc).getTime();
-      const localTime = Date.now();
-      offsetRef.current = serverTime - localTime;
-      dtoRef.current = dto;
+    connection.on('TimerStateSync', (dto: TimerStateSyncDto) => {
+      // Descarta seq fora de ordem; recalcula offset apenas para o DTO aceito.
+      syncRef.current = reduceSync(syncRef.current, dto, Date.now());
     });
 
     connection.start().then(() => {
-      connection.invoke("JoinTorneio", tournamentId).catch(err => {
-        console.error("Error joining tournament group:", err);
+      connection.invoke('JoinTorneio', tournamentId).catch(err => {
+        console.error('Error joining tournament group:', err);
       });
-    }).catch(err => console.error("SignalR start error", err));
+    }).catch(err => console.error('SignalR start error', err));
 
     return () => {
       connection.stop();
+      connectionRef.current = null;
+      syncRef.current = EMPTY_SYNC_STATE;
     };
   }, [tournamentId]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const dto = dtoRef.current;
-      if (!dto) return;
-
-      let remaining = 0;
-      let paused = true;
-
-      if (dto.levelEndsAtUtc) {
-        const endsAt = new Date(dto.levelEndsAtUtc).getTime();
-        const nowServer = Date.now() + offsetRef.current;
-        remaining = (endsAt - nowServer) / 1000;
-        paused = false;
-      } else if (dto.pausedRemainingSeconds !== undefined && dto.pausedRemainingSeconds !== null) {
-        remaining = dto.pausedRemainingSeconds;
-        paused = true;
-      }
-
-      if (remaining < 0) remaining = 0;
-      const roundedRemaining = Math.ceil(remaining);
-
-      const currentLevel = dto.currentLevel;
-      const blinds = blindsForLevel(t.level, currentLevel);
-      const nextBlinds = blindsForLevel(t.level, currentLevel + 1);
-      
-      let elapsedPct = Math.round((1 - (roundedRemaining / levelSeconds)) * 100);
-      if (elapsedPct < 0) elapsedPct = 0;
-      if (elapsedPct > 100) elapsedPct = 100;
-
-      setState({
-        level: currentLevel,
-        remainingSeconds: roundedRemaining,
-        levelSeconds,
-        paused,
-        blinds,
-        nextBlinds,
-        elapsedPct
-      });
+      const sync = syncRef.current;
+      if (!sync.dto) return;
+      setState(projectClock(sync.dto, Date.now(), sync.offsetMs));
     }, 250);
 
     return () => clearInterval(interval);
-  }, [levelSeconds, t.level]);
+  }, []);
 
-  // Mock handlers as Phase 4 might implement them later via SignalR
+  // Controles manuais são acionados via mutations REST no dashboard (useNextLevel/usePrevLevel/
+  // usePause/useStart). Mantidos como no-op aqui para preservar o contrato de retorno do hook.
   const togglePause = useCallback(() => {
-    console.warn("togglePause not fully implemented with SignalR");
+    console.warn('togglePause not handled by useTournamentClock; use REST mutations');
   }, []);
 
   const nextLevel = useCallback(() => {
-    console.warn("nextLevel not fully implemented with SignalR");
+    console.warn('nextLevel not handled by useTournamentClock; use REST mutations');
   }, []);
 
   const prevLevel = useCallback(() => {
-    console.warn("prevLevel not fully implemented with SignalR");
+    console.warn('prevLevel not handled by useTournamentClock; use REST mutations');
   }, []);
 
   return {
     state,
     togglePause,
     nextLevel,
-    prevLevel
+    prevLevel,
   };
 }
