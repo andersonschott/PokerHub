@@ -59,8 +59,6 @@ builder.Services.AddSignalR(options =>
 // Background Services
 // DatabaseWarmupService runs first to wake up Azure SQL from sleep mode
 builder.Services.AddHostedService<DatabaseWarmupService>();
-builder.Services.AddSingleton<TournamentTimerService>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<TournamentTimerService>());
 
 // Application Services
 builder.Services.AddApplicationServices();

@@ -116,6 +116,26 @@ public static class PaymentEndpoints
             return Results.Ok(allDebts);
         });
 
+        // GET /api/payments/my-credits  — logged-in user's pending credits across ALL leagues.
+        p.MapGet("/my-credits", async (
+            ClaimsPrincipal user,
+            IPlayerService players,
+            IPaymentService payments) =>
+        {
+            var userPlayers = await players.GetAllPlayersByUserAsync(user.GetUserId());
+            if (userPlayers.Count == 0)
+                return Results.Ok(Array.Empty<object>());
+
+            var allCredits = new List<object>();
+            foreach (var player in userPlayers)
+            {
+                var credits = await payments.GetPendingPaymentsToReceiveAsync(player.Id);
+                allCredits.AddRange(credits.Cast<object>());
+            }
+
+            return Results.Ok(allCredits);
+        });
+
         // GET /api/payments/organizer  — payments for leagues organized by current user
         p.MapGet("/organizer", async (
             ClaimsPrincipal user,

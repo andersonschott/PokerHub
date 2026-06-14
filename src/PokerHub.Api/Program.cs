@@ -50,6 +50,8 @@ builder.Services.AddIdentityCore<User>(options =>
     .AddDefaultTokenProviders();
 
 builder.Services.AddApplicationServices();
+builder.Services.AddSingleton<PokerHub.Api.Services.TournamentTimerService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<PokerHub.Api.Services.TournamentTimerService>());
 
 // --- JWT bearer ---
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
@@ -82,6 +84,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 builder.Services.AddOpenApi();
+builder.Services.AddSignalR();
 
 // CORS para o front (SWA em prod, Vite em dev usa proxy mas registramos por robustez).
 // Origens vêm de config: "Cors:AllowedOrigins": ["http://localhost:5173", "https://<swa>.azurestaticapps.net"]
@@ -115,6 +118,8 @@ RankingEndpoints.Map(app);
 PrizeTableEndpoints.Map(app);
 JackpotEndpoints.Map(app);
 ExpenseEndpoints.Map(app);
+
+app.MapHub<PokerHub.Api.Hubs.TournamentHub>("/hub/tournaments");
 
 app.MapHealthChecks("/health");
 
