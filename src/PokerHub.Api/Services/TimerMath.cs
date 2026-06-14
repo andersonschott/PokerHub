@@ -74,13 +74,79 @@ public static class TimerMath
 
     /// <summary>
     /// Re-anchors a paused level on resume so the remaining time is preserved:
-    /// anchor = now - (levelDuration - remaining). Pure, used by ResumeTournament.
+    /// anchor = now - (levelDuration - remaining). Pure, used by the resume / manual time controls.
     /// </summary>
     public static DateTime AnchorForRemaining(int levelDurationSeconds, int remainingSeconds, DateTime nowUtc)
     {
         var elapsed = levelDurationSeconds - remainingSeconds;
         if (elapsed < 0) elapsed = 0;
         return nowUtc.AddSeconds(-(double)elapsed);
+    }
+
+    /// <summary>
+    /// Re-anchors the timer for a MANUAL "next level" jump. Returns <c>null</c> when there is no next
+    /// level. The new anchor is exactly <paramref name="nowUtc"/>, so a subsequent <see cref="Resolve"/>
+    /// at this instant stays on the chosen level with its full duration — i.e. the manual change is NOT
+    /// clobbered by the automatic catch-up.
+    /// </summary>
+    public static TimerResolution? ResolveManualNext(
+        IReadOnlyList<(int Order, int DurationSeconds)> levels,
+        int currentOrder,
+        DateTime nowUtc)
+    {
+        if (levels is null || levels.Count == 0) return null;
+
+        var index = IndexOfOrder(levels, currentOrder);
+        if (index < 0 || index + 1 >= levels.Count) return null;
+
+        var next = levels[index + 1];
+        return new TimerResolution(next.Order, next.DurationSeconds, nowUtc, ReachedEnd: false);
+    }
+
+    /// <summary>
+    /// Re-anchors the timer for a MANUAL "previous level" jump. Returns <c>null</c> when already on the
+    /// first level. The new anchor is exactly <paramref name="nowUtc"/> so the chosen level restarts with
+    /// its full duration and the manual change survives the next <see cref="Resolve"/>.
+    /// </summary>
+    public static TimerResolution? ResolveManualPrevious(
+        IReadOnlyList<(int Order, int DurationSeconds)> levels,
+        int currentOrder,
+        DateTime nowUtc)
+    {
+        if (levels is null || levels.Count == 0) return null;
+
+        var index = IndexOfOrder(levels, currentOrder);
+        if (index <= 0) return null;
+
+        var prev = levels[index - 1];
+        return new TimerResolution(prev.Order, prev.DurationSeconds, nowUtc, ReachedEnd: false);
+    }
+
+    /// <summary>
+    /// Re-anchors the timer for a MANUAL time-remaining adjustment on the current level.
+    /// <paramref name="secondsRemaining"/> is clamped to <c>[0, levelDuration]</c> and the anchor is
+    /// computed (via <see cref="AnchorForRemaining"/>) so the next <see cref="Resolve"/> yields exactly
+    /// that remaining instead of reverting to the previous automatic value. Returns <c>null</c> when the
+    /// current level is unknown.
+    /// </summary>
+    public static TimerResolution? ResolveManualTimeRemaining(
+        IReadOnlyList<(int Order, int DurationSeconds)> levels,
+        int currentOrder,
+        int secondsRemaining,
+        DateTime nowUtc)
+    {
+        if (levels is null || levels.Count == 0) return null;
+
+        var index = IndexOfOrder(levels, currentOrder);
+        if (index < 0) return null;
+
+        var duration = levels[index].DurationSeconds;
+        var clamped = secondsRemaining;
+        if (clamped < 0) clamped = 0;
+        if (clamped > duration) clamped = duration;
+
+        var anchor = AnchorForRemaining(duration, clamped, nowUtc);
+        return new TimerResolution(currentOrder, clamped, anchor, ReachedEnd: false);
     }
 
     private static int IndexOfOrder(IReadOnlyList<(int Order, int DurationSeconds)> levels, int order)

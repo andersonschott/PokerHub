@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using PokerHub.Api.Common;
+using PokerHub.Api.Services;
 using PokerHub.Application.DTOs.Tournament;
 using PokerHub.Application.Interfaces;
 using PokerHub.Domain.Enums;
@@ -184,7 +185,8 @@ public static class TournamentEndpoints
             Guid id,
             ClaimsPrincipal user,
             ILeagueService leagues,
-            ITournamentService tournaments) =>
+            ITournamentService tournaments,
+            TournamentTimerService timer) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
@@ -192,7 +194,11 @@ public static class TournamentEndpoints
             if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
                 return Results.Forbid();
 
-            var ok = await tournaments.PauseTournamentAsync(id);
+            // Live tournament: the timer service is the single source of truth (freezes the exact
+            // remaining + flips status + broadcasts). Non-live falls back to the service.
+            var ok = existing.Status == TournamentStatus.InProgress
+                ? await timer.PauseManualAsync(id)
+                : await tournaments.PauseTournamentAsync(id);
             return ok ? Results.Ok() : Results.BadRequest();
         });
 
@@ -201,7 +207,8 @@ public static class TournamentEndpoints
             Guid id,
             ClaimsPrincipal user,
             ILeagueService leagues,
-            ITournamentService tournaments) =>
+            ITournamentService tournaments,
+            TournamentTimerService timer) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
@@ -209,7 +216,9 @@ public static class TournamentEndpoints
             if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
                 return Results.Forbid();
 
-            var ok = await tournaments.ResumeTournamentAsync(id);
+            var ok = existing.Status == TournamentStatus.Paused
+                ? await timer.ResumeManualAsync(id)
+                : await tournaments.ResumeTournamentAsync(id);
             return ok ? Results.Ok() : Results.BadRequest();
         });
 
@@ -514,7 +523,8 @@ public static class TournamentEndpoints
             Guid id,
             ClaimsPrincipal user,
             ILeagueService leagues,
-            ITournamentService tournaments) =>
+            ITournamentService tournaments,
+            TournamentTimerService timer) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
@@ -522,7 +532,11 @@ public static class TournamentEndpoints
             if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
                 return Results.Forbid();
 
-            var ok = await tournaments.AdvanceToNextLevelAsync(id);
+            // For a live tournament the in-memory timer is authoritative — route through it so the
+            // manual jump is not clobbered by the auto tick. Otherwise fall back to the DB-only path.
+            var ok = existing.Status == TournamentStatus.InProgress
+                ? await timer.AdvanceLevelManualAsync(id)
+                : await tournaments.AdvanceToNextLevelAsync(id);
             return ok ? Results.Ok() : Results.BadRequest();
         });
 
@@ -531,7 +545,8 @@ public static class TournamentEndpoints
             Guid id,
             ClaimsPrincipal user,
             ILeagueService leagues,
-            ITournamentService tournaments) =>
+            ITournamentService tournaments,
+            TournamentTimerService timer) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
@@ -539,7 +554,9 @@ public static class TournamentEndpoints
             if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
                 return Results.Forbid();
 
-            var ok = await tournaments.GoToPreviousLevelAsync(id);
+            var ok = existing.Status == TournamentStatus.InProgress
+                ? await timer.GoToPreviousLevelManualAsync(id)
+                : await tournaments.GoToPreviousLevelAsync(id);
             return ok ? Results.Ok() : Results.BadRequest();
         });
 
@@ -549,7 +566,8 @@ public static class TournamentEndpoints
             UpdateTimeRequest req,
             ClaimsPrincipal user,
             ILeagueService leagues,
-            ITournamentService tournaments) =>
+            ITournamentService tournaments,
+            TournamentTimerService timer) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
@@ -557,7 +575,9 @@ public static class TournamentEndpoints
             if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
                 return Results.Forbid();
 
-            var ok = await tournaments.UpdateTimeRemainingAsync(id, req.SecondsRemaining);
+            var ok = existing.Status == TournamentStatus.InProgress
+                ? await timer.SetTimeRemainingManualAsync(id, req.SecondsRemaining)
+                : await tournaments.UpdateTimeRemainingAsync(id, req.SecondsRemaining);
             return ok ? Results.Ok() : Results.BadRequest();
         });
 

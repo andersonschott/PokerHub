@@ -100,21 +100,35 @@ public class TournamentTimerService : BackgroundService
 
             foreach (var tournament in activeTournaments)
             {
-                if (!_activeTimers.ContainsKey(tournament.Id))
+                // Seed under the SAME per-tournament lock the manual/auto ops use, so a freshly started
+                // tournament whose manual op is mid-flight (holding the lock before its commit) can never be
+                // seeded from a stale DB read and then clobber the just-applied manual change one tick later.
+                // SemaphoreSlim is not reentrant, but this seed runs in the background loop OUTSIDE
+                // ProcessTimer (which is what holds the lock during a tick), so no lock is already held here.
+                var lockObj = GetAdvanceLock(tournament.Id);
+                await lockObj.WaitAsync(stoppingToken);
+                try
                 {
-                    var currentBlind = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == tournament.CurrentLevel);
-                    var levelStartedAt = tournament.CurrentLevelStartedAt ?? DateTime.UtcNow;
-
-                    _activeTimers[tournament.Id] = new TournamentTimerState
+                    if (!_activeTimers.ContainsKey(tournament.Id))
                     {
-                        TournamentId = tournament.Id,
-                        CurrentLevel = tournament.CurrentLevel,
-                        TimeRemainingSeconds = tournament.TimeRemainingSeconds ?? (currentBlind?.DurationMinutes ?? 15) * 60,
-                        IsPaused = false,
-                        LevelStartedAt = levelStartedAt
-                    };
+                        var currentBlind = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == tournament.CurrentLevel);
+                        var levelStartedAt = tournament.CurrentLevelStartedAt ?? DateTime.UtcNow;
 
-                    _logger.LogInformation("Added timer for tournament {TournamentId}", tournament.Id);
+                        _activeTimers[tournament.Id] = new TournamentTimerState
+                        {
+                            TournamentId = tournament.Id,
+                            CurrentLevel = tournament.CurrentLevel,
+                            TimeRemainingSeconds = tournament.TimeRemainingSeconds ?? (currentBlind?.DurationMinutes ?? 15) * 60,
+                            IsPaused = false,
+                            LevelStartedAt = levelStartedAt
+                        };
+
+                        _logger.LogInformation("Added timer for tournament {TournamentId}", tournament.Id);
+                    }
+                }
+                finally
+                {
+                    lockObj.Release();
                 }
             }
 
@@ -139,42 +153,59 @@ public class TournamentTimerService : BackgroundService
         if (timerState.IsPaused)
             return;
 
-        var now = DateTime.UtcNow;
-
-        using var scope = _serviceProvider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<PokerHubDbContext>();
-
-        var tournament = await context.Tournaments
-            .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
-            .FirstOrDefaultAsync(t => t.Id == tournamentId, stoppingToken);
-
-        if (tournament == null) return;
-
-        var levels = BuildLevels(tournament);
-        if (levels.Count == 0) return;
-
-        var previousLevel = timerState.CurrentLevel;
-
-        // Time is ALWAYS derived from the absolute anchor; this also performs the multi-level
-        // catch-up when the host woke up with several levels already expired (restart/scale-to-zero).
-        var resolution = TimerMath.Resolve(levels, previousLevel, timerState.LevelStartedAt, now);
-
-        timerState.CurrentLevel = resolution.ResolvedOrder;
-        timerState.TimeRemainingSeconds = resolution.RemainingSeconds;
-        timerState.LevelStartedAt = resolution.NewAnchorUtc;
-
-        if (resolution.ResolvedOrder != previousLevel)
+        // Hold the per-tournament lock for the whole resolve+mutate+persist so the automatic tick can
+        // never clobber a concurrent manual control (next/prev/time/pause). The lock is per-tournament
+        // and only contended by the (rare) manual operations, so this adds no throughput cost.
+        var lockObj = GetAdvanceLock(tournamentId);
+        await lockObj.WaitAsync(stoppingToken);
+        try
         {
-            // One or more levels elapsed: persist once and emit a single TimerStateSync
-            // (no broadcasts for the intermediate levels that were skipped).
-            await AdvanceLevel(tournamentId, timerState, context, tournament, previousLevel, stoppingToken);
+            var now = DateTime.UtcNow;
+
+            using var scope = _serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<PokerHubDbContext>();
+
+            var tournament = await context.Tournaments
+                .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
+                .FirstOrDefaultAsync(t => t.Id == tournamentId, stoppingToken);
+
+            if (tournament == null) return;
+
+            // Re-check liveness under the lock: a manual pause/finish/cancel that landed while this tick
+            // was queued must not be overwritten by the automatic resolution below.
+            if (timerState.IsPaused || tournament.Status != TournamentStatus.InProgress) return;
+
+            var levels = BuildLevels(tournament);
+            if (levels.Count == 0) return;
+
+            var previousLevel = timerState.CurrentLevel;
+
+            // Time is ALWAYS derived from the absolute anchor; this also performs the multi-level
+            // catch-up when the host woke up with several levels already expired (restart/scale-to-zero).
+            var resolution = TimerMath.Resolve(levels, previousLevel, timerState.LevelStartedAt, now);
+
+            timerState.CurrentLevel = resolution.ResolvedOrder;
+            timerState.TimeRemainingSeconds = resolution.RemainingSeconds;
+            timerState.LevelStartedAt = resolution.NewAnchorUtc;
+
+            if (resolution.ResolvedOrder != previousLevel)
+            {
+                // One or more levels elapsed: persist once and emit a single TimerStateSync
+                // (no broadcasts for the intermediate levels that were skipped).
+                await PersistAndSyncLevelChange(tournamentId, timerState, context, tournament, previousLevel, stoppingToken);
+            }
+            else if (!resolution.ReachedEnd && timerState.TimeRemainingSeconds % 10 == 0)
+            {
+                // Emit sync every 10 seconds, NO 1 second ticks. Suppressed once the tournament
+                // has run past its last level to avoid spamming a frozen remaining=0.
+                PersistFromState(context, tournament, timerState);
+                await TrySaveAsync(context, tournamentId, stoppingToken);
+                await SyncState(tournamentId, timerState, tournament, stoppingToken);
+            }
         }
-        else if (!resolution.ReachedEnd && timerState.TimeRemainingSeconds % 10 == 0)
+        finally
         {
-            // Emit sync every 10 seconds, NO 1 second ticks. Suppressed once the tournament
-            // has run past its last level to avoid spamming a frozen remaining=0.
-            await PersistTimerState(tournamentId, timerState, stoppingToken);
-            await SyncState(tournamentId, timerState, tournament, stoppingToken);
+            lockObj.Release();
         }
     }
 
@@ -205,7 +236,7 @@ public class TournamentTimerService : BackgroundService
             .Select(bl => (bl.Order, DurationSeconds: bl.DurationMinutes * 60))
             .ToList();
 
-    private async Task AdvanceLevel(
+    private async Task PersistAndSyncLevelChange(
         Guid tournamentId,
         TournamentTimerState timerState,
         PokerHubDbContext context,
@@ -214,35 +245,128 @@ public class TournamentTimerService : BackgroundService
         CancellationToken stoppingToken)
     {
         // timerState was already advanced by TimerMath.Resolve in ProcessTimer; here we just persist
-        // the resolved anchor/level and emit a single sync. Block on the lock so the persist always
-        // happens (only contends with Pause/Resume, which is brief), keeping memory and DB in sync.
-        var lockObj = GetAdvanceLock(tournamentId);
-        await lockObj.WaitAsync(stoppingToken);
+        // the resolved anchor/level and emit a single sync. The caller (ProcessTimer) already holds the
+        // per-tournament lock, so no extra synchronisation is needed here.
+        PersistFromState(context, tournament, timerState);
+        if (!await TrySaveAsync(context, tournamentId, stoppingToken)) return;
 
+        await SyncState(tournamentId, timerState, tournament, stoppingToken);
+
+        var jumped = timerState.CurrentLevel - previousLevel;
+        if (jumped > 1)
+            _logger.LogInformation(
+                "Tournament {TournamentId} caught up {Jumped} levels: {From} -> {To}",
+                tournamentId, jumped, previousLevel, timerState.CurrentLevel);
+        else
+            _logger.LogInformation(
+                "Tournament {TournamentId} advanced to level {Level}", tournamentId, timerState.CurrentLevel);
+    }
+
+    /// <summary>Copies the in-memory timer state onto the tracked tournament entity (no save).</summary>
+    private static void PersistFromState(
+        PokerHubDbContext context,
+        Domain.Entities.Tournament tournament,
+        TournamentTimerState timerState)
+    {
+        tournament.CurrentLevel = timerState.CurrentLevel;
+        tournament.TimeRemainingSeconds = timerState.TimeRemainingSeconds;
+        tournament.CurrentLevelStartedAt = timerState.LevelStartedAt;
+    }
+
+    /// <summary>SaveChanges with the shared transient-failure counter. Returns false on failure.</summary>
+    private async Task<bool> TrySaveAsync(PokerHubDbContext context, Guid tournamentId, CancellationToken stoppingToken)
+    {
         try
         {
-            tournament.CurrentLevel = timerState.CurrentLevel;
-            tournament.TimeRemainingSeconds = timerState.TimeRemainingSeconds;
-            tournament.CurrentLevelStartedAt = timerState.LevelStartedAt;
             await context.SaveChangesAsync(stoppingToken);
             _persistFailureCounts.TryRemove(tournamentId, out _);
-
-            await SyncState(tournamentId, timerState, tournament, stoppingToken);
-
-            var jumped = timerState.CurrentLevel - previousLevel;
-            if (jumped > 1)
-                _logger.LogInformation(
-                    "Tournament {TournamentId} caught up {Jumped} levels: {From} -> {To}",
-                    tournamentId, jumped, previousLevel, timerState.CurrentLevel);
-            else
-                _logger.LogInformation(
-                    "Tournament {TournamentId} advanced to level {Level}", tournamentId, timerState.CurrentLevel);
+            return true;
         }
         catch (Exception ex)
         {
             var failureCount = _persistFailureCounts.AddOrUpdate(tournamentId, 1, (_, count) => count + 1);
             if (failureCount >= 5)
-                _logger.LogCritical(ex, "Persistent failure to advance level for {TournamentId}", tournamentId);
+                _logger.LogCritical(ex, "Persistent failure to save timer state for {TournamentId}", tournamentId);
+            return false;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Manual controls — the timer service is the SINGLE source of truth for a live
+    // (InProgress) tournament. Each control mutates the authoritative in-memory state,
+    // re-anchors via TimerMath, persists, and emits exactly one TimerStateSync, so there
+    // is no manual-vs-auto race (the auto tick reads the same re-anchored state).
+    // -------------------------------------------------------------------------
+
+    /// <summary>Manually advances to the next blind level. Returns false when already on the last level.</summary>
+    public Task<bool> AdvanceLevelManualAsync(Guid tournamentId) =>
+        ApplyManualChangeAsync(tournamentId, (levels, state, now) =>
+            TimerMath.ResolveManualNext(levels, state.CurrentLevel, now));
+
+    /// <summary>Manually returns to the previous blind level. Returns false when already on the first level.</summary>
+    public Task<bool> GoToPreviousLevelManualAsync(Guid tournamentId) =>
+        ApplyManualChangeAsync(tournamentId, (levels, state, now) =>
+            TimerMath.ResolveManualPrevious(levels, state.CurrentLevel, now));
+
+    /// <summary>Manually sets the remaining time on the current level (re-anchored, clamped to the level duration).</summary>
+    public Task<bool> SetTimeRemainingManualAsync(Guid tournamentId, int secondsRemaining) =>
+        ApplyManualChangeAsync(tournamentId, (levels, state, now) =>
+            TimerMath.ResolveManualTimeRemaining(levels, state.CurrentLevel, secondsRemaining, now));
+
+    /// <summary>
+    /// Shared pipeline for the manual level/time controls. Resolves the new anchor with the supplied
+    /// pure TimerMath function, then persists + broadcasts + keeps the in-memory state coherent.
+    /// Works whether or not the tournament is already tracked in <see cref="_activeTimers"/> (a freshly
+    /// started tournament is loaded from the DB and applied immediately, without waiting for the refresh).
+    /// </summary>
+    private async Task<bool> ApplyManualChangeAsync(
+        Guid tournamentId,
+        Func<IReadOnlyList<(int Order, int DurationSeconds)>, TournamentTimerState, DateTime, TimerResolution?> resolve)
+    {
+        var lockObj = GetAdvanceLock(tournamentId);
+        await lockObj.WaitAsync();
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<PokerHubDbContext>();
+
+            var tournament = await context.Tournaments
+                .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
+                .FirstOrDefaultAsync(t => t.Id == tournamentId);
+
+            if (tournament == null) return false;
+
+            // Symmetry with Pause/Resume (which revalidate Status under the lock): the endpoint's InProgress
+            // gate is read in a separate, unlocked query. Re-check here so a tournament paused/finished
+            // between that gate and this application does not get a level/time change persisted (TOCTOU).
+            if (tournament.Status != TournamentStatus.InProgress) return false;
+
+            var levels = BuildLevels(tournament);
+            if (levels.Count == 0) return false;
+
+            // Use the tracked state when available (it is authoritative and may be ahead of the DB,
+            // which is only persisted every 10s); otherwise seed a transient state from the DB.
+            _activeTimers.TryGetValue(tournamentId, out var state);
+            state ??= SeedStateFromTournament(tournament);
+
+            var now = DateTime.UtcNow;
+            var resolution = resolve(levels, state, now);
+            if (resolution is null) return false;
+
+            state.CurrentLevel = resolution.Value.ResolvedOrder;
+            state.TimeRemainingSeconds = resolution.Value.RemainingSeconds;
+            state.LevelStartedAt = resolution.Value.NewAnchorUtc;
+
+            PersistFromState(context, tournament, state);
+            if (!await TrySaveAsync(context, tournamentId, CancellationToken.None)) return false;
+
+            // Register the post-manual state UNCONDITIONALLY so a freshly started (not-yet-tracked)
+            // tournament becomes tracked with the applied change. The refresh seed then sees the key
+            // (under the same lock) and will not overwrite it from a stale DB read.
+            _activeTimers[tournamentId] = state;
+
+            await SyncState(tournamentId, state, tournament, CancellationToken.None);
+            return true;
         }
         finally
         {
@@ -250,78 +374,111 @@ public class TournamentTimerService : BackgroundService
         }
     }
 
-    private async Task PersistTimerState(Guid tournamentId, TournamentTimerState timerState, CancellationToken stoppingToken)
+    /// <summary>
+    /// Manually pauses a live tournament: freezes the exact remaining time, flips the status to Paused,
+    /// and broadcasts. Returns false when the tournament is not InProgress.
+    /// </summary>
+    public async Task<bool> PauseManualAsync(Guid tournamentId)
     {
+        var lockObj = GetAdvanceLock(tournamentId);
+        await lockObj.WaitAsync();
         try
         {
             using var scope = _serviceProvider.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<PokerHubDbContext>();
 
-            var tournament = await context.Tournaments.FindAsync(new object[] { tournamentId }, stoppingToken);
-            if (tournament != null)
-            {
-                tournament.CurrentLevel = timerState.CurrentLevel;
-                tournament.TimeRemainingSeconds = timerState.TimeRemainingSeconds;
-                tournament.CurrentLevelStartedAt = timerState.LevelStartedAt;
-                await context.SaveChangesAsync(stoppingToken);
-                _persistFailureCounts.TryRemove(tournamentId, out _);
-            }
-        }
-        catch (Exception ex)
-        {
-            var failureCount = _persistFailureCounts.AddOrUpdate(tournamentId, 1, (_, count) => count + 1);
-            if (failureCount >= 5)
-                _logger.LogCritical(ex, "Persistent failure to save timer state for {TournamentId}", tournamentId);
-        }
-    }
+            var tournament = await context.Tournaments
+                .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
+                .FirstOrDefaultAsync(t => t.Id == tournamentId);
 
-    public async Task PauseTournamentAsync(Guid tournamentId)
-    {
-        if (_activeTimers.TryGetValue(tournamentId, out var state))
-        {
+            if (tournament == null || tournament.Status != TournamentStatus.InProgress) return false;
+
+            var now = DateTime.UtcNow;
+            _activeTimers.TryGetValue(tournamentId, out var state);
+            state ??= SeedStateFromTournament(tournament);
+
+            // Freeze the exact remaining by resolving against the live anchor before flipping status.
+            var levels = BuildLevels(tournament);
+            if (levels.Count > 0)
+            {
+                var resolution = TimerMath.Resolve(levels, state.CurrentLevel, state.LevelStartedAt, now);
+                state.CurrentLevel = resolution.ResolvedOrder;
+                state.TimeRemainingSeconds = resolution.RemainingSeconds;
+                state.LevelStartedAt = resolution.NewAnchorUtc;
+            }
+
             state.IsPaused = true;
-            await PersistTimerState(tournamentId, state, CancellationToken.None);
+            PersistFromState(context, tournament, state);
+            tournament.Status = TournamentStatus.Paused;
+            if (!await TrySaveAsync(context, tournamentId, CancellationToken.None)) return false;
 
-            using var scope = _serviceProvider.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<PokerHubDbContext>();
-            var tournament = await context.Tournaments
-                .Include(t => t.BlindLevels)
-                .FirstOrDefaultAsync(t => t.Id == tournamentId);
+            _activeTimers[tournamentId] = state;
 
-            if (tournament != null)
-                await SyncState(tournamentId, state, tournament, CancellationToken.None);
+            await SyncState(tournamentId, state, tournament, CancellationToken.None);
+            return true;
         }
-    }
-
-    public async Task ResumeTournament(Guid tournamentId)
-    {
-        if (_activeTimers.TryGetValue(tournamentId, out var state))
+        finally
         {
-            state.IsPaused = false;
-
-            using var scope = _serviceProvider.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<PokerHubDbContext>();
-            var tournament = await context.Tournaments
-                .Include(t => t.BlindLevels)
-                .FirstOrDefaultAsync(t => t.Id == tournamentId);
-
-            if (tournament != null)
-            {
-                var currentBlind = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == state.CurrentLevel);
-                if (currentBlind != null)
-                {
-                    // Re-anchor so the remaining time is preserved across the pause (anchor = now - elapsed).
-                    var levelDurationSeconds = currentBlind.DurationMinutes * 60;
-                    state.LevelStartedAt = TimerMath.AnchorForRemaining(
-                        levelDurationSeconds, state.TimeRemainingSeconds, DateTime.UtcNow);
-                    tournament.CurrentLevelStartedAt = state.LevelStartedAt;
-                    await context.SaveChangesAsync();
-                }
-
-                await SyncState(tournamentId, state, tournament, CancellationToken.None);
-            }
+            lockObj.Release();
         }
     }
+
+    /// <summary>
+    /// Manually resumes a paused tournament: re-anchors so the frozen remaining is preserved, flips the
+    /// status back to InProgress, and broadcasts. Returns false when the tournament is not Paused.
+    /// </summary>
+    public async Task<bool> ResumeManualAsync(Guid tournamentId)
+    {
+        var lockObj = GetAdvanceLock(tournamentId);
+        await lockObj.WaitAsync();
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<PokerHubDbContext>();
+
+            var tournament = await context.Tournaments
+                .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
+                .FirstOrDefaultAsync(t => t.Id == tournamentId);
+
+            if (tournament == null || tournament.Status != TournamentStatus.Paused) return false;
+
+            var now = DateTime.UtcNow;
+            _activeTimers.TryGetValue(tournamentId, out var state);
+            state ??= SeedStateFromTournament(tournament);
+
+            // Re-anchor preserving the frozen remaining: anchor = now - (duration - remaining).
+            var currentBlind = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == state.CurrentLevel);
+            if (currentBlind != null)
+            {
+                var levelDurationSeconds = currentBlind.DurationMinutes * 60;
+                state.LevelStartedAt = TimerMath.AnchorForRemaining(levelDurationSeconds, state.TimeRemainingSeconds, now);
+            }
+
+            state.IsPaused = false;
+            PersistFromState(context, tournament, state);
+            tournament.Status = TournamentStatus.InProgress;
+            if (!await TrySaveAsync(context, tournamentId, CancellationToken.None)) return false;
+
+            _activeTimers[tournamentId] = state;
+
+            await SyncState(tournamentId, state, tournament, CancellationToken.None);
+            return true;
+        }
+        finally
+        {
+            lockObj.Release();
+        }
+    }
+
+    private static TournamentTimerState SeedStateFromTournament(Domain.Entities.Tournament tournament) =>
+        new()
+        {
+            TournamentId = tournament.Id,
+            CurrentLevel = tournament.CurrentLevel,
+            TimeRemainingSeconds = tournament.TimeRemainingSeconds ?? 0,
+            IsPaused = tournament.Status == TournamentStatus.Paused,
+            LevelStartedAt = tournament.CurrentLevelStartedAt ?? DateTime.UtcNow
+        };
 
     public async Task<TimerStateSyncDto?> GetTimerStateAsync(Guid tournamentId)
     {
