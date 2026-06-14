@@ -5,7 +5,15 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PokerHub.Api.Auth;
+using PokerHub.Api.Expenses;
+using PokerHub.Api.Jackpot;
 using PokerHub.Api.Leagues;
+using PokerHub.Api.Payments;
+using PokerHub.Api.Players;
+using PokerHub.Api.PrizeTables;
+using PokerHub.Api.Rankings;
+using PokerHub.Api.Seasons;
+using PokerHub.Api.Tournaments;
 using PokerHub.Application;
 using PokerHub.Domain.Entities;
 using PokerHub.Infrastructure.Data;
@@ -99,6 +107,14 @@ app.UseAuthorization();
 
 AuthEndpoints.Map(app);
 LeagueEndpoints.Map(app);
+TournamentEndpoints.Map(app);
+PaymentEndpoints.Map(app);
+PlayerEndpoints.Map(app);
+SeasonEndpoints.Map(app);
+RankingEndpoints.Map(app);
+PrizeTableEndpoints.Map(app);
+JackpotEndpoints.Map(app);
+ExpenseEndpoints.Map(app);
 
 app.MapHealthChecks("/health");
 
