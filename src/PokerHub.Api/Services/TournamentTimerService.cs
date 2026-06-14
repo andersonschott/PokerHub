@@ -149,23 +149,30 @@ public class TournamentTimerService : BackgroundService
             .FirstOrDefaultAsync(t => t.Id == tournamentId, stoppingToken);
 
         if (tournament == null) return;
-        var currentBlind = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == timerState.CurrentLevel);
-        if (currentBlind == null) return;
 
-        var levelDurationSeconds = currentBlind.DurationMinutes * 60;
-        var elapsedSinceLevelStart = (int)(now - timerState.LevelStartedAt).TotalSeconds;
-        var calculatedRemaining = levelDurationSeconds - elapsedSinceLevelStart;
+        var levels = BuildLevels(tournament);
+        if (levels.Count == 0) return;
 
-        timerState.TimeRemainingSeconds = Math.Max(0, calculatedRemaining);
+        var previousLevel = timerState.CurrentLevel;
 
-        if (timerState.TimeRemainingSeconds <= 0)
+        // Time is ALWAYS derived from the absolute anchor; this also performs the multi-level
+        // catch-up when the host woke up with several levels already expired (restart/scale-to-zero).
+        var resolution = TimerMath.Resolve(levels, previousLevel, timerState.LevelStartedAt, now);
+
+        timerState.CurrentLevel = resolution.ResolvedOrder;
+        timerState.TimeRemainingSeconds = resolution.RemainingSeconds;
+        timerState.LevelStartedAt = resolution.NewAnchorUtc;
+
+        if (resolution.ResolvedOrder != previousLevel)
         {
-            await AdvanceLevel(tournamentId, timerState, stoppingToken);
+            // One or more levels elapsed: persist once and emit a single TimerStateSync
+            // (no broadcasts for the intermediate levels that were skipped).
+            await AdvanceLevel(tournamentId, timerState, context, tournament, previousLevel, stoppingToken);
         }
-
-        // Emit sync every 10 seconds or when requested, NO 1 second ticks anymore.
-        if (timerState.TimeRemainingSeconds % 10 == 0)
+        else if (!resolution.ReachedEnd && timerState.TimeRemainingSeconds % 10 == 0)
         {
+            // Emit sync every 10 seconds, NO 1 second ticks. Suppressed once the tournament
+            // has run past its last level to avoid spamming a frozen remaining=0.
             await PersistTimerState(tournamentId, timerState, stoppingToken);
             await SyncState(tournamentId, timerState, tournament, stoppingToken);
         }
@@ -192,45 +199,50 @@ public class TournamentTimerService : BackgroundService
         await _hubContext.Clients.Group($"tournament_{tournamentId}").SendAsync("TimerStateSync", dto, stoppingToken);
     }
 
-    private async Task AdvanceLevel(Guid tournamentId, TournamentTimerState timerState, CancellationToken stoppingToken)
+    private static List<(int Order, int DurationSeconds)> BuildLevels(Domain.Entities.Tournament tournament) =>
+        tournament.BlindLevels
+            .OrderBy(bl => bl.Order)
+            .Select(bl => (bl.Order, DurationSeconds: bl.DurationMinutes * 60))
+            .ToList();
+
+    private async Task AdvanceLevel(
+        Guid tournamentId,
+        TournamentTimerState timerState,
+        PokerHubDbContext context,
+        Domain.Entities.Tournament tournament,
+        int previousLevel,
+        CancellationToken stoppingToken)
     {
+        // timerState was already advanced by TimerMath.Resolve in ProcessTimer; here we just persist
+        // the resolved anchor/level and emit a single sync. Block on the lock so the persist always
+        // happens (only contends with Pause/Resume, which is brief), keeping memory and DB in sync.
         var lockObj = GetAdvanceLock(tournamentId);
-        if (!await lockObj.WaitAsync(0, stoppingToken))
-            return;
+        await lockObj.WaitAsync(stoppingToken);
 
         try
         {
-            using var scope = _serviceProvider.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<PokerHubDbContext>();
-
-            var tournament = await context.Tournaments
-                .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
-                .FirstOrDefaultAsync(t => t.Id == tournamentId, stoppingToken);
-
-            if (tournament == null) return;
-
-            var nextLevel = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == timerState.CurrentLevel + 1);
-
-            if (nextLevel == null)
-            {
-                timerState.TimeRemainingSeconds = 60;
-                timerState.LevelStartedAt = DateTime.UtcNow;
-                return;
-            }
-
-            var now = DateTime.UtcNow;
-            timerState.CurrentLevel = nextLevel.Order;
-            timerState.TimeRemainingSeconds = nextLevel.DurationMinutes * 60;
-            timerState.LevelStartedAt = now;
-
-            tournament.CurrentLevel = nextLevel.Order;
+            tournament.CurrentLevel = timerState.CurrentLevel;
             tournament.TimeRemainingSeconds = timerState.TimeRemainingSeconds;
-            tournament.CurrentLevelStartedAt = now;
+            tournament.CurrentLevelStartedAt = timerState.LevelStartedAt;
             await context.SaveChangesAsync(stoppingToken);
+            _persistFailureCounts.TryRemove(tournamentId, out _);
 
             await SyncState(tournamentId, timerState, tournament, stoppingToken);
 
-            _logger.LogInformation("Tournament {TournamentId} advanced to level {Level}", tournamentId, nextLevel.Order);
+            var jumped = timerState.CurrentLevel - previousLevel;
+            if (jumped > 1)
+                _logger.LogInformation(
+                    "Tournament {TournamentId} caught up {Jumped} levels: {From} -> {To}",
+                    tournamentId, jumped, previousLevel, timerState.CurrentLevel);
+            else
+                _logger.LogInformation(
+                    "Tournament {TournamentId} advanced to level {Level}", tournamentId, timerState.CurrentLevel);
+        }
+        catch (Exception ex)
+        {
+            var failureCount = _persistFailureCounts.AddOrUpdate(tournamentId, 1, (_, count) => count + 1);
+            if (failureCount >= 5)
+                _logger.LogCritical(ex, "Persistent failure to advance level for {TournamentId}", tournamentId);
         }
         finally
         {
@@ -248,6 +260,7 @@ public class TournamentTimerService : BackgroundService
             var tournament = await context.Tournaments.FindAsync(new object[] { tournamentId }, stoppingToken);
             if (tournament != null)
             {
+                tournament.CurrentLevel = timerState.CurrentLevel;
                 tournament.TimeRemainingSeconds = timerState.TimeRemainingSeconds;
                 tournament.CurrentLevelStartedAt = timerState.LevelStartedAt;
                 await context.SaveChangesAsync(stoppingToken);
@@ -285,8 +298,7 @@ public class TournamentTimerService : BackgroundService
         if (_activeTimers.TryGetValue(tournamentId, out var state))
         {
             state.IsPaused = false;
-            state.LevelStartedAt = DateTime.UtcNow.AddSeconds(state.TimeRemainingSeconds - (/* total level duration - no easy access here, approximated */ state.TimeRemainingSeconds)); // simplified resume
-            // To properly resume, we should adjust LevelStartedAt so elapsed time matches previous elapsed time.
+
             using var scope = _serviceProvider.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<PokerHubDbContext>();
             var tournament = await context.Tournaments
@@ -298,9 +310,10 @@ public class TournamentTimerService : BackgroundService
                 var currentBlind = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == state.CurrentLevel);
                 if (currentBlind != null)
                 {
+                    // Re-anchor so the remaining time is preserved across the pause (anchor = now - elapsed).
                     var levelDurationSeconds = currentBlind.DurationMinutes * 60;
-                    var elapsed = levelDurationSeconds - state.TimeRemainingSeconds;
-                    state.LevelStartedAt = DateTime.UtcNow.AddSeconds(-elapsed);
+                    state.LevelStartedAt = TimerMath.AnchorForRemaining(
+                        levelDurationSeconds, state.TimeRemainingSeconds, DateTime.UtcNow);
                     tournament.CurrentLevelStartedAt = state.LevelStartedAt;
                     await context.SaveChangesAsync();
                 }
