@@ -1,13 +1,10 @@
 /**
  * Caixinha — saldo acumulado da liga (jackpot).
- * Port fiel de Caixinha.jsx do kit.
- * Dados mock: mockData.caixinha.
- * Funcionalidade: tab Entradas / Saídas, organizer sheets para registrar
- * gasto e uso em torneio — atualiza saldo local via useState.
+ * Refatorado na Fase 5 para consumir a API Real.
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, Trophy, Check } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Trophy, Check, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,27 +12,35 @@ import { Sheet } from '@/components/ui/sheet';
 import { StatTile } from '@/components/ui/stat-tile';
 import { MoneyValue } from '@/components/ui/money-value';
 import { Input } from '@/components/ui/input';
-import { mockData, type MockCaixinhaUsage, type MockCaixinhaUsageType } from '@/mocks/data';
-import { formatBRL } from '@/components/ui/money-value';
+
+import { useActiveLeague } from '@/features/leagues/league-context';
+import { useLeague } from '@/lib/api/hooks/use-leagues';
+import {
+  useJackpotStatus,
+  useJackpotContributions,
+  useJackpotUsages,
+  useUseJackpot,
+} from '@/lib/api/hooks/use-jackpot';
 
 type SheetKind = 'expense' | 'tournament' | null;
 
 export default function CaixinhaRoute() {
   const navigate = useNavigate();
-  const C = mockData.caixinha;
+  const { activeLeagueId } = useActiveLeague();
 
   const [tab, setTab] = useState<'entradas' | 'saidas'>('entradas');
-  const [usages, setUsages] = useState<MockCaixinhaUsage[]>(() =>
-    C.usages.map((u) => ({ ...u })),
-  );
   const [sheet, setSheet] = useState<SheetKind>(null);
   const [desc, setDesc] = useState('');
   const [val, setVal] = useState('');
-  const [toast, setToast] = useState<string | null>(null);
 
-  const entriesTotal = C.entries.reduce((s, e) => s + e.amount, 0);
-  const usagesTotal = usages.reduce((s, u) => s + u.amount, 0);
-  const balance = entriesTotal - usagesTotal;
+  // Queries
+  const { data: league, isLoading: isLoadingL } = useLeague(activeLeagueId ?? '');
+  const { data: status, isLoading: isLoadingS } = useJackpotStatus(activeLeagueId);
+  const { data: contributions, isLoading: isLoadingC } = useJackpotContributions(activeLeagueId);
+  const { data: usages, isLoading: isLoadingU } = useJackpotUsages(activeLeagueId);
+
+  // Mutations
+  const useJackpotMut = useUseJackpot(activeLeagueId);
 
   const openSheet = (kind: SheetKind) => {
     setSheet(kind);
@@ -43,36 +48,45 @@ export default function CaixinhaRoute() {
     setVal('');
   };
 
-  const fire = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2200);
-  };
-
   const submitSheet = () => {
-    const amount = parseInt(val, 10) || 0;
+    const amount = parseFloat(val.replace(',', '.')) || 0;
     if (!amount || !desc.trim()) return;
-    const type: MockCaixinhaUsageType = sheet === 'expense' ? 'expense' : 'tournament';
-    const newUsage: MockCaixinhaUsage = {
-      id: `u${Date.now()}`,
-      desc: desc.trim(),
-      date: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-      amount,
-      type,
-      balanceAfter: balance - amount,
-    };
-    setUsages((prev) => [...prev, newUsage]);
-    setSheet(null);
-    fire(
-      `${type === 'expense' ? 'Gasto registrado' : 'Uso em torneio registrado'}: R$ ${formatBRL(amount)}`,
+
+    useJackpotMut.mutate(
+      { amount, description: desc.trim() },
+      {
+        onSuccess: () => {
+          setSheet(null);
+        },
+      }
     );
   };
 
-  const typeBadge = (type: MockCaixinhaUsageType) =>
-    type === 'tournament' ? (
-      <Badge tone="gold">Torneio especial</Badge>
-    ) : (
-      <Badge tone="neutral">Gasto da liga</Badge>
+  if (!activeLeagueId) {
+    return (
+      <div className="p-4 text-center mt-10">
+        <p className="text-muted-foreground">Nenhuma liga selecionada.</p>
+        <Button className="mt-4" onClick={() => navigate('/app/ligas')}>Voltar</Button>
+      </div>
     );
+  }
+
+  if (isLoadingL || isLoadingS || isLoadingC || isLoadingU) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const entriesTotal = contributions?.reduce((s, e) => s + e.amount, 0) ?? 0;
+  const usagesTotal = usages?.reduce((s, u) => s + u.amount, 0) ?? 0;
+  const balance = entriesTotal - usagesTotal; // API backend already computes this implicitly, but we calculate locally from lists for UI logic or use status.accumulatedPrizePool (which is the prize pool basis).
+  
+  // Actually, status.accumulatedPrizePool might be the total basis, not the balance. Let's rely on the real entries - usages, or the total. Wait, balance could just be entries - usages.
+
+  const safeEntries = contributions ?? [];
+  const safeUsages = usages ?? [];
 
   return (
     <div className="pb-24 px-4 pt-3 relative min-h-full">
@@ -90,7 +104,7 @@ export default function CaixinhaRoute() {
           <h1 className="font-sans font-bold text-[19px] tracking-[-0.01em] leading-tight">
             Caixinha
           </h1>
-          <p className="text-[12.5px] text-muted-foreground">{mockData.league.name}</p>
+          <p className="text-[12.5px] text-muted-foreground">{league?.name}</p>
         </div>
       </div>
 
@@ -102,7 +116,7 @@ export default function CaixinhaRoute() {
         <MoneyValue value={balance} cents={false} color="none" size="40px" />
         <div className="text-[12.5px] text-muted-foreground mt-1">
           Acumula{' '}
-          <span className="font-mono font-bold text-gold-400">{C.percent}%</span> de cada prize
+          <span className="font-mono font-bold text-gold-400">{status?.jackpotPercentage ?? 0}%</span> de cada prize
           pool
         </div>
       </Card>
@@ -124,7 +138,7 @@ export default function CaixinhaRoute() {
           valueSize="16px"
         />
         <StatTile
-          value={C.entries.length}
+          value={safeEntries.length}
           label="Torneios"
           center
           valueSize="16px"
@@ -134,8 +148,8 @@ export default function CaixinhaRoute() {
       {/* Tabs */}
       <div className="flex gap-1 bg-secondary p-1 rounded-[var(--radius-md)] mb-3.5">
         {([
-          { k: 'entradas', l: `Entradas · ${C.entries.length}` },
-          { k: 'saidas', l: `Saídas · ${usages.length}` },
+          { k: 'entradas', l: `Entradas · ${safeEntries.length}` },
+          { k: 'saidas', l: `Saídas · ${safeUsages.length}` },
         ] as const).map((x) => {
           const active = x.k === tab;
           return (
@@ -159,51 +173,57 @@ export default function CaixinhaRoute() {
       {/* Entradas list */}
       {tab === 'entradas' && (
         <div className="flex flex-col gap-2">
-          {C.entries.map((e, i) => (
-            <Card key={i} pad="md">
-              <div className="flex items-center gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="font-sans font-semibold text-[14.5px] truncate">
-                    {e.tournament}
+          {safeEntries.length === 0 ? (
+            <p className="text-[12.5px] text-muted-foreground px-0.5 text-center py-4">
+              Ainda não há contribuições.
+            </p>
+          ) : (
+            safeEntries.map((e) => (
+              <Card key={e.id} pad="md">
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-sans font-semibold text-[14.5px] truncate">
+                      {e.tournamentName}
+                    </div>
+                    <div className="font-mono text-[11.5px] text-muted-foreground mt-0.5">
+                      {new Date(e.tournamentDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} · pool <MoneyValue value={e.tournamentPrizePool} cents={false} size="11.5px" color="none" /> · {e.percentageApplied}%
+                    </div>
                   </div>
-                  <div className="font-mono text-[11.5px] text-muted-foreground mt-0.5">
-                    {e.date} · pool <MoneyValue value={e.prizePool} cents={false} size="11.5px" color="none" /> · {e.pct}%
-                  </div>
+                  <MoneyValue value={e.amount} signed cents={false} size="15px" />
                 </div>
-                <MoneyValue value={e.amount} signed cents={false} size="15px" />
-              </div>
-            </Card>
-          ))}
+              </Card>
+            ))
+          )}
         </div>
       )}
 
       {/* Saídas list */}
       {tab === 'saidas' && (
         <div className="flex flex-col gap-2">
-          {usages.length === 0 ? (
+          {safeUsages.length === 0 ? (
             <p className="text-[12.5px] text-muted-foreground px-0.5">
               Nenhuma saída ainda — quando a caixinha for usada, aparece aqui.
             </p>
           ) : (
-            usages.map((u) => (
+            safeUsages.map((u) => (
               <Card key={u.id} pad="md">
                 <div className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
-                    <div className="font-sans font-semibold text-[14.5px] truncate">{u.desc}</div>
+                    <div className="font-sans font-semibold text-[14.5px] truncate">{u.description}</div>
                     <div className="font-mono text-[11.5px] text-muted-foreground mt-0.5">
-                      {u.date} · saldo após <MoneyValue value={u.balanceAfter} cents={false} size="11.5px" color="none" />
+                      {new Date(u.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} · saldo após <MoneyValue value={u.balanceAfter} cents={false} size="11.5px" color="none" />
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1.5">
                     <MoneyValue value={-u.amount} cents={false} size="15px" />
-                    {typeBadge(u.type)}
+                    <Badge tone="neutral">Uso / Gasto</Badge>
                   </div>
                 </div>
               </Card>
             ))
           )}
 
-          {/* Organizer action buttons */}
+          {/* Organizer action buttons (Check if user is organizer in the future) */}
           <div className="flex gap-2 mt-1.5">
             <Button
               variant="primary"
@@ -227,7 +247,7 @@ export default function CaixinhaRoute() {
 
       {/* Info footer */}
       <p className="text-[12px] text-muted-foreground leading-relaxed mt-4 px-0.5">
-        A caixinha guarda {C.percent}% de cada prize pool. O organizador usa para torneios
+        A caixinha guarda {status?.jackpotPercentage ?? 0}% de cada prize pool. O organizador usa para torneios
         especiais ou despesas da liga — baralhos, fichas, lanches.
       </p>
 
@@ -261,10 +281,10 @@ export default function CaixinhaRoute() {
               <Input
                 mono
                 prefix="R$"
-                inputMode="numeric"
+                inputMode="decimal"
                 placeholder="0"
                 value={val}
-                onChange={(e) => setVal(e.target.value.replace(/\D/g, ''))}
+                onChange={(e) => setVal(e.target.value.replace(/[^0-9,.]/g, ''))}
               />
             </div>
             <Button
@@ -272,7 +292,7 @@ export default function CaixinhaRoute() {
               icon={Check}
               block
               disabled={
-                !desc.trim() || !val || (parseInt(val, 10) || 0) > balance
+                !desc.trim() || !val || (parseFloat(val.replace(',', '.')) || 0) > balance
               }
               onClick={submitSheet}
             >
@@ -280,14 +300,6 @@ export default function CaixinhaRoute() {
             </Button>
           </div>
         </Sheet>
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <div className="absolute left-4 right-4 bottom-20 z-[70] bg-[var(--felt-700)] border border-border rounded-[var(--radius-md)] px-[14px] py-3 flex items-center gap-2.5 shadow-lg">
-          <Check className="w-[18px] h-[18px] text-positive shrink-0" />
-          <span className="text-[14px] font-medium">{toast}</span>
-        </div>
       )}
     </div>
   );

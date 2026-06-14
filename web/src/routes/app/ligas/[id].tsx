@@ -13,6 +13,8 @@ import { ChevronsUpDown, Settings2, CalendarPlus, Plus, CalendarClock, PiggyBank
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { useLeague, useLeaguePlayers } from '@/lib/api/hooks/use-leagues';
+import { useActiveSeason, useSeasonRanking } from '@/lib/api/hooks/use-seasons';
+import { useTournaments, TournamentStatus } from '@/lib/api/hooks/use-tournaments';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -118,6 +120,13 @@ export default function LeagueHomeRoute() {
     isLoading: playersLoading,
   } = useLeaguePlayers(id);
 
+  const { data: activeSeason, isLoading: seasonLoading } = useActiveSeason(id);
+  const { data: rankingData, isLoading: rankingLoading } = useSeasonRanking(activeSeason?.id ?? '');
+
+  const { data: allTournaments, isLoading: toursLoading } = useTournaments(id);
+  const upcoming = allTournaments?.filter(t => t.status === TournamentStatus.Scheduled || t.status === TournamentStatus.InProgress) ?? [];
+  const history = allTournaments?.filter(t => t.status === TournamentStatus.Finished || t.status === TournamentStatus.Cancelled) ?? [];
+
   // Mock tournament data (will be replaced when the live-tournament endpoint exists)
   const t = mockData.tournament;
   const liveTournament = league ? false : false; // No live tournament endpoint yet — always show empty hero
@@ -125,7 +134,7 @@ export default function LeagueHomeRoute() {
   // Set the active league when this page loads with a valid id
   useEffect(() => {
     if (id) setActiveLeagueId(id);
-  }, [id]);
+  }, [id, setActiveLeagueId]);
 
   const isOrganizer = league?.organizerId === user?.userId;
 
@@ -274,16 +283,18 @@ export default function LeagueHomeRoute() {
             <div className="flex flex-col gap-[10px]">
               <SectionTitle icon={CalendarClock}>Próximos</SectionTitle>
 
-              {mockData.upcoming.map((u, i) => (
-                <Card key={i} interactive pad="md">
+              {toursLoading && <div className="text-sm text-muted-foreground">Carregando...</div>}
+              {upcoming.length === 0 && !toursLoading && <div className="text-sm text-muted-foreground">Nenhum torneio próximo.</div>}
+              {upcoming.map((u) => (
+                <Card key={u.id} interactive pad="md">
                   <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-sans font-semibold text-[15px]">{u.name}</span>
-                        {u.status === 'live' ? <StatusPill status="live" dot /> : null}
+                        {u.status === TournamentStatus.InProgress ? <StatusPill status="live" dot /> : null}
                       </div>
                       <div className="text-[12.5px] text-muted-foreground mt-0.5">
-                        {u.when} · {u.confirmed} confirmados
+                        {new Date(u.scheduledDateTime).toLocaleString('pt-BR')} · {u.playerCount} confirmados
                       </div>
                     </div>
                     <Badge tone="neutral"><MoneyValue value={u.buyIn} cents={false} color="none" /></Badge>
@@ -317,7 +328,9 @@ export default function LeagueHomeRoute() {
 
               {/* Realizados (mock) */}
               <SectionTitle icon={CalendarClock}>Realizados</SectionTitle>
-              {mockData.history.map((h) => (
+              {toursLoading && <div className="text-sm text-muted-foreground">Carregando...</div>}
+              {history.length === 0 && !toursLoading && <div className="text-sm text-muted-foreground">Nenhum torneio finalizado.</div>}
+              {history.map((h) => (
                 <Card
                   key={h.id}
                   interactive
@@ -332,8 +345,7 @@ export default function LeagueHomeRoute() {
                         {h.name}
                       </div>
                       <div className="text-xs text-muted-foreground mt-0.5">
-                        {h.date} · {h.players} jogadores · campeão{' '}
-                        {h.podium[0]?.name ?? '—'}
+                        {new Date(h.scheduledDateTime).toLocaleDateString('pt-BR')} · {h.playerCount} jogadores
                       </div>
                     </div>
                     <MoneyValue value={h.prizePool} cents={false} size="13px" />
@@ -346,17 +358,16 @@ export default function LeagueHomeRoute() {
             {/* Right column (desktop): next tournament + acerto rápido placeholder */}
             <div className="hidden lg:flex flex-col gap-[10px]">
               <SectionTitle icon={CalendarClock}>Próximo torneio</SectionTitle>
-              {mockData.upcoming[0] ? (
+              {upcoming[0] ? (
                 <Card pad="md">
                   <div className="font-sans font-semibold text-[16px]">
-                    {mockData.upcoming[0].name}
+                    {upcoming[0].name}
                   </div>
                   <div className="text-sm text-muted-foreground mt-1">
-                    {mockData.upcoming[0].when} · {mockData.upcoming[0].confirmed}{' '}
-                    confirmados
+                    {new Date(upcoming[0].scheduledDateTime).toLocaleString('pt-BR')} · {upcoming[0].playerCount} confirmados
                   </div>
                   <div className="mt-3">
-                    <Badge tone="neutral"><MoneyValue value={mockData.upcoming[0].buyIn} cents={false} color="none" /></Badge>
+                    <Badge tone="neutral"><MoneyValue value={upcoming[0].buyIn} cents={false} color="none" /></Badge>
                   </div>
                 </Card>
               ) : (
@@ -385,9 +396,21 @@ export default function LeagueHomeRoute() {
       {/* Tab: Jogadores (REAL) */}
       {tab === 'jogadores' && (
         <div className="flex flex-col gap-2">
-          <SectionTitle icon={Users}>
-            {league ? `${league.playerCount} jogadores` : 'Jogadores'}
-          </SectionTitle>
+          <div className="flex items-center justify-between">
+            <SectionTitle icon={Users}>
+              {league ? `${league.playerCount} jogadores` : 'Jogadores'}
+            </SectionTitle>
+            {isOrganizer ? (
+              <Button
+                variant="outline"
+                size="sm"
+                icon={Settings2}
+                onClick={() => navigate(`/app/ligas/${id}/jogadores`)}
+              >
+                Gerenciar
+              </Button>
+            ) : null}
+          </div>
 
           {playersLoading && (
             <>
@@ -488,33 +511,58 @@ export default function LeagueHomeRoute() {
         </div>
       )}
 
-      {/* Tab: Ranking (mock summary → link to /app/ranking) */}
+      {/* Tab: Ranking (REAL via active season) */}
       {tab === 'ranking' && (
         <div className="flex flex-col gap-2">
-          <SectionTitle icon={Trophy}>Ranking da temporada</SectionTitle>
+          <div className="flex items-center justify-between">
+            <SectionTitle icon={Trophy}>Ranking da temporada</SectionTitle>
+            {isOrganizer ? (
+              <Button
+                variant="outline"
+                size="sm"
+                icon={Settings2}
+                onClick={() => navigate(`/app/ligas/${id}/temporadas`)}
+              >
+                Gerenciar
+              </Button>
+            ) : null}
+          </div>
 
-          {mockData.ranking.map((r, idx) => (
-            <Card key={r.position} pad="md">
-              <div className="flex items-center gap-3">
-                <Avatar
-                  name={r.name}
-                  podium={idx < 3 ? (['gold', 'silver', 'bronze'] as const)[idx] : undefined}
-                  badge={idx < 3 ? String(idx + 1) : undefined}
-                  badgeGold={idx === 0}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="font-sans font-semibold text-[15px]">{r.name}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {r.tournaments} torneio{r.tournaments !== 1 ? 's' : ''} · ITM {r.itm}%
+          {seasonLoading || rankingLoading ? (
+            <PlayerSkeleton />
+          ) : !activeSeason ? (
+            <div className="text-sm text-muted-foreground py-8 text-center">
+              Nenhuma temporada ativa.
+              {isOrganizer ? ' Inicie uma nova temporada para contabilizar pontos.' : ''}
+            </div>
+          ) : rankingData?.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-8 text-center">
+              Nenhum torneio finalizado na temporada atual.
+            </div>
+          ) : (
+            rankingData?.map((r, idx) => (
+              <Card key={r.playerId} pad="md">
+                <div className="flex items-center gap-3">
+                  <Avatar
+                    name={r.playerName}
+                    podium={idx < 3 ? (['gold', 'silver', 'bronze'] as const)[idx] : undefined}
+                    badge={idx < 3 ? String(idx + 1) : undefined}
+                    badgeGold={idx === 0}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-sans font-semibold text-[15px]">{r.playerName}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {r.totalPoints} pts · {r.tournamentsPlayed} torneio{r.tournamentsPlayed !== 1 ? 's' : ''} · ITM {r.itmCount > 0 ? Math.round((r.itmCount / r.tournamentsPlayed) * 100) : 0}%
+                    </div>
                   </div>
+                  <MoneyValue value={r.totalProfit} signed size="15px" />
                 </div>
-                <MoneyValue value={r.profit} signed size="15px" />
-              </div>
-            </Card>
-          ))}
+              </Card>
+            ))
+          )}
 
           <Link
-            to="/app/ranking"
+            to={`/app/ranking?leagueId=${id}&seasonId=${activeSeason?.id ?? ''}`}
             className="mt-2 flex items-center justify-center gap-2 h-10 rounded-[var(--radius-md)] border border-border text-[13px] font-semibold text-muted-foreground hover:text-foreground hover:border-[var(--ring)] transition-colors no-underline"
           >
             <Trophy className="w-4 h-4" />

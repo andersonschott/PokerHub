@@ -10,12 +10,13 @@
  *   Na Fase 4 será trocado por SignalR sem mudar o layout.
  */
 import { useEffect, useState, type CSSProperties } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Minimize2 } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Minimize2, Loader2 } from 'lucide-react';
 import { IconButton } from '@/components/ui/icon-button';
 import { StatusPill } from '@/components/ui/status-pill';
 import { MoneyValue } from '@/components/ui/money-value';
 import { useMockClock, fmtTime } from '@/features/timer/use-mock-clock';
+import { useTournamentByInvite } from '@/lib/api/hooks/use-tournaments';
 import { mockData } from '@/mocks/data';
 
 // ---------------------------------------------------------------------------
@@ -42,9 +43,24 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 
 export default function TvRoute() {
   const navigate = useNavigate();
+  const { inviteCode } = useParams<{ inviteCode: string }>();
+
+  // Fetch from API using public invite code endpoint
+  const { data: tReal, isLoading, error } = useTournamentByInvite(inviteCode ?? '');
+
   const { state } = useMockClock();
   const { level, remainingSeconds, paused, blinds, nextBlinds } = state;
-  const t = mockData.tournament;
+  
+  // TODO: Use real API data when fully connected
+  const t = tReal ? {
+    ...tReal,
+    prizePool: tReal.prizePool ?? 0,
+    remaining: tReal.players?.filter(p => !p.position).length ?? 0,
+    players: tReal.players?.length ?? 0,
+    rebuys: 0,
+    addons: 0,
+  } : mockData.tournament;
+
   const prizes = mockData.prizes;
   const table = mockData.table;
 
@@ -99,6 +115,23 @@ export default function TvRoute() {
     'var(--podium-silver)',
     'var(--podium-bronze)',
   ];
+
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[var(--tv-bg)] text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error || !tReal) {
+    return (
+      <div className="flex flex-col h-screen items-center justify-center gap-4 bg-[var(--tv-bg)] text-muted-foreground">
+        <p>Torneio não encontrado ou acesso inválido.</p>
+        <button onClick={handleExit} className="underline hover:text-foreground">Voltar</button>
+      </div>
+    );
+  }
 
   return (
     <div

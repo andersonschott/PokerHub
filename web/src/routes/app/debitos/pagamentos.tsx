@@ -1,16 +1,9 @@
 /**
  * /app/debitos/pagamentos — Pagamentos do torneio (pós-encerramento).
- * Port de Pagamentos.jsx + tabelas de DesktopPagamentos.jsx. README item 11.
- *
- * Resumo (a receber · pendentes · confirmados · progresso),
- * Saldo do torneio (investimento · prêmio · saldo por jogador, caixinha, prize pool),
- * lista de transferências (quem paga quem, PIX copy, Pago → Confirmar state machine),
- * Recalcular / Cobrar todos.
- *
- * Desktop (lg:): tabelas conforme DesktopPagamentos.jsx.
+ * Refatorado na Fase 5 para consumir a API Real.
  */
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Check,
@@ -21,8 +14,10 @@ import {
   Megaphone,
   Copy,
   ChevronRight,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
+
 import { IconButton } from '@/components/ui/icon-button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -31,16 +26,29 @@ import { Avatar } from '@/components/ui/avatar';
 import { MoneyValue } from '@/components/ui/money-value';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { StatTile } from '@/components/ui/stat-tile';
-import { mockData, type MockTransfer, type MockTransferStatus } from '@/mocks/data';
+
+import {
+  useTournamentBalances,
+  useTournamentPayments,
+  useCalculatePayments,
+  useAdminMarkAsPaid,
+  useAdminConfirmPayment,
+  useJackpotContribution,
+  PaymentStatus,
+  PaymentType
+} from '@/lib/api/hooks/use-payments';
+
+import { useTournament as useTournamentData } from '@/lib/api/hooks/use-tournaments';
 
 // ---------------------------------------------------------------------------
 // Status badge helper
 // ---------------------------------------------------------------------------
 
-function StatusBadge({ status }: { status: MockTransferStatus }) {
-  if (status === 'pending') return <Badge tone="warning">Pendente</Badge>;
-  if (status === 'paid') return <Badge tone="neutral" icon={Clock}>Aguardando</Badge>;
-  return <Badge tone="positive" icon={CheckCheck}>Confirmado</Badge>;
+function StatusBadge({ status }: { status: PaymentStatus }) {
+  if (status === PaymentStatus.Pending) return <Badge tone="warning">Pendente</Badge>;
+  if (status === PaymentStatus.Paid) return <Badge tone="neutral" icon={Clock}>Aguardando</Badge>;
+  if (status === PaymentStatus.Confirmed) return <Badge tone="positive" icon={CheckCheck}>Confirmado</Badge>;
+  return <Badge tone="neutral">Cancelado</Badge>;
 }
 
 // ---------------------------------------------------------------------------
@@ -49,53 +57,100 @@ function StatusBadge({ status }: { status: MockTransferStatus }) {
 
 export default function PagamentosRoute() {
   const navigate = useNavigate();
-  const P = mockData.pagamentos;
+  const [searchParams] = useSearchParams();
+  const tId = searchParams.get('t');
 
   const [tab, setTab] = useState<'saldo' | 'pagamentos'>('saldo');
-  const [transfers, setTransfers] = useState<MockTransfer[]>(() =>
-    P.transfers.map((t) => ({ ...t })),
-  );
   const [copied, setCopied] = useState<string | null>(null);
 
-  // ---- PIX copy ----
-  const copyPix = (transfer: MockTransfer) => {
+  // ---- Queries ----
+  const { data: tournament, isLoading: isLoadingT } = useTournamentData(tId ?? '');
+  const { data: balances, isLoading: isLoadingB } = useTournamentBalances(tId ?? '');
+  const { data: payments, isLoading: isLoadingP } = useTournamentPayments(tId ?? '');
+  const { data: jackpot } = useJackpotContribution(tId ?? '');
+
+  // ---- Mutations ----
+  const calcMut = useCalculatePayments(tId ?? '');
+  const markPaidMut = useAdminMarkAsPaid();
+  const confirmMut = useAdminConfirmPayment();
+
+  // Auto-calculate on load if no payments exist
+  useEffect(() => {
+    if (tId && payments && payments.length === 0 && balances && balances.length === 0) {
+      // If we literally have 0 payments and 0 balances, maybe we need to calculate
+      // BUT let's require the user to press "Recalcular" manually to be safe,
+      // or we can just trigger it once if tournament is finished.
+    }
+  }, [tId, payments, balances]);
+
+  if (!tId || isLoadingT || isLoadingB || isLoadingP) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!tournament) {
+    return (
+      <div className="p-4 text-center">
+        <p>Torneio não encontrado.</p>
+        <Button onClick={() => navigate('/app/debitos')}>Voltar</Button>
+      </div>
+    );
+  }
+
+  const transfers = payments ?? [];
+  const saldo = balances ?? [];
+
+  // ---- Actions ----
+  const copyPix = (pixKey: string, id: string) => {
     try {
-      void navigator.clipboard.writeText(transfer.pix);
+      void navigator.clipboard.writeText(pixKey);
     } catch {
       // clipboard unavailable
     }
-    setCopied(transfer.id);
-    setTimeout(() => setCopied((c) => (c === transfer.id ? null : c)), 1600);
+    setCopied(id);
+    setTimeout(() => setCopied((c) => (c === id ? null : c)), 1600);
     toast.success('Chave copiada');
   };
 
-  // ---- State machine: pending → paid → confirmed ----
-  const advance = (id: string, toStatus: MockTransferStatus, msg: string) => {
-    setTransfers((ts) => ts.map((t) => (t.id === id ? { ...t, status: toStatus } : t)));
-    toast.success(msg);
-  };
-
-  // ---- Recalcular (mock) ----
   const recalculate = () => {
-    setTransfers(P.transfers.map((t) => ({ ...t })));
-    toast.success('Pagamentos recalculados');
+    calcMut.mutate(undefined, {
+      onSuccess: () => toast.success('Pagamentos calculados com sucesso'),
+      onError: () => toast.error('Falha ao calcular pagamentos')
+    });
   };
 
-  // ---- Cobrar todos (mock) ----
   const chargeAll = () => {
-    const pendingCount = transfers.filter((t) => t.status === 'pending').length;
-    toast.success(`Lembrete enviado para ${pendingCount} pendentes`);
+    const pendingCount = transfers.filter((t) => t.status === PaymentStatus.Pending).length;
+    toast.success(`Lembrete enviado para ${pendingCount} pendentes (Mock)`);
+  };
+
+  const adminMarkPaid = (id: string, name: string) => {
+    markPaidMut.mutate(id, {
+      onSuccess: () => toast.success(`${name} marcou como pago (via Admin)`)
+    });
+  };
+
+  const adminConfirm = (id: string, name: string) => {
+    confirmMut.mutate(id, {
+      onSuccess: () => toast.success(`Recebimento de ${name} confirmado`)
+    });
   };
 
   // ---- Derived ----
-  const pending = transfers.filter((t) => t.status === 'pending').length;
-  const paid = transfers.filter((t) => t.status === 'paid').length;
-  const confirmed = transfers.filter((t) => t.status === 'confirmed').length;
+  const pending = transfers.filter((t) => t.status === PaymentStatus.Pending).length;
+  const paid = transfers.filter((t) => t.status === PaymentStatus.Paid).length;
+  const confirmed = transfers.filter((t) => t.status === PaymentStatus.Confirmed).length;
   const totalReceber = transfers.reduce((s, t) => s + t.amount, 0);
   const pct = transfers.length > 0 ? Math.round((confirmed / transfers.length) * 100) : 0;
 
-  const saldoOf = (p: { inv: number; prize: number }) => p.prize - p.inv;
-  const sortedSaldo = [...P.saldo].sort((a, b) => saldoOf(b) - saldoOf(a));
+  const sortedSaldo = [...saldo].sort((a, b) => b.balance - a.balance);
+
+  const tName = tournament.name;
+  const tPrizePool = tournament.prizePool;
+  const tCaixinha = jackpot?.amount ?? 0;
 
   return (
     <div className="px-4 pb-24 min-h-full">
@@ -110,7 +165,7 @@ export default function PagamentosRoute() {
         />
         <div className="flex-1 min-w-0">
           <div className="font-sans font-bold text-[17px]">Pagamentos</div>
-          <div className="text-[12px] text-muted-foreground">{P.tournament} · encerrado</div>
+          <div className="text-[12px] text-muted-foreground">{tName}</div>
         </div>
       </div>
 
@@ -118,7 +173,7 @@ export default function PagamentosRoute() {
       <div className="hidden lg:grid lg:grid-cols-[2fr_1fr_1fr_1fr] gap-3 mb-5">
         <Card pad="md">
           <div className="text-[11.5px] uppercase tracking-[0.07em] text-muted-foreground">
-            {P.tournament} · progresso do acerto
+            {tName} · progresso do acerto
           </div>
           <div className="flex items-baseline gap-2 my-[6px]">
             <span className="font-mono font-bold text-[28px]">{pct}%</span>
@@ -209,23 +264,23 @@ export default function PagamentosRoute() {
           <Card pad="none" className="lg:hidden">
             {sortedSaldo.map((p, i) => (
               <div
-                key={p.id}
+                key={p.playerId}
                 className={[
                   'flex items-center gap-3 px-[14px] py-[10px]',
                   i < sortedSaldo.length - 1 ? 'border-b border-border' : '',
                 ].join(' ')}
               >
-                <Avatar name={p.name} size={36} />
+                <Avatar name={p.playerName} size={36} />
                 <div className="flex-1 min-w-0">
                   <div className="font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis">
-                    {p.name}
+                    {p.playerName}
                   </div>
                   <div className="text-[11.5px] text-muted-foreground font-mono inline-flex items-center gap-1 flex-wrap">
-                    inv <MoneyValue value={p.inv} cents={false} color="none" size="11.5px" />
+                    inv <MoneyValue value={p.totalInvestment} cents={false} color="none" size="11.5px" />
                     {' · '}prêmio <MoneyValue value={p.prize} cents={false} color="none" size="11.5px" />
                   </div>
                 </div>
-                <MoneyValue value={saldoOf(p)} signed cents={false} size="15px" />
+                <MoneyValue value={p.balance} signed cents={false} size="15px" />
               </div>
             ))}
           </Card>
@@ -238,7 +293,7 @@ export default function PagamentosRoute() {
               </span>
               <Badge tone="gold" icon={PiggyBank}>
                 Caixinha{' '}
-                <MoneyValue value={P.caixinha} cents={false} color="none" size="11px" />
+                <MoneyValue value={tCaixinha} cents={false} color="none" size="11px" />
               </Badge>
             </div>
             <table className="w-full" style={{ borderCollapse: 'collapse' }}>
@@ -256,26 +311,25 @@ export default function PagamentosRoute() {
                 </tr>
               </thead>
               <tbody>
-                {P.saldo.map((s) => {
-                  const net = s.prize - s.inv;
+                {sortedSaldo.map((s) => {
                   return (
-                    <tr key={s.id} className="border-t border-border">
+                    <tr key={s.playerId} className="border-t border-border">
                       <td className="py-2 pr-2">
                         <div className="flex items-center gap-2">
-                          <Avatar name={s.name} size={26} />
+                          <Avatar name={s.playerName} size={26} />
                           <span className="font-sans font-semibold text-[13px] whitespace-nowrap">
-                            {s.name.split(' ')[0]}
+                            {s.playerName.split(' ')[0]}
                           </span>
                         </div>
                       </td>
                       <td className="px-2 text-right">
-                        <MoneyValue value={s.inv} cents={false} color="muted" size="12.5px" />
+                        <MoneyValue value={s.totalInvestment} cents={false} color="muted" size="12.5px" />
                       </td>
                       <td className="px-2 text-right">
                         <MoneyValue value={s.prize} cents={false} color="none" size="12.5px" />
                       </td>
                       <td className="py-2 pl-2 text-right">
-                        <MoneyValue value={net} signed cents={false} size="13px" />
+                        <MoneyValue value={s.balance} signed cents={false} size="13px" />
                       </td>
                     </tr>
                   );
@@ -284,7 +338,7 @@ export default function PagamentosRoute() {
             </table>
             <div className="flex justify-between pt-[10px] mt-1 border-t border-border">
               <span className="text-[12.5px] text-muted-foreground">Prize pool</span>
-              <MoneyValue value={P.prizePool} cents={false} color="none" size="14px" />
+              <MoneyValue value={tPrizePool} cents={false} color="none" size="14px" />
             </div>
           </Card>
 
@@ -301,7 +355,7 @@ export default function PagamentosRoute() {
               <span className="flex-1 text-[13.5px] font-medium">
                 Contribuição para a caixinha
               </span>
-              <MoneyValue value={P.caixinha} cents={false} color="none" size="14.5px" className="font-bold text-gold-400" />
+              <MoneyValue value={tCaixinha} cents={false} color="none" size="14.5px" className="font-bold text-gold-400" />
             </div>
           </Card>
 
@@ -309,14 +363,14 @@ export default function PagamentosRoute() {
           <Card pad="md" className="lg:hidden">
             <div className="flex items-center gap-[10px]">
               <span className="flex-1 text-[13.5px] font-medium">Total prize pool</span>
-              <MoneyValue value={P.prizePool} cents={false} color="none" size="15px" />
+              <MoneyValue value={tPrizePool} cents={false} color="none" size="15px" />
             </div>
           </Card>
 
           {/* Actions */}
           <div className="flex gap-2 mt-1">
             <Button variant="secondary" icon={RefreshCcw} block onClick={recalculate}>
-              Recalcular
+              Calcular Pagamentos
             </Button>
             <Button variant="primary" icon={Megaphone} block onClick={chargeAll}>
               Cobrar todos
@@ -343,22 +397,28 @@ export default function PagamentosRoute() {
             </div>
           </div>
 
+          {transfers.length === 0 && (
+             <div className="text-center py-6 text-muted-foreground">
+               Nenhum pagamento gerado. Use a aba Saldo para Calcular.
+             </div>
+          )}
+
           {transfers.map((x) => (
             <Card key={x.id} pad="md">
               {/* Transfer header: from → to + type badge */}
               <div className="flex items-center gap-2 mb-[10px]">
                 <span className="font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis min-w-0">
-                  {x.from}
+                  {x.fromPlayerName.split(' ')[0]}
                 </span>
                 <ChevronRight className="w-[14px] h-[14px] text-muted-foreground shrink-0" />
                 <span className="font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis min-w-0">
-                  {x.to}
+                  {x.toPlayerName.split(' ')[0]}
                 </span>
                 <span className="ml-auto shrink-0">
-                  {x.type === 'Caixinha' ? (
+                  {x.isJackpotContribution ? (
                     <Badge tone="gold">Caixinha</Badge>
                   ) : (
-                    <Badge tone="neutral">{x.type}</Badge>
+                    <Badge tone="neutral">{x.type === PaymentType.Poker ? 'Poker' : 'Despesa'}</Badge>
                   )}
                 </span>
               </div>
@@ -366,11 +426,11 @@ export default function PagamentosRoute() {
               {/* Amount + PIX copy + status */}
               <div className="flex items-center gap-[10px]">
                 <MoneyValue value={x.amount} cents={false} color="none" size="18px" />
-                {x.type !== 'Caixinha' ? (
+                {!x.isJackpotContribution && x.toPlayerPixKey ? (
                   <button
                     type="button"
-                    onClick={() => copyPix(x)}
-                    aria-label={`Copiar chave PIX de ${x.from}`}
+                    onClick={() => copyPix(x.toPlayerPixKey!, x.id)}
+                    aria-label={`Copiar chave PIX de ${x.fromPlayerName}`}
                     className={[
                       'inline-flex items-center gap-[5px] border-0 bg-transparent cursor-pointer',
                       'font-sans font-semibold text-[12px]',
@@ -391,16 +451,14 @@ export default function PagamentosRoute() {
               </div>
 
               {/* State machine buttons */}
-              {x.status !== 'confirmed' ? (
+              {x.status !== PaymentStatus.Confirmed ? (
                 <div className="flex gap-2 mt-[10px]">
-                  {x.status === 'pending' ? (
+                  {x.status === PaymentStatus.Pending ? (
                     <Button
                       variant="secondary"
                       size="sm"
                       block
-                      onClick={() =>
-                        advance(x.id, 'paid', `${x.from} marcou como pago`)
-                      }
+                      onClick={() => adminMarkPaid(x.id, x.fromPlayerName)}
                     >
                       Pago
                     </Button>
@@ -409,13 +467,7 @@ export default function PagamentosRoute() {
                     variant="primary"
                     size="sm"
                     block
-                    onClick={() =>
-                      advance(
-                        x.id,
-                        'confirmed',
-                        `Recebimento de ${x.from} confirmado`,
-                      )
-                    }
+                    onClick={() => adminConfirm(x.id, x.fromPlayerName)}
                   >
                     Confirmar
                   </Button>

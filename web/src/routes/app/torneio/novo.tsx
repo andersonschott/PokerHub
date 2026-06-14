@@ -11,6 +11,15 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { useActiveLeague } from '@/features/leagues/league-context';
+import {
+  useCreateTournament,
+  useTournaments,
+  PrizeDistributionType,
+  RebuyLimitType,
+  CreateTournamentDto,
+} from '@/lib/api/hooks/use-tournaments';
+
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
 import { Card } from '@/components/ui/card';
@@ -179,6 +188,12 @@ export default function NovoTorneioRoute() {
   const isEdit = searchParams.get('edit') === '1';
   const t = mockData.tournament;
 
+  const { activeLeagueId } = useActiveLeague();
+  const id = activeLeagueId ?? '';
+  const { data: allTournaments } = useTournaments(id);
+  const pastTournaments = (allTournaments ?? []).slice(0, 3);
+  const create = useCreateTournament(id);
+
   // Stepper state
   const [step, setStep] = useState(0);
   const [copied, setCopied] = useState<string | null>(null);
@@ -221,30 +236,62 @@ export default function NovoTorneioRoute() {
   const prizeOk = usePrizeTable || prizeMode === 'fixo' || prizeTotal === 100;
   const canNext = step !== 0 || !!name.trim();
 
-  const back = () => navigate(isEdit ? '/app/torneio/dashboard' : '/app/torneio');
+  const back = () => navigate(isEdit ? '/app/torneio/dashboard' : (activeLeagueId ? `/app/ligas/${activeLeagueId}` : '/app/ligas'));
 
-  const next = () => {
+  const next = async () => {
     if (step < 4) {
       setStep(step + 1);
     } else {
-      // Fase 1: mock — toast + navegação
-      toast.success(isEdit ? 'Torneio atualizado!' : 'Torneio criado!');
-      navigate('/app/torneio');
+      if (!activeLeagueId) {
+        toast.error('Nenhuma liga ativa selecionada.');
+        return;
+      }
+      try {
+        const dto: CreateTournamentDto = {
+          name,
+          scheduledDateTime: new Date(`${tourDate}T${tourTime}:00`).toISOString(),
+          location: local || null,
+          buyIn: Number(buyIn) || 0,
+          startingStack: Number(stack) || 0,
+          rebuyValue: rebuy ? (Number(rebuyVal) || 0) : null,
+          rebuyStack: rebuy ? (Number(rebuyStack) || 0) : null,
+          rebuyLimitLevel: rebuy ? rebuyLvl : null,
+          rebuyLimitMinutes: null,
+          rebuyLimitType: RebuyLimitType.Level,
+          addonValue: addon ? (Number(addonVal) || 0) : null,
+          addonStack: addon ? (Number(addonStack) || 0) : null,
+          prizeStructure: usePrizeTable ? null : positions.join(','),
+          prizeDistributionType: usePrizeTable ? PrizeDistributionType.Percentage : (prizeMode === 'pct' ? PrizeDistributionType.Percentage : PrizeDistributionType.Fixed),
+          usePrizeTable,
+          prizeTableId: null,
+          allowCheckInUntilLevel: lateCheckin ? lateLvl : null,
+          blindLevels: blinds.map((b) => ({
+            order: b.level,
+            smallBlind: b.sb || 0,
+            bigBlind: b.bb || 0,
+            ante: b.ante || 0,
+            durationMinutes: b.min || 15,
+            isBreak: b.type === 'intervalo',
+            breakDescription: b.type === 'intervalo' ? 'Intervalo' : null
+          }))
+        };
+        await create.mutateAsync(dto);
+        toast.success(isEdit ? 'Torneio atualizado!' : 'Torneio criado!');
+        navigate(`/app/ligas/${activeLeagueId}`);
+      } catch (err) {
+        toast.error('Erro ao salvar o torneio.');
+      }
     }
   };
 
-  const copyFrom = (pt: (typeof mockData.pastTournaments)[0]) => {
+  const copyFrom = (pt: any) => {
     if (!isEdit) setName(pt.name);
     setBuyIn(String(pt.buyIn));
-    setStack(String(pt.stack));
-    setRebuy(pt.rebuy);
-    setRebuyVal(String(pt.rebuyVal));
-    setRebuyLvl(pt.rebuyLvl);
-    setAddon(pt.addon);
-    setAddonVal(String(pt.addonVal));
-    setTemplate(pt.blinds);
-    setUsePrizeTable(false);
-    setPositions([...pt.prize]);
+    setStack(String(pt.startingStack || pt.stack || 10000));
+    setRebuy(pt.rebuyValue !== null && pt.rebuyValue !== undefined);
+    setRebuyVal(String(pt.rebuyValue || pt.buyIn));
+    setAddon(pt.addonValue !== null && pt.addonValue !== undefined);
+    setAddonVal(String(pt.addonValue || pt.buyIn));
     setCopied(pt.id);
   };
 
@@ -279,7 +326,7 @@ export default function NovoTorneioRoute() {
                 Copiar configurações de
               </div>
               <div className="flex gap-1.5 flex-wrap">
-                {mockData.pastTournaments.map((pt) => {
+                {pastTournaments.map((pt) => {
                   const active = copied === pt.id;
                   return (
                     <button
@@ -646,8 +693,7 @@ export default function NovoTorneioRoute() {
           )}
           {/* Desktop caixinha note */}
           <div className="hidden lg:block px-[14px] py-3 rounded-[var(--radius-md)] bg-[color-mix(in_oklab,var(--gold-500)_10%,var(--card))] border border-border text-[13px] text-muted-foreground">
-            {mockData.caixinha.percent}% do prize pool vai para a caixinha da liga, conforme as
-            regras da {mockData.league.name}.
+            Uma porcentagem do prize pool vai para a caixinha da liga.
           </div>
         </div>
       )}

@@ -16,6 +16,11 @@ const LigasRoute = lazy(() => import('@/routes/app/ligas/index'));
 const NovaLigaRoute = lazy(() => import('@/routes/app/ligas/nova'));
 const LeagueHomeRoute = lazy(() => import('@/routes/app/ligas/[id]'));
 
+// Task Phase 3: League Management Routes
+const LeaguePlayersRoute = lazy(() => import('@/routes/app/ligas/[id]/jogadores'));
+const LeagueSeasonsRoute = lazy(() => import('@/routes/app/ligas/[id]/temporadas'));
+const LeaguePrizeTablesRoute = lazy(() => import('@/routes/app/ligas/[id]/tabelas-premiacao'));
+
 // Task 10: timer screens (mock clock)
 const TorneioRoute = lazy(() => import('@/routes/app/torneio/index'));
 const TvRoute = lazy(() => import('@/routes/app/tv'));
@@ -38,6 +43,7 @@ const AdminRoute = lazy(() => import('@/routes/app/perfil/admin'));
 // Task 15: wizard de torneio + histórico
 const NovoTorneioRoute = lazy(() => import('@/routes/app/torneio/novo'));
 const HistoricoDetalheRoute = lazy(() => import('@/routes/app/torneio/historico/[id]'));
+const EntrarTorneioRoute = lazy(() => import('@/routes/app/torneio/entrar'));
 
 const RouteFallback = () => (
   <div className="flex min-h-dvh items-center justify-center">
@@ -73,15 +79,8 @@ export default function App() {
                 <Routes>
                   <Route path="/login" element={<LoginRoute />} />
                   <Route path="/cadastro" element={<CadastroRoute />} />
-                  {/* TV mode: protegido mas FORA do AppShell (fullscreen, sem nav) */}
-                  <Route
-                    path="/app/tv"
-                    element={
-                      <Protected>
-                        <TvRoute />
-                      </Protected>
-                    }
-                  />
+                  {/* TV mode: público via invite code */}
+                  <Route path="/tv/:inviteCode" element={<TvRoute />} />
                   <Route
                     path="/app"
                     element={
@@ -95,9 +94,13 @@ export default function App() {
                     <Route path="ligas" element={<LigasRoute />} />
                     <Route path="ligas/nova" element={<NovaLigaRoute />} />
                     <Route path="ligas/:leagueId" element={<LeagueHomeRoute />} />
+                    <Route path="ligas/:leagueId/jogadores" element={<LeaguePlayersRoute />} />
+                    <Route path="ligas/:leagueId/temporadas" element={<LeagueSeasonsRoute />} />
+                    <Route path="ligas/:leagueId/tabelas-premiacao" element={<LeaguePrizeTablesRoute />} />
                     <Route path="torneio" element={<TorneioRoute />} />
                     <Route path="torneio/dashboard" element={<DashboardRoute />} />
                     <Route path="torneio/novo" element={<NovoTorneioRoute />} />
+                    <Route path="torneio/entrar/:code" element={<EntrarTorneioRoute />} />
                     <Route path="torneio/historico/:tournamentId" element={<HistoricoDetalheRoute />} />
                     <Route path="debitos" element={<DebitosRoute />} />
                     <Route path="debitos/pagamentos" element={<PagamentosRoute />} />

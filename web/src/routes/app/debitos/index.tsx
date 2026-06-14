@@ -1,14 +1,10 @@
 /**
  * /app/debitos — Acerto de contas (Settlement).
- * Port de Settlement.jsx. README item 5.
- *
- * Saldo líquido hero, tabs A pagar / A receber, chave PIX com 1 toque,
- * state machine local: pendente → aguardando → confirmado.
- * Link para Pagamentos do torneio.
+ * Refatorado na Fase 5 para consumir a API Real.
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Receipt, ChevronRight, ArrowLeftRight, Copy, Check, CheckCheck, Clock } from 'lucide-react';
+import { ArrowLeft, ArrowLeftRight, Copy, Check, CheckCheck, Clock, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { IconButton } from '@/components/ui/icon-button';
 import { Card } from '@/components/ui/card';
@@ -16,16 +12,25 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
 import { MoneyValue } from '@/components/ui/money-value';
-import { mockData, type MockTransferStatus, type MockSettlementDebt } from '@/mocks/data';
+
+import {
+  useMyDebts,
+  useMyCredits,
+  useMarkAsPaid,
+  useConfirmPayment,
+  PaymentStatus,
+  PaymentType,
+} from '@/lib/api/hooks/use-payments';
 
 // ---------------------------------------------------------------------------
 // Status badge helper
 // ---------------------------------------------------------------------------
 
-function StatusBadge({ status }: { status: MockTransferStatus }) {
-  if (status === 'pending') return <Badge tone="warning">Pendente</Badge>;
-  if (status === 'paid') return <Badge tone="neutral" icon={Clock}>Aguardando</Badge>;
-  return <Badge tone="positive" icon={CheckCheck}>Confirmado</Badge>;
+function StatusBadge({ status }: { status: PaymentStatus }) {
+  if (status === PaymentStatus.Pending) return <Badge tone="warning">Pendente</Badge>;
+  if (status === PaymentStatus.Paid) return <Badge tone="neutral" icon={Clock}>Aguardando</Badge>;
+  if (status === PaymentStatus.Confirmed) return <Badge tone="positive" icon={CheckCheck}>Confirmado</Badge>;
+  return <Badge tone="neutral">Cancelado</Badge>;
 }
 
 // ---------------------------------------------------------------------------
@@ -34,16 +39,32 @@ function StatusBadge({ status }: { status: MockTransferStatus }) {
 
 export default function SettlementRoute() {
   const navigate = useNavigate();
-  const S = mockData.settlement;
 
   const [tab, setTab] = useState<'pagar' | 'receber'>('pagar');
-  const [debts, setDebts] = useState<MockSettlementDebt[]>(() =>
-    S.debts.map((d) => ({ ...d })),
-  );
-  const [credits, setCredits] = useState<MockSettlementDebt[]>(() =>
-    S.credits.map((c) => ({ ...c })),
-  );
   const [copied, setCopied] = useState<string | null>(null);
+
+  // ---- Queries ----
+  const { data: debts, isLoading: isLoadingD } = useMyDebts();
+  const { data: credits, isLoading: isLoadingC } = useMyCredits();
+
+  // ---- Mutations ----
+  const markPaidMut = useMarkAsPaid();
+  const confirmMut = useConfirmPayment();
+
+  if (isLoadingD || isLoadingC) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const activeDebts = debts?.filter(d => d.status !== PaymentStatus.Confirmed) ?? [];
+  const activeCredits = credits?.filter(c => c.status !== PaymentStatus.Confirmed && !c.isJackpotContribution) ?? [];
+
+  const totalDebts = activeDebts.reduce((s, d) => s + d.amount, 0);
+  const totalCredits = activeCredits.reduce((s, c) => s + c.amount, 0);
+  const netBalance = totalCredits - totalDebts;
 
   // ---- PIX copy ----
   const copyPix = (pix: string) => {
@@ -57,21 +78,20 @@ export default function SettlementRoute() {
     toast.success('Chave copiada');
   };
 
-  // ---- State machine: pending → paid ----
-  const markPaid = (id: string) => {
-    setDebts((ds) => ds.map((d) => (d.id === id ? { ...d, status: 'paid' as const } : d)));
-    const debt = debts.find((d) => d.id === id);
-    if (debt) toast.success(`Marcado como pago para ${debt.to}`);
+  // ---- Actions ----
+  const markPaid = (id: string, toName: string) => {
+    markPaidMut.mutate(id, {
+      onSuccess: () => toast.success(`Marcado como pago para ${toName.split(' ')[0]}`)
+    });
   };
 
-  // ---- State machine: paid → confirmed ----
-  const confirmCredit = (id: string) => {
-    setCredits((cs) => cs.map((c) => (c.id === id ? { ...c, status: 'confirmed' as const } : c)));
-    const credit = credits.find((c) => c.id === id);
-    if (credit) toast.success(`Recebimento de ${credit.from} confirmado`);
+  const confirmCredit = (id: string, fromName: string) => {
+    confirmMut.mutate(id, {
+      onSuccess: () => toast.success(`Recebimento de ${fromName.split(' ')[0]} confirmado`)
+    });
   };
 
-  const pendingCount = debts.filter((d) => d.status !== 'confirmed').length;
+
 
   return (
     <div className="px-4 pb-24 min-h-full">
@@ -87,53 +107,40 @@ export default function SettlementRoute() {
         <div className="flex-1 min-w-0">
           <div className="font-sans font-bold text-[17px]">Acerto de contas</div>
           <div className="text-[12px] text-muted-foreground">
-            {mockData.tournament.name} · encerrado
+            Todas as suas ligas
           </div>
         </div>
       </div>
 
       {/* ---- Net balance hero ---- */}
       <Card
-        variant={S.netBalance >= 0 ? 'live' : 'default'}
+        variant={netBalance >= 0 ? 'live' : 'default'}
         pad="lg"
         className="mb-[10px]"
       >
         <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground mb-1">
           Saldo líquido
         </div>
-        <MoneyValue value={S.netBalance} signed size="40px" />
+        <MoneyValue value={netBalance} signed size="40px" />
         <div className="text-[13px] text-muted-foreground mt-1">
-          {S.netBalance >= 0
-            ? 'Você recebe mais do que paga nesta noite.'
+          {netBalance >= 0
+            ? 'Você recebe mais do que paga.'
             : 'Você deve mais do que recebe.'}
         </div>
       </Card>
 
-      {/* ---- Link para Pagamentos do torneio ---- */}
-      <Card
-        interactive
-        pad="md"
-        className="mb-[16px]"
-        onClick={() => navigate('/app/debitos/pagamentos')}
-      >
-        <div className="flex items-center gap-3">
-          <Receipt className="w-[18px] h-[18px] text-gold-400 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="font-sans font-semibold text-[14.5px]">Pagamentos do torneio</div>
-            <div className="text-[12px] text-muted-foreground mt-[1px]">
-              Saldo por jogador · quem paga quem · caixinha
-            </div>
-          </div>
-          <Badge tone="warning">{pendingCount} pendentes</Badge>
-          <ChevronRight className="w-[16px] h-[16px] text-muted-foreground shrink-0" />
-        </div>
-      </Card>
+      {/* ---- Link para Pagamentos do torneio (If user is organizer? Keep generic for now or hide if we don't have tournament context. In the mock it was linked to the 'current' tournament) ---- */}
+      {/* 
+        NOTE: "Pagamentos do Torneio" was accessed from here in the mock, but in the real app, 
+        it is accessed from the Dashboard. If we want it here, we would need to know WHICH tournament. 
+        For now, we leave the active tournament logic out of the player's wallet view.
+      */}
 
       {/* ---- Tabs ---- */}
       <div className="flex gap-1 bg-secondary p-1 rounded-[var(--radius-md)] mb-[14px]">
         {([
-          { k: 'pagar', l: `A pagar · ${debts.length}` },
-          { k: 'receber', l: `A receber · ${credits.length}` },
+          { k: 'pagar', l: `A pagar · ${activeDebts.length}` },
+          { k: 'receber', l: `A receber · ${activeCredits.length}` },
         ] as { k: 'pagar' | 'receber'; l: string }[]).map((x) => {
           const active = x.k === tab;
           return (
@@ -158,14 +165,19 @@ export default function SettlementRoute() {
       {/* ---- A pagar ---- */}
       {tab === 'pagar' && (
         <div className="flex flex-col gap-[10px]">
-          {debts.map((d) => (
-            <Card key={d.id} pad="md">
+          {activeDebts.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">Você não tem débitos pendentes.</div>
+          )}
+          {activeDebts.map((d) => (
+            <Card key={d.paymentId} pad="md">
               {/* Player row */}
               <div className="flex items-center gap-3 mb-3">
-                <Avatar name={d.to} size={40} />
+                <Avatar name={d.creditorPlayerName} size={40} />
                 <div className="flex-1 min-w-0">
-                  <div className="font-sans font-semibold text-[15px]">{d.to}</div>
-                  <div className="text-[12px] text-muted-foreground">{d.type}</div>
+                  <div className="font-sans font-semibold text-[15px]">{d.creditorPlayerName}</div>
+                  <div className="text-[12px] text-muted-foreground">
+                    {d.tournamentName} · {d.type === PaymentType.Poker ? 'Poker' : 'Outros'}
+                  </div>
                 </div>
                 <div className="text-right">
                   <MoneyValue value={-d.amount} size="18px" />
@@ -175,38 +187,38 @@ export default function SettlementRoute() {
                 </div>
               </div>
               {/* PIX row */}
-              {d.pix ? (
+              {d.creditorPixKey ? (
                 <div className="flex items-center gap-[10px] bg-secondary rounded-[var(--radius-md)] px-3 py-[10px] mb-2">
                   <ArrowLeftRight className="w-4 h-4 text-gold-400 shrink-0" />
                   <span className="flex-1 min-w-0 font-mono text-[13px] overflow-hidden text-ellipsis whitespace-nowrap">
-                    {d.pix}
+                    {d.creditorPixKey}
                   </span>
                   <button
                     type="button"
-                    onClick={() => copyPix(d.pix!)}
+                    onClick={() => copyPix(d.creditorPixKey!)}
                     aria-label="Copiar chave PIX"
                     className={[
                       'inline-flex items-center gap-[6px] border-0 bg-transparent cursor-pointer',
                       'font-sans font-semibold text-[13px]',
-                      copied === d.pix ? 'text-positive' : 'text-gold-400',
+                      copied === d.creditorPixKey ? 'text-positive' : 'text-gold-400',
                     ].join(' ')}
                   >
-                    {copied === d.pix ? (
+                    {copied === d.creditorPixKey ? (
                       <Check className="w-[15px] h-[15px]" />
                     ) : (
                       <Copy className="w-[15px] h-[15px]" />
                     )}
-                    {copied === d.pix ? 'Copiado' : 'Copiar'}
+                    {copied === d.creditorPixKey ? 'Copiado' : 'Copiar'}
                   </button>
                 </div>
               ) : null}
               {/* Action button */}
-              {d.status === 'pending' ? (
+              {d.status === PaymentStatus.Pending ? (
                 <Button
                   variant="primary"
                   icon={Check}
                   block
-                  onClick={() => markPaid(d.id)}
+                  onClick={() => markPaid(d.paymentId, d.creditorPlayerName)}
                 >
                   Marcar como pago
                 </Button>
@@ -219,13 +231,18 @@ export default function SettlementRoute() {
       {/* ---- A receber ---- */}
       {tab === 'receber' && (
         <div className="flex flex-col gap-[10px]">
-          {credits.map((c) => (
+          {activeCredits.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">Você não tem créditos pendentes.</div>
+          )}
+          {activeCredits.map((c) => (
             <Card key={c.id} pad="md">
               <div className="flex items-center gap-3 mb-2">
-                <Avatar name={c.from} size={40} />
+                <Avatar name={c.fromPlayerName} size={40} />
                 <div className="flex-1 min-w-0">
-                  <div className="font-sans font-semibold text-[15px]">{c.from}</div>
-                  <div className="text-[12px] text-muted-foreground">{c.type}</div>
+                  <div className="font-sans font-semibold text-[15px]">{c.fromPlayerName}</div>
+                  <div className="text-[12px] text-muted-foreground">
+                    {c.tournamentName} · {c.type === PaymentType.Poker ? 'Poker' : 'Outros'}
+                  </div>
                 </div>
                 <div className="text-right">
                   <MoneyValue value={c.amount} signed size="18px" />
@@ -234,12 +251,12 @@ export default function SettlementRoute() {
                   </div>
                 </div>
               </div>
-              {c.status !== 'confirmed' ? (
+              {c.status !== PaymentStatus.Confirmed ? (
                 <Button
                   variant="secondary"
                   icon={CheckCheck}
                   block
-                  onClick={() => confirmCredit(c.id)}
+                  onClick={() => confirmCredit(c.id, c.fromPlayerName)}
                 >
                   Confirmar recebimento
                 </Button>
