@@ -35,6 +35,9 @@ const PagamentosRoute = lazy(() => import('@/routes/app/debitos/pagamentos'));
 // Task 13: ranking + player stats
 const RankingRoute = lazy(() => import('@/routes/app/ranking'));
 
+// F16b: comparativo de jogadores
+const CompararRoute = lazy(() => import('@/routes/app/comparar'));
+
 // Task 14: perfil + caixinha + admin
 const PerfilRoute = lazy(() => import('@/routes/app/perfil/index'));
 const CaixinhaRoute = lazy(() => import('@/routes/app/perfil/caixinha'));
@@ -105,6 +108,7 @@ export default function App() {
                     <Route path="debitos" element={<DebitosRoute />} />
                     <Route path="debitos/pagamentos" element={<PagamentosRoute />} />
                     <Route path="ranking" element={<RankingRoute />} />
+                    <Route path="comparar" element={<CompararRoute />} />
                     <Route path="perfil" element={<PerfilRoute />} />
                     <Route path="perfil/caixinha" element={<CaixinhaRoute />} />
                     <Route path="perfil/admin" element={<AdminRoute />} />

@@ -14,7 +14,7 @@
  */
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, Loader2, Trophy } from 'lucide-react';
+import { ArrowLeftRight, ChevronDown, Loader2, Trophy } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { PodiumHero } from '@/features/rankings/podium';
 import { RkSort, type SortKey } from '@/features/rankings/sort-toggle';
@@ -140,6 +140,16 @@ export default function RankingRoute() {
             {leagueQ.data?.name ?? ' '}
           </div>
         </div>
+
+        {/* Comparar jogadores */}
+        <Link
+          to="/app/comparar"
+          aria-label="Comparar jogadores"
+          className="flex items-center gap-[6px] px-3 py-2 rounded-[var(--radius-md)] bg-secondary border border-border text-foreground no-underline font-sans font-semibold text-[13px] whitespace-nowrap shrink-0"
+        >
+          <ArrowLeftRight className="w-[15px] h-[15px] text-muted-foreground shrink-0" />
+          <span className="hidden sm:inline">Comparar</span>
+        </Link>
 
         {/* Season selector button */}
         <button
