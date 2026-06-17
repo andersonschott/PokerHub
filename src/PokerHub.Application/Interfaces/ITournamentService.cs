@@ -73,9 +73,10 @@ public interface ITournamentService
 
     // Invite System
     /// <summary>
-    /// Gets a tournament by its invite code.
+    /// Gets a tournament (detalhe completo) by its invite code. Retorna <see cref="TournamentDetailDto"/>
+    /// para alimentar o modo TV (players[], blindLevels[] e prêmios calculados).
     /// </summary>
-    Task<TournamentDto?> GetTournamentByInviteCodeAsync(string inviteCode);
+    Task<TournamentDetailDto?> GetTournamentByInviteCodeAsync(string inviteCode);
 
     /// <summary>
     /// Allows a logged-in user to register themselves for a tournament.

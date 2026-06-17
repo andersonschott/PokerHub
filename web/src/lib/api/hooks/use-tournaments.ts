@@ -60,6 +60,13 @@ export interface TournamentPlayerDto {
   profitLoss: number;
 }
 
+export interface TournamentPrizeDto {
+  position: number;
+  amount: number;
+  /** Derivação de exibição (amount / prizePool * 100); o dinheiro vem do backend. */
+  percentage: number;
+}
+
 export interface TournamentDto {
   id: string;
   leagueId: string;
@@ -112,6 +119,7 @@ export interface TournamentDetailDto {
   prizePool: number;
   blindLevels: BlindLevelDto[];
   players: TournamentPlayerDto[];
+  prizes: TournamentPrizeDto[];
   isCheckInAllowed: boolean;
 }
 

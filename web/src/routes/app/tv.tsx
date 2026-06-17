@@ -1,13 +1,13 @@
 /**
- * /app/tv — Timer TV mode (fullscreen, legível a 3m).
- * Port fiel do TimerTV.jsx do kit.
+ * /tv/:inviteCode — Timer TV mode (fullscreen, legível a 3m).
+ * Port fiel do TimerTV.jsx do kit, agora ligado à API real (Passo 2).
  *
  * - Fullscreen API no mount (com fallback silencioso).
  * - Landscape 3 colunas (prêmios · timer gigante + blinds · jogadores/stats).
  * - ≤900px colapsa painéis laterais (phone propped on the table).
  * - ESC/botão sair → /app/torneio.
- * - useMockClock para manter o mesmo estado que o timer mobile.
- *   Na Fase 4 será trocado por SignalR sem mudar o layout.
+ * - Clock REAL via useTournamentClock (SignalR). Sem sync ainda (torneio agendado/pausado, ou
+ *   1º sync não chegou) → fallback gracioso derivado do DTO REST; nunca relógio mock nem 00:00 enganoso.
  */
 import { useEffect, useState, type CSSProperties } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -15,9 +15,18 @@ import { Minimize2, Loader2 } from 'lucide-react';
 import { IconButton } from '@/components/ui/icon-button';
 import { StatusPill } from '@/components/ui/status-pill';
 import { MoneyValue } from '@/components/ui/money-value';
-import { useMockClock, fmtTime } from '@/features/timer/use-mock-clock';
+import { fmtTime } from '@/features/timer/use-mock-clock';
 import { useTournamentByInvite } from '@/lib/api/hooks/use-tournaments';
-import { mockData } from '@/mocks/data';
+import { useTournamentClock } from '@/lib/api/hooks/use-tournament-clock';
+import {
+  mapPlayersToTable,
+  aggregateStats,
+  eliminatedFromTable,
+  normalizePrizes,
+  restFallbackClock,
+  isLiveClock,
+  tvPhase,
+} from './tv-projection';
 
 // ---------------------------------------------------------------------------
 // Panel helper
@@ -45,24 +54,11 @@ export default function TvRoute() {
   const navigate = useNavigate();
   const { inviteCode } = useParams<{ inviteCode: string }>();
 
-  // Fetch from API using public invite code endpoint
+  // Fetch from API using public invite code endpoint (TournamentDetailDto: players[], blindLevels[], prizes[]).
   const { data: tReal, isLoading, error } = useTournamentByInvite(inviteCode ?? '');
 
-  const { state } = useMockClock();
-  const { level, remainingSeconds, paused, blinds, nextBlinds } = state;
-  
-  // TODO: Use real API data when fully connected
-  const t = tReal ? {
-    ...tReal,
-    prizePool: tReal.prizePool ?? 0,
-    remaining: tReal.players?.filter(p => !p.position).length ?? 0,
-    players: tReal.players?.length ?? 0,
-    rebuys: 0,
-    addons: 0,
-  } : mockData.tournament;
-
-  const prizes = mockData.prizes;
-  const table = mockData.table;
+  // Clock fiel via SignalR. Id vazio enquanto carrega → hook não conecta (no-op).
+  const { state: liveClock } = useTournamentClock(tReal?.id ?? '');
 
   // Responsive — collapse side panels on narrow viewports (≤900px).
   const [compact, setCompact] = useState(
@@ -106,16 +102,6 @@ export default function TvRoute() {
     navigate('/app/torneio');
   }
 
-  const eliminated = table
-    .filter((p) => p.status === 'out')
-    .sort((a, b) => (a.place ?? 99) - (b.place ?? 99));
-
-  const podiumColors = [
-    'var(--podium-gold)',
-    'var(--podium-silver)',
-    'var(--podium-bronze)',
-  ];
-
   if (isLoading) {
     return (
       <div className="flex h-screen items-center justify-center bg-[var(--tv-bg)] text-muted-foreground">
@@ -132,6 +118,30 @@ export default function TvRoute() {
       </div>
     );
   }
+
+  // ---- Derived state from real data ----------------------------------------
+  const hasLive = isLiveClock(liveClock);
+  const clock = hasLive
+    ? liveClock
+    : restFallbackClock({
+        status: tReal.status,
+        currentLevel: tReal.currentLevel,
+        timeRemainingSeconds: tReal.timeRemainingSeconds,
+        blindLevels: tReal.blindLevels,
+      });
+  const { level, remainingSeconds, paused, blinds, nextBlinds } = clock;
+  const phase = tvPhase(tReal.status, hasLive);
+
+  const table = mapPlayersToTable(tReal.players);
+  const stats = aggregateStats(table);
+  const eliminated = eliminatedFromTable(table);
+  const prizes = normalizePrizes(tReal.prizes);
+
+  const podiumColors = [
+    'var(--podium-gold)',
+    'var(--podium-silver)',
+    'var(--podium-bronze)',
+  ];
 
   return (
     <div
@@ -175,7 +185,7 @@ export default function TvRoute() {
             className="font-sans font-bold tracking-[-0.02em] whitespace-nowrap overflow-hidden text-ellipsis"
             style={{ fontSize: compact ? 19 : 30 } as CSSProperties}
           >
-            {t.name}
+            {tReal.name}
           </div>
         </div>
 
@@ -192,56 +202,61 @@ export default function TvRoute() {
       </div>
 
       {/* ------------------------------------------------------------------ */}
-      {/* Left panel — prizes (desktop only)                                */}
+      {/* Left panel — prizes (desktop only). Lista vazia → coluna preservada */}
       {/* ------------------------------------------------------------------ */}
       {!compact && (
-        <Panel title="Premiação">
-          {/* Prize pool hero */}
-          <div
-            className="rounded-[20px] p-6 text-center"
-            style={{
-              background:
-                'linear-gradient(150deg, color-mix(in oklab, var(--emerald-500) 12%, transparent), transparent)',
-              border:
-                '1px solid color-mix(in oklab, var(--emerald-500) 28%, transparent)',
-            } as CSSProperties}
-          >
-            <div className="text-base text-muted-foreground uppercase tracking-[0.1em] mb-1">
-              Prize pool
-            </div>
-            <MoneyValue value={t.prizePool} cents={false} color="none" size="46px" />
-          </div>
-
-          {/* Per-position prizes */}
-          {prizes.map((p) => {
-            const ring = podiumColors[p.position - 1] ?? 'var(--secondary)';
-            return (
-              <div
-                key={p.position}
-                className="flex items-center gap-4 px-[18px] py-4 rounded-2xl bg-card"
-                style={{ border: '1px solid var(--border)' } as CSSProperties}
-              >
-                <span
-                  className="shrink-0 rounded-xl flex items-center justify-center font-mono font-bold text-[20px]"
-                  style={{
-                    width: 44,
-                    height: 44,
-                    background: ring,
-                    color: 'var(--felt-950)',
-                  } as CSSProperties}
-                >
-                  {p.position}º
-                </span>
-                <div className="flex-1">
-                  <MoneyValue value={p.amount} cents={false} color="none" size="26px" />
-                </div>
-                <span className="font-mono text-[17px] text-muted-foreground">
-                  {p.pct}%
-                </span>
+        prizes.length > 0 ? (
+          <Panel title="Premiação">
+            {/* Prize pool hero */}
+            <div
+              className="rounded-[20px] p-6 text-center"
+              style={{
+                background:
+                  'linear-gradient(150deg, color-mix(in oklab, var(--emerald-500) 12%, transparent), transparent)',
+                border:
+                  '1px solid color-mix(in oklab, var(--emerald-500) 28%, transparent)',
+              } as CSSProperties}
+            >
+              <div className="text-base text-muted-foreground uppercase tracking-[0.1em] mb-1">
+                Prize pool
               </div>
-            );
-          })}
-        </Panel>
+              <MoneyValue value={tReal.prizePool} cents={false} color="none" size="46px" />
+            </div>
+
+            {/* Per-position prizes */}
+            {prizes.map((p) => {
+              const ring = podiumColors[p.position - 1] ?? 'var(--secondary)';
+              return (
+                <div
+                  key={p.position}
+                  className="flex items-center gap-4 px-[18px] py-4 rounded-2xl bg-card"
+                  style={{ border: '1px solid var(--border)' } as CSSProperties}
+                >
+                  <span
+                    className="shrink-0 rounded-xl flex items-center justify-center font-mono font-bold text-[20px]"
+                    style={{
+                      width: 44,
+                      height: 44,
+                      background: ring,
+                      color: 'var(--felt-950)',
+                    } as CSSProperties}
+                  >
+                    {p.position}º
+                  </span>
+                  <div className="flex-1">
+                    <MoneyValue value={p.amount} cents={false} color="none" size="26px" />
+                  </div>
+                  <span className="font-mono text-[17px] text-muted-foreground">
+                    {p.pct}%
+                  </span>
+                </div>
+              );
+            })}
+          </Panel>
+        ) : (
+          // Sem premiação calculada (prize pool zerado): esconde o painel, mantém o grid 3-col.
+          <div aria-hidden />
+        )
       )}
 
       {/* ------------------------------------------------------------------ */}
@@ -271,16 +286,25 @@ export default function TvRoute() {
           Nível {level}
         </div>
 
-        {/* Countdown */}
-        <div
-          className="font-mono font-bold tabular-nums whitespace-nowrap leading-[0.9] tracking-[-0.04em]"
-          style={{
-            fontSize: 'clamp(72px, 33cqi, 240px)',
-            color: paused ? 'var(--warning)' : 'var(--foreground)',
-          } as CSSProperties}
-        >
-          {fmtTime(remainingSeconds)}
-        </div>
+        {/* Countdown (ao vivo) ou estado da fase (aguardando / encerrado) */}
+        {phase === 'live' ? (
+          <div
+            className="font-mono font-bold tabular-nums whitespace-nowrap leading-[0.9] tracking-[-0.04em]"
+            style={{
+              fontSize: 'clamp(72px, 33cqi, 240px)',
+              color: paused ? 'var(--warning)' : 'var(--foreground)',
+            } as CSSProperties}
+          >
+            {fmtTime(remainingSeconds)}
+          </div>
+        ) : (
+          <div
+            className="font-sans font-bold whitespace-nowrap leading-[1] tracking-[-0.02em] text-muted-foreground text-center"
+            style={{ fontSize: 'clamp(32px, 9cqi, 96px)' } as CSSProperties}
+          >
+            {phase === 'waiting' ? 'Aguardando início' : 'Torneio encerrado'}
+          </div>
+        )}
 
         {/* Current blinds */}
         <div
@@ -307,9 +331,9 @@ export default function TvRoute() {
           {/* Stat grid */}
           <div className="grid grid-cols-2 gap-3.5">
             {[
-              { v: `${t.remaining}/${t.players}`, l: 'Jogadores' },
-              { v: t.rebuys, l: 'Rebuys' },
-              { v: t.addons, l: 'Add-ons' },
+              { v: `${stats.remaining}/${stats.players}`, l: 'Jogadores' },
+              { v: stats.rebuys, l: 'Rebuys' },
+              { v: stats.addons, l: 'Add-ons' },
             ].map((s, i) => (
               <div
                 key={i}
@@ -329,7 +353,7 @@ export default function TvRoute() {
               style={{ border: '1px solid var(--border)' } as CSSProperties}
             >
               <div className="font-mono font-bold tracking-[-0.02em] text-[38px] leading-none">
-                <MoneyValue value={t.buyIn} cents={false} size="38px" />
+                <MoneyValue value={tReal.buyIn} cents={false} size="38px" />
               </div>
               <div className="text-[14px] text-muted-foreground uppercase tracking-[0.06em] mt-1">
                 Buy-in
@@ -346,14 +370,18 @@ export default function TvRoute() {
               Eliminações
             </div>
             <div className="flex flex-col gap-2.5">
-              {eliminated.map((p) => (
-                <div key={p.id} className="flex items-center gap-3">
-                  <span className="font-mono font-bold text-[18px] text-muted-foreground w-[34px]">
-                    {p.place}º
-                  </span>
-                  <span className="font-sans font-semibold text-[19px]">{p.name}</span>
-                </div>
-              ))}
+              {eliminated.length === 0 ? (
+                <div className="text-[15px] text-muted-foreground">Ninguém eliminado ainda.</div>
+              ) : (
+                eliminated.map((p) => (
+                  <div key={p.id} className="flex items-center gap-3">
+                    <span className="font-mono font-bold text-[18px] text-muted-foreground w-[34px]">
+                      {p.place}º
+                    </span>
+                    <span className="font-sans font-semibold text-[19px]">{p.name}</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </Panel>
@@ -367,10 +395,10 @@ export default function TvRoute() {
           className="flex items-center justify-center gap-6 pb-2 font-mono text-[15px] text-muted-foreground whitespace-nowrap"
         >
           <span>
-            {t.remaining}/{t.players} na mesa
+            {stats.remaining}/{stats.players} na mesa
           </span>
           <span className="text-emerald-400">
-            <MoneyValue value={t.prizePool} cents={false} color="none" className="text-emerald-400" />{' '}pool
+            <MoneyValue value={tReal.prizePool} cents={false} color="none" className="text-emerald-400" />{' '}pool
           </span>
         </div>
       )}

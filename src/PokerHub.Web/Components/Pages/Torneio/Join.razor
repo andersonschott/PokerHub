@@ -73,7 +73,7 @@
 
                 <MudStack Row AlignItems="AlignItems.Center" Spacing="2">
                     <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Small" Color="Color.Secondary"/>
-                    <MudText>@_tournament.PlayerCount jogadores inscritos</MudText>
+                    <MudText>@_tournament.Players.Count jogadores inscritos</MudText>
                 </MudStack>
 
                 <MudChip T="string" Color="@GetStatusColor(_tournament.Status)" Size="Size.Medium" Class="mt-2">
@@ -220,7 +220,7 @@
 @code {
     [Parameter] public string InviteCode { get; set; } = string.Empty;
 
-    private TournamentDto? _tournament;
+    private TournamentDetailDto? _tournament;
     private User? _currentUser;
     private bool _loading = true;
     private bool _processing;
@@ -456,7 +456,7 @@
 
         var date = _tournament.ScheduledDateTime.ToString("dd/MM/yyyy 'as' HH:mm");
         var buyIn = _tournament.BuyIn.ToString("N2");
-        var players = _tournament.PlayerCount;
+        var players = _tournament.Players.Count;
         var location = !string.IsNullOrEmpty(_tournament.Location) ? $" | Local: {_tournament.Location}" : "";
 
         return $"{_tournament.LeagueName} | {date} | Buy-in: R$ {buyIn} | {players} jogadores{location}";
