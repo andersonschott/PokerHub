@@ -2,12 +2,12 @@
  * /app/torneio/historico/:tournamentId — Detalhe de torneio encerrado.
  * Port de PHTorneioDetalhe de Historico.jsx (mobile) + DkHistorico (desktop).
  *
- * Mobile: detalhe da entrada selecionada via useParams + mockData.history.
+ * Mobile: detalhe da entrada selecionada via useParams + useTournament.
  * Desktop lg:: lista à esquerda + detalhe à direita.
  */
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, PiggyBank, Trophy, Users, Repeat, Wallet, Copy } from 'lucide-react';
+import { ArrowLeft, PiggyBank, Trophy, Users, Repeat, Wallet, Copy, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
@@ -18,15 +18,20 @@ import { PodiumStat } from '@/components/ui/podium-stat';
 import { MoneyValue } from '@/components/ui/money-value';
 import { SectionTitle } from '@/components/ui/section-title';
 import { Avatar } from '@/components/ui/avatar';
-import { mockData, type MockHistoricoItem } from '@/mocks/data';
 import { cn } from '@/lib/utils';
+
+import { useTournament, useTournaments } from '@/lib/api/hooks/use-tournaments';
+import { useJackpotContribution } from '@/lib/api/hooks/use-payments';
+import { useActiveLeague } from '@/features/leagues/league-context';
+import { selectRealizados } from '@/routes/app/torneio/torneio-lists';
+import { tournamentDetailToHistorico, formatPtBrDate, type HistoricoDetail } from '@/routes/app/torneio/historico-map';
 
 // ---------------------------------------------------------------------------
 // Detail panel (shared mobile + desktop)
 // ---------------------------------------------------------------------------
 
 interface DetailPanelProps {
-  h: MockHistoricoItem;
+  h: HistoricoDetail;
   onDuplicate: () => void;
   onViewPayments: () => void;
 }
@@ -91,9 +96,17 @@ function DetailPanel({ h, onDuplicate, onViewPayments }: DetailPanelProps) {
 
 function DesktopHistorico({ tournamentId }: { tournamentId: string }) {
   const navigate = useNavigate();
-  // fallback to first item if id not found
-  const initial = mockData.history.find((x) => x.id === tournamentId) ?? mockData.history[0];
-  const [sel, setSel] = useState<MockHistoricoItem>(initial);
+  const { activeLeagueId } = useActiveLeague();
+
+  const { data: tournaments } = useTournaments(activeLeagueId ?? '');
+  const realizados = selectRealizados(tournaments);
+
+  const [selectedId, setSelectedId] = useState<string>(tournamentId);
+
+  const { data: detail, isLoading: isLoadingDetail } = useTournament(selectedId);
+  const { data: jackpotContribution, isLoading: isLoadingJackpot } = useJackpotContribution(selectedId);
+
+  const h = detail ? tournamentDetailToHistorico(detail, jackpotContribution?.amount ?? 0) : null;
 
   return (
     <div
@@ -105,12 +118,12 @@ function DesktopHistorico({ tournamentId }: { tournamentId: string }) {
         <table className="w-full border-collapse">
           <thead>
             <tr>
-              {['Data', 'Torneio', 'Jog.', 'Campeão', 'Prize pool'].map((c, i) => (
+              {['Data', 'Torneio', 'Jog.', 'Prize pool'].map((c, i) => (
                 <th
                   key={c}
                   className={cn(
                     'pb-[10px] px-[10px] font-sans text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground whitespace-nowrap',
-                    i >= 2 ? (i === 4 ? 'text-right' : 'text-center') : 'text-left',
+                    i >= 2 ? (i === 3 ? 'text-right' : 'text-center') : 'text-left',
                   )}
                 >
                   {c}
@@ -119,12 +132,12 @@ function DesktopHistorico({ tournamentId }: { tournamentId: string }) {
             </tr>
           </thead>
           <tbody>
-            {mockData.history.map((x) => {
-              const active = x.id === sel.id;
+            {realizados.map((x) => {
+              const active = x.id === selectedId;
               return (
                 <tr
                   key={x.id}
-                  onClick={() => setSel(x)}
+                  onClick={() => setSelectedId(x.id)}
                   className={cn(
                     'cursor-pointer border-t border-border',
                     'transition-colors duration-[var(--dur-fast,120ms)]',
@@ -134,20 +147,12 @@ function DesktopHistorico({ tournamentId }: { tournamentId: string }) {
                   )}
                 >
                   <td className="px-[10px] py-3 font-mono text-[13px] text-muted-foreground whitespace-nowrap">
-                    {x.date}
+                    {formatPtBrDate(x.scheduledDateTime)}
                   </td>
                   <td className="px-[10px] py-3 font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis max-w-[180px]">
                     {x.name}
                   </td>
-                  <td className="px-[10px] py-3 text-center font-mono text-[13px]">{x.players}</td>
-                  <td className="px-[10px] py-3 text-center">
-                    <div className="inline-flex items-center gap-[7px]">
-                      <Avatar name={x.podium[0]?.name ?? '?'} size={22} podium="gold" />
-                      <span className="text-[13px] font-sans font-semibold whitespace-nowrap">
-                        {x.podium[0]?.name.split(' ')[0]}
-                      </span>
-                    </div>
-                  </td>
+                  <td className="px-[10px] py-3 text-center font-mono text-[13px]">{x.playerCount}</td>
                   <td className="px-[10px] py-3 text-right whitespace-nowrap">
                     <MoneyValue value={x.prizePool} cents={false} color="none" size="13.5px" />
                   </td>
@@ -161,99 +166,111 @@ function DesktopHistorico({ tournamentId }: { tournamentId: string }) {
       {/* Detail */}
       <div className="flex flex-col gap-3.5">
         <Card pad="lg">
-          <div className="flex items-center justify-between gap-2.5 mb-3.5">
-            <div className="min-w-0">
-              <div className="font-sans font-bold text-[18px] whitespace-nowrap overflow-hidden text-ellipsis">
-                {sel.name}
-              </div>
-              <div className="text-[12.5px] text-muted-foreground mt-0.5">
-                {sel.date} · buy-in <MoneyValue value={sel.buyIn} cents={false} color="none" size="12.5px" />
-              </div>
+          {isLoadingDetail || isLoadingJackpot ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             </div>
-            <Badge tone="neutral">Encerrado</Badge>
-          </div>
-
-          {/* Stats 2-col desktop */}
-          <div className="grid grid-cols-2 gap-2.5 mb-3.5">
-            <StatTile icon={Users} value={sel.players} label="Jogadores" center />
-            <StatTile
-              icon={Repeat}
-              value={`${sel.rebuys} · ${sel.addons}`}
-              valueSize="20px"
-              label="Rebuys · Add-ons"
-              center
-            />
-            <StatTile
-              icon={Trophy}
-              value={<MoneyValue value={sel.prizePool} cents={false} color="none" size="18px" />}
-              label="Prize pool"
-              tone="emerald"
-              center
-            />
-            <StatTile
-              icon={PiggyBank}
-              value={<MoneyValue value={sel.caixinha} cents={false} color="none" size="18px" />}
-              label="Caixinha"
-              tone="gold"
-              center
-            />
-          </div>
-
-          {/* Podium */}
-          <div className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.07em] text-muted-foreground mb-2.5">
-            Pódio
-          </div>
-          <div className="flex flex-col gap-2 mb-4">
-            {sel.podium.map((p) => {
-              const podiumColors = ['var(--podium-gold)', 'var(--podium-silver)', 'var(--podium-bronze)'];
-              const podiumBg = [
-                'bg-[color-mix(in_oklab,var(--podium-gold)_12%,var(--card))]',
-                'bg-secondary',
-                'bg-secondary',
-              ];
-              const podiumTone = (['gold', 'silver', 'bronze'] as const)[p.pos - 1];
-              return (
-                <div
-                  key={p.pos}
-                  className={cn(
-                    'flex items-center gap-2.5 px-3 py-2 rounded-[var(--radius-md)] border border-border',
-                    podiumBg[p.pos - 1],
-                  )}
-                >
-                  <span
-                    className="font-mono font-bold text-[14px] w-6"
-                    style={{ color: podiumColors[p.pos - 1] }}
-                  >
-                    {p.pos}º
-                  </span>
-                  <Avatar name={p.name} size={28} podium={podiumTone} />
-                  <span className="flex-1 font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis">
-                    {p.name}
-                  </span>
-                  <MoneyValue value={p.prize} cents={false} signed size="14px" />
+          ) : !h ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              Torneio não encontrado
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-2.5 mb-3.5">
+                <div className="min-w-0">
+                  <div className="font-sans font-bold text-[18px] whitespace-nowrap overflow-hidden text-ellipsis">
+                    {h.name}
+                  </div>
+                  <div className="text-[12.5px] text-muted-foreground mt-0.5">
+                    {h.date} · buy-in <MoneyValue value={h.buyIn} cents={false} color="none" size="12.5px" />
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+                <Badge tone="neutral">Encerrado</Badge>
+              </div>
 
-          <div className="flex gap-2">
-            <Button
-              variant="primary"
-              icon={Wallet}
-              block
-              onClick={() => navigate('/app/debitos/pagamentos')}
-            >
-              Ver pagamentos
-            </Button>
-            <Button
-              variant="secondary"
-              icon={Copy}
-              block
-              onClick={() => navigate('/app/torneio/novo')}
-            >
-              Duplicar
-            </Button>
-          </div>
+              {/* Stats 2-col desktop */}
+              <div className="grid grid-cols-2 gap-2.5 mb-3.5">
+                <StatTile icon={Users} value={h.players} label="Jogadores" center />
+                <StatTile
+                  icon={Repeat}
+                  value={`${h.rebuys} · ${h.addons}`}
+                  valueSize="20px"
+                  label="Rebuys · Add-ons"
+                  center
+                />
+                <StatTile
+                  icon={Trophy}
+                  value={<MoneyValue value={h.prizePool} cents={false} color="none" size="18px" />}
+                  label="Prize pool"
+                  tone="emerald"
+                  center
+                />
+                <StatTile
+                  icon={PiggyBank}
+                  value={<MoneyValue value={h.caixinha} cents={false} color="none" size="18px" />}
+                  label="Caixinha"
+                  tone="gold"
+                  center
+                />
+              </div>
+
+              {/* Podium */}
+              <div className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.07em] text-muted-foreground mb-2.5">
+                Pódio
+              </div>
+              <div className="flex flex-col gap-2 mb-4">
+                {h.podium.map((p) => {
+                  const podiumColors = ['var(--podium-gold)', 'var(--podium-silver)', 'var(--podium-bronze)'];
+                  const podiumBg = [
+                    'bg-[color-mix(in_oklab,var(--podium-gold)_12%,var(--card))]',
+                    'bg-secondary',
+                    'bg-secondary',
+                  ];
+                  const podiumTone = (['gold', 'silver', 'bronze'] as const)[p.pos - 1];
+                  return (
+                    <div
+                      key={p.pos}
+                      className={cn(
+                        'flex items-center gap-2.5 px-3 py-2 rounded-[var(--radius-md)] border border-border',
+                        podiumBg[p.pos - 1],
+                      )}
+                    >
+                      <span
+                        className="font-mono font-bold text-[14px] w-6"
+                        style={{ color: podiumColors[p.pos - 1] }}
+                      >
+                        {p.pos}º
+                      </span>
+                      <Avatar name={p.name} size={28} podium={podiumTone} />
+                      <span className="flex-1 font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis">
+                        {p.name}
+                      </span>
+                      <MoneyValue value={p.prize} cents={false} signed size="14px" />
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="primary"
+                  icon={Wallet}
+                  block
+                  onClick={() => navigate('/app/debitos/pagamentos')}
+                >
+                  Ver pagamentos
+                </Button>
+                <Button
+                  variant="secondary"
+                  icon={Copy}
+                  block
+                  onClick={() => navigate('/app/torneio/novo')}
+                >
+                  Duplicar
+                </Button>
+              </div>
+            </>
+          )}
         </Card>
       </div>
     </div>
@@ -268,7 +285,10 @@ export default function HistoricoDetalheRoute() {
   const navigate = useNavigate();
   const { tournamentId = '' } = useParams<{ tournamentId: string }>();
 
-  const h = mockData.history.find((x) => x.id === tournamentId) ?? mockData.history[0];
+  const { data: detail, isLoading: isLoadingDetail } = useTournament(tournamentId);
+  const { data: jackpotContribution, isLoading: isLoadingJackpot } = useJackpotContribution(tournamentId);
+
+  const h = detail ? tournamentDetailToHistorico(detail, jackpotContribution?.amount ?? 0) : null;
 
   const handleDuplicate = () => {
     navigate('/app/torneio/novo');
@@ -292,10 +312,17 @@ export default function HistoricoDetalheRoute() {
           />
           <div className="flex-1 min-w-0">
             <div className="font-sans font-bold text-[18px] tracking-[-0.01em] whitespace-nowrap overflow-hidden text-ellipsis">
-              {h.name}
+              {h?.name ?? 'Torneio encerrado'}
             </div>
             <div className="text-[12px] text-muted-foreground">
-              <span className="font-mono">{h.date}</span> · buy-in <MoneyValue value={h.buyIn} cents={false} color="none" size="12px" />
+              {h ? (
+                <>
+                  <span className="font-mono">{h.date}</span> · buy-in{' '}
+                  <MoneyValue value={h.buyIn} cents={false} color="none" size="12px" />
+                </>
+              ) : (
+                <span>&nbsp;</span>
+              )}
             </div>
           </div>
           <Badge tone="neutral" className="shrink-0">
@@ -303,7 +330,17 @@ export default function HistoricoDetalheRoute() {
           </Badge>
         </div>
 
-        <DetailPanel h={h} onDuplicate={handleDuplicate} onViewPayments={handleViewPayments} />
+        {isLoadingDetail || isLoadingJackpot ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : !h ? (
+          <div className="flex items-center justify-center py-12 text-muted-foreground">
+            Torneio não encontrado
+          </div>
+        ) : (
+          <DetailPanel h={h} onDuplicate={handleDuplicate} onViewPayments={handleViewPayments} />
+        )}
       </div>
 
       {/* Desktop */}
