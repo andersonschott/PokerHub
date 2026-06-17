@@ -3,8 +3,8 @@
  * Port de docs/design-system/ui_kits/pokerhub_app/Home.jsx.
  *
  * Header com nome/switcher REAL (useLeague).
- * Hero: torneio ao vivo mock (mockData.tournament) ou banner vazio → Criar.
- * Tabs: Torneios (lista mock + Caixinha) / Jogadores (REAL: useLeaguePlayers).
+ * Hero: torneio ao vivo real (allTournaments InProgress/Paused) ou banner vazio → Criar.
+ * Tabs: Torneios (lista real + Caixinha real) / Jogadores (REAL: useLeaguePlayers).
  * Variante desktop Step 5: grid 2 colunas no lg:.
  */
 import { useState, useEffect } from 'react';
@@ -16,6 +16,11 @@ import { useLeague, useLeaguePlayers } from '@/lib/api/hooks/use-leagues';
 import { useActiveSeason } from '@/lib/api/hooks/use-seasons';
 import { useSeasonRanking } from '@/lib/api/hooks/use-rankings';
 import { useTournaments, TournamentStatus } from '@/lib/api/hooks/use-tournaments';
+import {
+  useJackpotContributions,
+  useJackpotUsages,
+} from '@/lib/api/hooks/use-jackpot';
+import { jackpotBalance } from '@/features/jackpot/jackpot-balance';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -23,9 +28,7 @@ import { SectionTitle } from '@/components/ui/section-title';
 import { MoneyValue } from '@/components/ui/money-value';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { IconButton } from '@/components/ui/icon-button';
 import { StatusPill } from '@/components/ui/status-pill';
-import { mockData } from '@/mocks/data';
 
 // ---------------------------------------------------------------------------
 // Segmented control
@@ -128,9 +131,14 @@ export default function LeagueHomeRoute() {
   const upcoming = allTournaments?.filter(t => t.status === TournamentStatus.Scheduled || t.status === TournamentStatus.InProgress) ?? [];
   const history = allTournaments?.filter(t => t.status === TournamentStatus.Finished || t.status === TournamentStatus.Cancelled) ?? [];
 
-  // Mock tournament data (will be replaced when the live-tournament endpoint exists)
-  const t = mockData.tournament;
-  const liveTournament = league ? false : false; // No live tournament endpoint yet — always show empty hero
+  const liveT = allTournaments?.find(
+    t => t.status === TournamentStatus.InProgress || t.status === TournamentStatus.Paused,
+  );
+  const liveTournament = !!liveT;
+
+  const { data: contributions } = useJackpotContributions(id);
+  const { data: usages } = useJackpotUsages(id);
+  const jackpotBalanceValue = jackpotBalance(contributions, usages);
 
   // Set the active league when this page loads with a valid id
   useEffect(() => {
@@ -138,11 +146,6 @@ export default function LeagueHomeRoute() {
   }, [id, setActiveLeagueId]);
 
   const isOrganizer = league?.organizerId === user?.userId;
-
-  // Format seconds as MM:SS
-  const mins = String(Math.floor(t.secondsRemaining / 60)).padStart(2, '0');
-  const secs = String(t.secondsRemaining % 60).padStart(2, '0');
-  const timerLabel = `${mins}:${secs}`;
 
   return (
     <div className="px-4 pt-[14px] pb-24">
@@ -211,36 +214,29 @@ export default function LeagueHomeRoute() {
         <Card
           variant="live"
           pad="md"
-          interactive
-          onClick={() => navigate('/app/torneio')}
           className="mb-[14px]"
         >
           <div className="flex items-center gap-3">
             <span className="w-2 h-2 rounded-full bg-[var(--live,var(--positive))] shrink-0 animate-ph-pulse" />
             <div className="flex-1 min-w-0">
-              <div className="font-sans font-semibold text-[14.5px] whitespace-nowrap overflow-hidden text-ellipsis">
-                {t.name}
+              <div className="flex items-center gap-2 mb-1">
+                <div className="font-sans font-semibold text-[14.5px] whitespace-nowrap overflow-hidden text-ellipsis">
+                  {liveT?.name}
+                </div>
+                <Badge tone="positive">Ao vivo</Badge>
               </div>
-              <div className="font-mono text-[11.5px] text-muted-foreground mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">
-                {t.levelLabel} · {t.sb}/{t.bb} · {t.remaining}/{t.players} na mesa
+              <div className="font-mono text-[11.5px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">
+                Nível {liveT?.currentLevel} · {liveT?.checkedInCount}/{liveT?.playerCount} na mesa
               </div>
             </div>
-            <span className="font-mono font-bold text-[20px] tracking-[-0.02em] shrink-0">
-              {timerLabel}
-            </span>
-            <IconButton
-              icon={Settings2}
-              variant="solid"
+            <Button
+              variant="primary"
               size="sm"
-              gold
-              aria-label="Operar torneio"
-              title="Operar"
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate('/app/torneio/dashboard');
-              }}
+              onClick={() => navigate('/app/torneio/dashboard')}
               className="shrink-0"
-            />
+            >
+              Abrir torneio
+            </Button>
           </div>
         </Card>
       ) : (
@@ -319,7 +315,7 @@ export default function LeagueHomeRoute() {
                         {league.jackpotPercentage}% de cada prize pool · despesas da liga
                       </div>
                     </div>
-                    <MoneyValue value={mockData.caixinha.balance} cents={false} size="14.5px" />
+                    <MoneyValue value={jackpotBalanceValue} cents={false} size="14.5px" />
                     <ChevronRight className="text-muted-foreground w-4 h-4" />
                   </div>
                 </Card>

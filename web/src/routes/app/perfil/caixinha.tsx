@@ -21,6 +21,7 @@ import {
   useJackpotUsages,
   useUseJackpot,
 } from '@/lib/api/hooks/use-jackpot';
+import { jackpotBalance } from '@/features/jackpot/jackpot-balance';
 
 type SheetKind = 'expense' | 'tournament' | null;
 
@@ -81,9 +82,7 @@ export default function CaixinhaRoute() {
 
   const entriesTotal = contributions?.reduce((s, e) => s + e.amount, 0) ?? 0;
   const usagesTotal = usages?.reduce((s, u) => s + u.amount, 0) ?? 0;
-  const balance = entriesTotal - usagesTotal; // API backend already computes this implicitly, but we calculate locally from lists for UI logic or use status.accumulatedPrizePool (which is the prize pool basis).
-  
-  // Actually, status.accumulatedPrizePool might be the total basis, not the balance. Let's rely on the real entries - usages, or the total. Wait, balance could just be entries - usages.
+  const balance = jackpotBalance(contributions, usages);
 
   const safeEntries = contributions ?? [];
   const safeUsages = usages ?? [];
