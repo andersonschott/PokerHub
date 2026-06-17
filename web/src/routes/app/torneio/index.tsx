@@ -1,13 +1,17 @@
 /**
- * /app/torneio — Tab Torneio.
- * Se a liga ativa tem torneio ao vivo → timer com mock-clock.
- * Se não → agenda vazia + próximos + realizados (port de PHTorneioVazio + PHTimerTab).
+ * /app/torneio — Tab Torneio (ligada à API real, Passo 2B).
  *
- * Fontes: Timer.jsx, DesktopTorneio.jsx.
+ * - Liga ativa com torneio ao vivo (InProgress|Paused) → TimerView: timer fiel via SignalR
+ *   (fallback REST sem 00:00 enganoso, igual ao tv.tsx) + stats e listas reais.
+ * - Sem torneio ao vivo → TorneioVazio: empty state + Próximos (agendados) + Realizados (finalizados).
+ *
+ * Reusa os padrões já reais de dashboard.tsx (transform de players, toggle de pausa) e de
+ * tv.tsx (clock fiel + restFallbackClock). Sem mock, sem dinheiro novo, sem API nova.
  */
 import { useEffect, useRef, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CalendarClock, Plus, TimerOff, Users, Trophy, Repeat } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Plus, TimerOff, Users, Trophy, Repeat, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
 import { Card } from '@/components/ui/card';
@@ -20,18 +24,45 @@ import { Avatar } from '@/components/ui/avatar';
 import { LevelControls } from '@/features/timer/level-controls';
 import { TimerDisplay } from '@/features/timer/timer-display';
 import { RealizadosList } from '@/features/timer/realizados-list';
-import { useMockClock } from '@/features/timer/use-mock-clock';
-import { mockData } from '@/mocks/data';
+import { useActiveLeague } from '@/features/leagues/league-context';
+import {
+  useTournaments,
+  useTournament,
+  useResumeTournament,
+  usePauseTournament,
+  useNextLevel,
+  usePrevLevel,
+  TournamentStatus,
+  type TournamentDto,
+} from '@/lib/api/hooks/use-tournaments';
+import { useTournamentClock } from '@/lib/api/hooks/use-tournament-clock';
+import {
+  mapPlayersToTable,
+  aggregateStats,
+  eliminatedFromTable,
+  isLiveClock,
+  restFallbackClock,
+} from '../tv-projection';
+import { selectUpcoming, selectRealizados } from './torneio-lists';
 
 // ---------------------------------------------------------------------------
 // Timer (ao vivo)
 // ---------------------------------------------------------------------------
 
-function TimerView() {
+function TimerView({ tournamentId }: { tournamentId: string }) {
   const navigate = useNavigate();
-  const { state, togglePause, nextLevel, prevLevel } = useMockClock();
-  const { level, remainingSeconds, levelSeconds, paused, blinds, nextBlinds, elapsedPct } = state;
-  const t = mockData.tournament;
+  const { data: tDetail, isLoading } = useTournament(tournamentId);
+  const { state: liveClock } = useTournamentClock(tournamentId);
+
+  // Controles do timer = mutations REST (espelha dashboard.tsx; não reinventa pause/resume).
+  // Esta tela só monta com InProgress|Paused → retomar é /resume, nunca /start.
+  const resumeMut = useResumeTournament(tournamentId);
+  const pauseMut = usePauseTournament(tournamentId);
+  const nextMut = useNextLevel(tournamentId);
+  const prevMut = usePrevLevel(tournamentId);
+
+  // Feedback de erro nas mutações de controle (o estado de sucesso chega via SignalR).
+  const onTimerError = { onError: () => toast.error('Falha ao atualizar o timer') };
 
   // Wake Lock — mantém a tela ligada enquanto o timer está ativo.
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -56,8 +87,35 @@ function TimerView() {
     };
   }, []);
 
-  const inPlay = mockData.table.filter((p) => p.status === 'in');
-  const out = mockData.table.filter((p) => p.status === 'out').sort((a, b) => (a.place ?? 99) - (b.place ?? 99));
+  if (isLoading || !tDetail) {
+    return (
+      <div className="flex min-h-full items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  // Clock fiel via SignalR; sem 1º sync (level 0) → fallback derivado do DTO REST. Nunca 00:00 mock.
+  const hasLive = isLiveClock(liveClock);
+  const clock = hasLive
+    ? liveClock
+    : restFallbackClock({
+        status: tDetail.status,
+        currentLevel: tDetail.currentLevel,
+        timeRemainingSeconds: tDetail.timeRemainingSeconds,
+        blindLevels: tDetail.blindLevels,
+      });
+  const { level, remainingSeconds, levelSeconds, paused, blinds, nextBlinds, elapsedPct } = clock;
+
+  // players → shape de UI (mesmo transform de dashboard.tsx, já extraído/testado em tv-projection).
+  const table = mapPlayersToTable(tDetail.players);
+  const stats = aggregateStats(table);
+  const inPlay = table.filter((p) => p.status === 'in');
+  const out = eliminatedFromTable(table);
+
+  // Toggle de pausa: pausado → resume (/resume); rodando → pause (/pause).
+  const handleTogglePause = () =>
+    paused ? resumeMut.mutate(undefined, onTimerError) : pauseMut.mutate(undefined, onTimerError);
 
   return (
     <div
@@ -73,7 +131,7 @@ function TimerView() {
           onClick={() => navigate(-1)}
         />
         <div className="min-w-0 font-sans font-bold text-base leading-none whitespace-nowrap overflow-hidden text-ellipsis">
-          {t.name}
+          {tDetail.name}
         </div>
         <StatusPill status={paused ? 'paused' : 'live'} className="shrink-0" />
       </div>
@@ -107,14 +165,14 @@ function TimerView() {
       <div className="grid grid-cols-4 gap-2 mb-3.5">
         <StatTile
           icon={Users}
-          value={`${t.remaining}/${t.players}`}
+          value={`${stats.remaining}/${stats.players}`}
           label="Mesa"
           center
           valueSize="15px"
         />
         <StatTile
           icon={Trophy}
-          value={<MoneyValue value={t.prizePool} cents={false} color="none" size="15px" />}
+          value={<MoneyValue value={tDetail.prizePool} cents={false} color="none" size="15px" />}
           label="Pool"
           tone="emerald"
           center
@@ -122,14 +180,14 @@ function TimerView() {
         />
         <StatTile
           icon={Repeat}
-          value={t.rebuys}
+          value={stats.rebuys}
           label="Rebuys"
           center
           valueSize="15px"
         />
         <StatTile
           icon={Plus}
-          value={t.addons}
+          value={stats.addons}
           label="Add-on"
           center
           valueSize="15px"
@@ -139,10 +197,10 @@ function TimerView() {
       {/* Controls */}
       <LevelControls
         paused={paused}
-        onPrev={prevLevel}
-        onTogglePause={togglePause}
-        onNext={nextLevel}
-        onTv={() => navigate('/app/tv')}
+        onPrev={() => prevMut.mutate(undefined, onTimerError)}
+        onTogglePause={handleTogglePause}
+        onNext={() => nextMut.mutate(undefined, onTimerError)}
+        onTv={() => window.open(`/tv/${tDetail.inviteCode}`, '_blank')}
       />
 
       {/* Participantes — somente leitura */}
@@ -205,17 +263,23 @@ function TimerView() {
 // Torneio vazio (sem torneio ao vivo)
 // ---------------------------------------------------------------------------
 
-function TorneioVazio() {
+function TorneioVazio({
+  tournaments,
+  leagueName,
+}: {
+  tournaments: readonly TournamentDto[] | undefined;
+  leagueName: string;
+}) {
   const navigate = useNavigate();
-  const d = mockData;
-  const upcoming = d.upcoming.filter((u) => u.status !== 'live');
+  const upcoming = selectUpcoming(tournaments);
+  const realizados = selectRealizados(tournaments);
 
   return (
     <div className="px-4 pb-24 min-h-full">
       {/* Header */}
       <div className="mb-4 pt-4">
         <div className="font-sans font-bold text-[20px] tracking-[-0.01em]">Torneio</div>
-        <div className="text-[12.5px] text-muted-foreground">{d.league.name}</div>
+        {leagueName && <div className="text-[12.5px] text-muted-foreground">{leagueName}</div>}
       </div>
 
       {/* Empty state card */}
@@ -240,25 +304,38 @@ function TorneioVazio() {
       {/* Próximos */}
       <SectionTitle icon={CalendarClock}>Próximos</SectionTitle>
       <div className="flex flex-col gap-2.5 mt-2">
-        {upcoming.map((u, i) => (
-          <Card key={i} pad="md">
-            <div className="flex items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="font-sans font-semibold text-[15px]">{u.name}</div>
-                <div className="text-[12.5px] text-muted-foreground mt-0.5">
-                  {u.when} · {u.confirmed} confirmados
+        {upcoming.length === 0 ? (
+          <div className="text-[13px] text-muted-foreground px-0.5">Nenhum torneio agendado.</div>
+        ) : (
+          upcoming.map((u) => (
+            <Card key={u.id} pad="md">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="font-sans font-semibold text-[15px]">{u.name}</div>
+                  <div className="text-[12.5px] text-muted-foreground mt-0.5">
+                    {new Date(u.scheduledDateTime).toLocaleString('pt-BR')} · {u.playerCount} confirmados
+                  </div>
                 </div>
+                <Badge tone="neutral"><MoneyValue value={u.buyIn} cents={false} color="none" /></Badge>
               </div>
-              <Badge tone="neutral"><MoneyValue value={u.buyIn} cents={false} color="none" /></Badge>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          ))
+        )}
       </div>
 
       <div className="h-[18px]" />
 
       {/* Realizados */}
-      <RealizadosList limit={3} />
+      <RealizadosList
+        limit={3}
+        items={realizados.map((r) => ({
+          id: r.id,
+          name: r.name,
+          scheduledDateTime: r.scheduledDateTime,
+          players: r.playerCount,
+          prizePool: r.prizePool,
+        }))}
+      />
     </div>
   );
 }
@@ -268,6 +345,25 @@ function TorneioVazio() {
 // ---------------------------------------------------------------------------
 
 export default function TorneioRoute() {
-  const live = mockData.league.live;
-  return live ? <TimerView /> : <TorneioVazio />;
+  const { activeLeagueId } = useActiveLeague();
+  const { data: tournaments, isLoading } = useTournaments(activeLeagueId ?? '');
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-full items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const activeT = tournaments?.find(
+    (t) => t.status === TournamentStatus.InProgress || t.status === TournamentStatus.Paused,
+  );
+  const leagueName = tournaments?.[0]?.leagueName ?? '';
+
+  return activeT ? (
+    <TimerView tournamentId={activeT.id} />
+  ) : (
+    <TorneioVazio tournaments={tournaments} leagueName={leagueName} />
+  );
 }
