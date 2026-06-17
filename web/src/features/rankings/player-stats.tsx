@@ -2,14 +2,26 @@
  * PlayerStats — detalhe de estatísticas do jogador.
  * Port de PHPlayerStats de Ranking.jsx.
  */
-import { ArrowLeft, Target, Trophy, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Loader2, Target, Trophy, TrendingUp } from 'lucide-react';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { IconButton } from '@/components/ui/icon-button';
 import { Avatar } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { StatTile } from '@/components/ui/stat-tile';
 import { MoneyValue, formatBRL } from '@/components/ui/money-value';
 import { ProgressBar } from '@/components/ui/progress-bar';
-import type { MockRankingEntry } from '@/mocks/data';
+import { usePlayerStats } from '@/lib/api/hooks/use-player-stats';
+import { mapPlayerStatsDetail } from './player-stats-map';
+import type { RankingEntry } from './ranking-map';
 
 const PODIUM_COLORS: Record<number, string> = {
   1: 'var(--podium-gold)',
@@ -34,14 +46,71 @@ function roiMsg(roi: number): string {
   return 'Momento difícil. Paciência!';
 }
 
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="font-sans text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mt-[18px] mb-2">
+      {children}
+    </div>
+  );
+}
+
+/** Eixo Y compacto: 1.2k para milhares, valor cru abaixo disso. */
+function fmtAxis(v: number): string {
+  const abs = Math.abs(v);
+  if (abs >= 1000) return `${v < 0 ? '-' : ''}${Math.round(abs / 100) / 10}k`;
+  return String(v);
+}
+
+interface ProfitDatum {
+  label: string;
+  name: string;
+  profit: number;
+}
+
+/** Tooltip do gráfico — usa cores do tema (o default do Recharts é claro). */
+function ProfitTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: { payload: ProfitDatum }[];
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="rounded-[8px] border border-border bg-card px-3 py-2 text-[12px] shadow-sm">
+      <div className="text-muted-foreground mb-1 max-w-[160px] truncate">{d.name}</div>
+      <MoneyValue value={d.profit} signed size="13px" />
+    </div>
+  );
+}
+
 interface PlayerStatsProps {
-  player: MockRankingEntry;
+  player: RankingEntry;
   rank: number;
   onBack: () => void;
 }
 
 export function PlayerStats({ player: p, rank, onBack }: PlayerStatsProps) {
   const roiPos = p.roi >= 0;
+
+  // Detalhe real (posição média, melhor/pior, últimos torneios) — o entry de
+  // ranking não traz esses campos; chegam de /players/{id}/ranking-stats.
+  const statsQ = usePlayerStats(p.playerId);
+  const statsLoading = !!p.playerId && statsQ.isLoading;
+  const detail = statsQ.data ? mapPlayerStatsDetail(statsQ.data) : null;
+
+  const avgPos = detail ? detail.avgPos : p.avgPos;
+  const best = detail ? detail.best : p.best;
+  const worst = detail ? detail.worst : p.worst;
+  const recent = detail ? detail.recent : p.recent ?? [];
+  const chartData: ProfitDatum[] = recent.map((r, i) => ({
+    label: String(i + 1),
+    name: r.name,
+    profit: r.profit,
+  }));
+
+  const dash = <span className="font-mono text-[14px] text-muted-foreground">—</span>;
 
   return (
     <div className="px-4 pb-24 min-h-full">
@@ -163,7 +232,9 @@ export function PlayerStats({ player: p, rank, onBack }: PlayerStatsProps) {
               <span className="font-mono font-bold text-[15px] shrink-0">
                 {val != null
                   ? `${val}%`
-                  : `${p.avgPos.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}º`}
+                  : statsLoading
+                    ? '—'
+                    : `${avgPos.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}º`}
               </span>
             </div>
             {val != null && tone != null ? (
@@ -183,8 +254,8 @@ export function PlayerStats({ player: p, rank, onBack }: PlayerStatsProps) {
             { label: 'Total investido',    node: <MoneyValue value={p.buyIns}  color="none" size="14px" /> },
             { label: 'Total em prêmios',   node: <MoneyValue value={p.prizes}  color="none" size="14px" /> },
             { label: 'Lucro / prejuízo',   node: <MoneyValue value={p.profit}  signed       size="14px" /> },
-            { label: 'Melhor resultado',   node: <MoneyValue value={p.best  ?? 0} signed   size="14px" /> },
-            { label: 'Pior resultado',     node: <MoneyValue value={p.worst ?? 0} signed   size="14px" /> },
+            { label: 'Melhor resultado',   node: statsLoading ? dash : <MoneyValue value={best  ?? 0} signed size="14px" /> },
+            { label: 'Pior resultado',     node: statsLoading ? dash : <MoneyValue value={worst ?? 0} signed size="14px" /> },
           ]
         ).map(({ label, node }, i, arr) => (
           <div
@@ -198,14 +269,49 @@ export function PlayerStats({ player: p, rank, onBack }: PlayerStatsProps) {
         ))}
       </Card>
 
-      {/* Histórico */}
-      {p.recent && p.recent.length > 0 ? (
+      {/* Histórico + gráfico — detalhe real via /players/{id}/ranking-stats */}
+      {statsLoading ? (
+        <div className="flex justify-center py-12">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : recent.length > 0 ? (
         <>
-          <div className="font-sans text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mt-[18px] mb-2">
-            Últimos torneios
-          </div>
+          {/* Gráfico: lucro por torneio recente */}
+          <SectionLabel>Lucro por torneio</SectionLabel>
+          <Card pad="md">
+            <ResponsiveContainer width="100%" height={170}>
+              <BarChart data={chartData} margin={{ top: 6, right: 4, bottom: 0, left: -8 }}>
+                <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="label"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
+                />
+                <YAxis
+                  width={44}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
+                  tickFormatter={fmtAxis}
+                />
+                <Tooltip cursor={{ fill: 'var(--secondary)' }} content={<ProfitTooltip />} />
+                <Bar dataKey="profit" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+                  {chartData.map((d, i) => (
+                    <Cell
+                      key={i}
+                      fill={d.profit >= 0 ? 'var(--positive)' : 'var(--negative)'}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+
+          {/* Últimos torneios */}
+          <SectionLabel>Últimos torneios</SectionLabel>
           <div className="flex flex-col gap-2">
-            {p.recent.map((r, i) => (
+            {recent.map((r, i) => (
               <Card key={i} pad="md">
                 <div className="flex items-center gap-3">
                   <span
@@ -226,7 +332,14 @@ export function PlayerStats({ player: p, rank, onBack }: PlayerStatsProps) {
             ))}
           </div>
         </>
-      ) : null}
+      ) : (
+        <>
+          <SectionLabel>Últimos torneios</SectionLabel>
+          <Card pad="lg" className="text-center text-[13px] text-muted-foreground">
+            Nenhum torneio recente registrado.
+          </Card>
+        </>
+      )}
     </div>
   );
 }

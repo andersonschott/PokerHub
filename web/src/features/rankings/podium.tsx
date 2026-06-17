@@ -4,7 +4,7 @@
  */
 import { Avatar } from '@/components/ui/avatar';
 import { MoneyValue } from '@/components/ui/money-value';
-import type { MockRankingEntry } from '@/mocks/data';
+import type { RankingEntry } from './ranking-map';
 
 interface PodiumMeta {
   h: number;
@@ -20,13 +20,13 @@ const META: Record<number, PodiumMeta> = {
 };
 
 interface PodiumHeroProps {
-  top: MockRankingEntry[];
-  onPick: (p: MockRankingEntry) => void;
+  top: RankingEntry[];
+  onPick: (p: RankingEntry) => void;
 }
 
 export function PodiumHero({ top, onPick }: PodiumHeroProps) {
   // visual order: 2nd, 1st, 3rd
-  const order = [top[1], top[0], top[2]].filter((p): p is MockRankingEntry => Boolean(p));
+  const order = [top[1], top[0], top[2]].filter((p): p is RankingEntry => Boolean(p));
 
   return (
     <div className="grid grid-cols-3 items-end gap-2">

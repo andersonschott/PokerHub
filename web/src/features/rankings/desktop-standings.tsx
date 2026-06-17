@@ -6,7 +6,7 @@
  */
 import { Avatar } from '@/components/ui/avatar';
 import { MoneyValue } from '@/components/ui/money-value';
-import type { MockRankingEntry } from '@/mocks/data';
+import type { RankingEntry } from './ranking-map';
 
 const PODIUM_COLORS = [
   'var(--podium-gold)',
@@ -15,8 +15,8 @@ const PODIUM_COLORS = [
 ];
 
 interface DesktopStandingsProps {
-  data: MockRankingEntry[];
-  onRow: (p: MockRankingEntry) => void;
+  data: RankingEntry[];
+  onRow: (p: RankingEntry) => void;
 }
 
 function Th({ children, align = 'left', width }: { children: React.ReactNode; align?: string; width?: number }) {

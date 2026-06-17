@@ -23,7 +23,7 @@ import { SeasonSheet } from '@/features/rankings/season-sheet';
 import { PlayerStats } from '@/features/rankings/player-stats';
 import { PlayerStatsModal } from '@/features/rankings/player-stats-modal';
 import { DesktopStandings } from '@/features/rankings/desktop-standings';
-import { mapRanking, type MockRankingEntry } from '@/features/rankings/ranking-map';
+import { mapRanking, type RankingEntry } from '@/features/rankings/ranking-map';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { useLeague } from '@/lib/api/hooks/use-leagues';
 import { useSeasons, useActiveSeason } from '@/lib/api/hooks/use-seasons';
@@ -41,8 +41,8 @@ export default function RankingRoute() {
   const activeSeasonQ = useActiveSeason(leagueId);
 
   const [sort, setSort] = useState<SortKey>('profit');
-  const [sel, setSel] = useState<MockRankingEntry | null>(null);
-  const [desktopSel, setDesktopSel] = useState<MockRankingEntry | null>(null);
+  const [sel, setSel] = useState<RankingEntry | null>(null);
+  const [desktopSel, setDesktopSel] = useState<RankingEntry | null>(null);
   const [seasonSheet, setSeasonSheet] = useState(false);
   // null = ainda não escolhido (segue o default = temporada ativa, senão Geral).
   const [picked, setPicked] = useState<string | null>(null);

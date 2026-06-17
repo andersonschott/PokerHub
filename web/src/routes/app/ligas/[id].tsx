@@ -13,7 +13,8 @@ import { ChevronsUpDown, Settings2, CalendarPlus, Plus, CalendarClock, PiggyBank
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { useLeague, useLeaguePlayers } from '@/lib/api/hooks/use-leagues';
-import { useActiveSeason, useSeasonRanking } from '@/lib/api/hooks/use-seasons';
+import { useActiveSeason } from '@/lib/api/hooks/use-seasons';
+import { useSeasonRanking } from '@/lib/api/hooks/use-rankings';
 import { useTournaments, TournamentStatus } from '@/lib/api/hooks/use-tournaments';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { Button } from '@/components/ui/button';
@@ -540,22 +541,22 @@ export default function LeagueHomeRoute() {
               Nenhum torneio finalizado na temporada atual.
             </div>
           ) : (
-            rankingData?.map((r, idx) => (
+            rankingData?.map((r) => (
               <Card key={r.playerId} pad="md">
                 <div className="flex items-center gap-3">
                   <Avatar
                     name={r.playerName}
-                    podium={idx < 3 ? (['gold', 'silver', 'bronze'] as const)[idx] : undefined}
-                    badge={idx < 3 ? String(idx + 1) : undefined}
-                    badgeGold={idx === 0}
+                    podium={r.position <= 3 ? (['gold', 'silver', 'bronze'] as const)[r.position - 1] : undefined}
+                    badge={r.position <= 3 ? String(r.position) : undefined}
+                    badgeGold={r.position === 1}
                   />
                   <div className="flex-1 min-w-0">
                     <div className="font-sans font-semibold text-[15px]">{r.playerName}</div>
                     <div className="text-xs text-muted-foreground">
-                      {r.totalPoints} pts · {r.tournamentsPlayed} torneio{r.tournamentsPlayed !== 1 ? 's' : ''} · ITM {r.itmCount > 0 ? Math.round((r.itmCount / r.tournamentsPlayed) * 100) : 0}%
+                      {r.tournamentsPlayed} torneio{r.tournamentsPlayed !== 1 ? 's' : ''} · {r.wins} vitória{r.wins !== 1 ? 's' : ''} · ITM {Math.round(r.itmRate)}%
                     </div>
                   </div>
-                  <MoneyValue value={r.totalProfit} signed size="15px" />
+                  <MoneyValue value={r.profit} signed size="15px" />
                 </div>
               </Card>
             ))

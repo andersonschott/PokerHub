@@ -6,7 +6,7 @@ import { ChevronRight } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Avatar } from '@/components/ui/avatar';
 import { MoneyValue } from '@/components/ui/money-value';
-import type { MockRankingEntry } from '@/mocks/data';
+import type { RankingEntry } from './ranking-map';
 import type { SortKey } from './sort-toggle';
 
 const PODIUM_COLORS = [
@@ -28,7 +28,7 @@ function RankNum({ rank }: { rank: number }) {
   );
 }
 
-function MetricValue({ p, sort }: { p: MockRankingEntry; sort: SortKey }) {
+function MetricValue({ p, sort }: { p: RankingEntry; sort: SortKey }) {
   if (sort === 'profit') {
     return <MoneyValue value={p.profit} signed size="15px" />;
   }
@@ -54,10 +54,10 @@ function MetricValue({ p, sort }: { p: MockRankingEntry; sort: SortKey }) {
 }
 
 interface StandingsListProps {
-  data: MockRankingEntry[];
-  sorted: MockRankingEntry[];
+  data: RankingEntry[];
+  sorted: RankingEntry[];
   sort: SortKey;
-  onPick: (p: MockRankingEntry) => void;
+  onPick: (p: RankingEntry) => void;
 }
 
 export function StandingsList({ data, sorted, sort, onPick }: StandingsListProps) {

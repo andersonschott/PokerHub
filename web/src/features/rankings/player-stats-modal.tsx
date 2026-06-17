@@ -5,10 +5,10 @@
  */
 import { X } from 'lucide-react';
 import { PlayerStats } from './player-stats';
-import type { MockRankingEntry } from '@/mocks/data';
+import type { RankingEntry } from './ranking-map';
 
 interface PlayerStatsModalProps {
-  player: MockRankingEntry;
+  player: RankingEntry;
   rank: number;
   onClose: () => void;
 }

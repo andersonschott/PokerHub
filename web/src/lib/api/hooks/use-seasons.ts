@@ -23,19 +23,6 @@ export interface SeasonSummaryDto {
   uniquePlayersCount: number;
 }
 
-export interface SeasonRankingItemDto {
-  playerId: string;
-  playerName: string;
-  position: number;
-  totalPoints: number;
-  tournamentsPlayed: number;
-  wins: number;
-  secondPlaces: number;
-  thirdPlaces: number;
-  itmCount: number;
-  totalProfit: number;
-}
-
 export interface CreateSeasonDto {
   name: string;
   startDate?: string;
@@ -55,7 +42,6 @@ export const seasonKeys = {
   summaries: (leagueId: string) => [...seasonKeys.all, 'summaries', leagueId] as const,
   active: (leagueId: string) => [...seasonKeys.all, 'active', leagueId] as const,
   detail: (seasonId: string) => [...seasonKeys.all, 'detail', seasonId] as const,
-  ranking: (seasonId: string) => [...seasonKeys.all, 'ranking', seasonId] as const,
 };
 
 export function useSeasons(leagueId: string) {
@@ -98,14 +84,6 @@ export function useSeason(seasonId: string) {
   return useQuery({
     queryKey: seasonKeys.detail(seasonId),
     queryFn: () => api<SeasonDto>(`/seasons/${seasonId}`),
-    enabled: !!seasonId,
-  });
-}
-
-export function useSeasonRanking(seasonId: string) {
-  return useQuery({
-    queryKey: seasonKeys.ranking(seasonId),
-    queryFn: () => api<SeasonRankingItemDto[]>(`/seasons/${seasonId}/ranking`),
     enabled: !!seasonId,
   });
 }

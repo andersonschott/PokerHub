@@ -18,10 +18,19 @@ import type { MockRankingEntry } from '@/mocks/data';
 // O type-source para os consumidores deste módulo (evita import direto de mocks).
 export type { MockRankingEntry };
 
-export function mapRankingEntry(dto: PlayerRankingDto): MockRankingEntry {
+/**
+ * MockRankingEntry + playerId real. MockRankingEntry não tem id; o playerId é
+ * necessário para o player-stats buscar /players/{id}/ranking-stats (F16).
+ */
+export interface RankingEntry extends MockRankingEntry {
+  playerId: string;
+}
+
+export function mapRankingEntry(dto: PlayerRankingDto): RankingEntry {
   const winRate = dto.tournamentsPlayed > 0 ? (dto.wins / dto.tournamentsPlayed) * 100 : 0;
 
   return {
+    playerId: dto.playerId,
     position: dto.position,
     name: dto.playerName,
     nick: dto.nickname ?? dto.playerName.split(' ')[0],
@@ -42,6 +51,6 @@ export function mapRankingEntry(dto: PlayerRankingDto): MockRankingEntry {
   };
 }
 
-export function mapRanking(dtos: PlayerRankingDto[] | undefined): MockRankingEntry[] {
+export function mapRanking(dtos: PlayerRankingDto[] | undefined): RankingEntry[] {
   return (dtos ?? []).map(mapRankingEntry);
 }
