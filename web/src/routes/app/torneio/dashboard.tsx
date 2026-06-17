@@ -17,7 +17,7 @@ import { PlayerRow } from '@/features/live/player-row';
 import { ActionSheet } from '@/features/live/action-sheet';
 import { EliminateSheet } from '@/features/live/eliminate-sheet';
 
-import { useTournaments, useTournament, TournamentStatus, usePauseTournament, useStartTournament, useNextLevel, usePrevLevel, useCheckInPlayer, useEliminatePlayer, useAddRebuy, useSetAddon, useUndoElimination } from '@/lib/api/hooks/use-tournaments';
+import { useTournaments, useTournament, TournamentStatus, usePauseTournament, useResumeTournament, useNextLevel, usePrevLevel, useCheckInPlayer, useEliminatePlayer, useAddRebuy, useSetAddon, useUndoElimination } from '@/lib/api/hooks/use-tournaments';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { useTournamentClock } from '@/lib/api/hooks/use-tournament-clock';
 import { type MockTablePlayer } from '@/mocks/data';
@@ -38,7 +38,7 @@ export default function DashboardRoute() {
 
   // Mutations
   const pauseMut = usePauseTournament(activeTId);
-  const startMut = useStartTournament(activeTId);
+  const resumeMut = useResumeTournament(activeTId);
   const nextMut = useNextLevel(activeTId);
   const prevMut = usePrevLevel(activeTId);
   const checkInMut = useCheckInPlayer(activeTId);
@@ -95,9 +95,11 @@ export default function DashboardRoute() {
   const selectedPlayer = selectedId ? table.find(p => p.id === selectedId) ?? null : null;
 
   // Actions
-  const handleTogglePause = () => clock.paused ? startMut.mutate() : pauseMut.mutate();
-  const handleNextLevel = () => nextMut.mutate();
-  const handlePrevLevel = () => prevMut.mutate();
+  // Pausado → resume (/resume), nunca /start; o estado de sucesso chega via SignalR.
+  const onTimerError = { onError: () => toast.error('Falha ao atualizar o timer') };
+  const handleTogglePause = () => clock.paused ? resumeMut.mutate(undefined, onTimerError) : pauseMut.mutate(undefined, onTimerError);
+  const handleNextLevel = () => nextMut.mutate(undefined, onTimerError);
+  const handlePrevLevel = () => prevMut.mutate(undefined, onTimerError);
 
   const openSheet = useCallback((p: MockTablePlayer) => {
     setSelectedId(p.id);
