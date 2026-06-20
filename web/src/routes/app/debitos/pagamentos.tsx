@@ -122,11 +122,6 @@ export default function PagamentosRoute() {
     });
   };
 
-  const chargeAll = () => {
-    const pendingCount = transfers.filter((t) => t.status === PaymentStatus.Pending).length;
-    toast.success(`Lembrete enviado para ${pendingCount} pendentes (Mock)`);
-  };
-
   const adminMarkPaid = (id: string, name: string) => {
     markPaidMut.mutate(id, {
       onSuccess: () => toast.success(`${name} marcou como pago (via Admin)`)
@@ -372,8 +367,8 @@ export default function PagamentosRoute() {
             <Button variant="secondary" icon={RefreshCcw} block onClick={recalculate}>
               Calcular Pagamentos
             </Button>
-            <Button variant="primary" icon={Megaphone} block onClick={chargeAll}>
-              Cobrar todos
+            <Button variant="secondary" icon={Megaphone} block disabled title="Em breve">
+              Cobrar todos · Em breve
             </Button>
           </div>
         </div>
@@ -391,8 +386,8 @@ export default function PagamentosRoute() {
               <Button variant="ghost" icon={RefreshCcw} size="sm" onClick={recalculate}>
                 Recalcular
               </Button>
-              <Button variant="secondary" icon={Megaphone} size="sm" onClick={chargeAll}>
-                Cobrar todos
+              <Button variant="secondary" icon={Megaphone} size="sm" disabled title="Em breve">
+                Cobrar todos · Em breve
               </Button>
             </div>
           </div>
