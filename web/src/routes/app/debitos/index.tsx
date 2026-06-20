@@ -4,7 +4,7 @@
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowLeftRight, Copy, Check, CheckCheck, Clock, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowLeftRight, Copy, Check, CheckCheck, Clock, Loader2, QrCode } from 'lucide-react';
 import { toast } from 'sonner';
 import { IconButton } from '@/components/ui/icon-button';
 import { Card } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
 import { MoneyValue } from '@/components/ui/money-value';
+import { PixQrSheet } from '@/features/payments/pix-qr-sheet';
 
 import {
   useMyDebts,
@@ -42,6 +43,7 @@ export default function SettlementRoute() {
 
   const [tab, setTab] = useState<'pagar' | 'receber'>('pagar');
   const [copied, setCopied] = useState<string | null>(null);
+  const [qrFor, setQrFor] = useState<{ key: string; name: string; amount: number } | null>(null);
 
   // ---- Queries ----
   const { data: debts, isLoading: isLoadingD } = useMyDebts();
@@ -198,7 +200,8 @@ export default function SettlementRoute() {
                     onClick={() => copyPix(d.creditorPixKey!)}
                     aria-label="Copiar chave PIX"
                     className={[
-                      'inline-flex items-center gap-[6px] border-0 bg-transparent cursor-pointer',
+                      'inline-flex items-center justify-center gap-[6px] shrink-0 cursor-pointer',
+                      'min-h-[44px] px-[14px] rounded-[var(--radius-sm)] border border-border bg-transparent',
                       'font-sans font-semibold text-[13px]',
                       copied === d.creditorPixKey ? 'text-positive' : 'text-gold-400',
                     ].join(' ')}
@@ -209,6 +212,14 @@ export default function SettlementRoute() {
                       <Copy className="w-[15px] h-[15px]" />
                     )}
                     {copied === d.creditorPixKey ? 'Copiado' : 'Copiar'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQrFor({ key: d.creditorPixKey!, name: d.creditorPlayerName, amount: d.amount })}
+                    aria-label="Mostrar QR Code PIX"
+                    className="inline-flex items-center justify-center shrink-0 min-w-[44px] min-h-[44px] rounded-[var(--radius-sm)] border border-border bg-transparent text-foreground cursor-pointer"
+                  >
+                    <QrCode className="w-[18px] h-[18px]" />
                   </button>
                 </div>
               ) : null}
@@ -265,6 +276,16 @@ export default function SettlementRoute() {
           ))}
         </div>
       )}
+
+      {qrFor ? (
+        <PixQrSheet
+          open
+          onClose={() => setQrFor(null)}
+          pixKey={qrFor.key}
+          recipientName={qrFor.name}
+          amount={qrFor.amount}
+        />
+      ) : null}
     </div>
   );
 }

@@ -215,6 +215,10 @@ export default function LeagueHomeRoute() {
           variant="live"
           pad="md"
           className="mb-[14px]"
+          interactive
+          onClick={() => navigate('/app/torneio')}
+          role="button"
+          aria-label={`Assistir ${liveT?.name ?? 'torneio ao vivo'}`}
         >
           <div className="flex items-center gap-3">
             <span className="w-2 h-2 rounded-full bg-[var(--live,var(--positive))] shrink-0 animate-ph-pulse" />
@@ -229,14 +233,22 @@ export default function LeagueHomeRoute() {
                 Nível {liveT?.currentLevel} · {liveT?.checkedInCount}/{liveT?.playerCount} na mesa
               </div>
             </div>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => navigate('/app/torneio/dashboard')}
-              className="shrink-0"
-            >
-              Abrir torneio
-            </Button>
+            {isOrganizer ? (
+              <Button
+                variant="primary"
+                size="sm"
+                icon={Settings2}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate('/app/torneio/dashboard');
+                }}
+                className="shrink-0"
+              >
+                Operar
+              </Button>
+            ) : (
+              <ChevronRight className="text-muted-foreground w-5 h-5 shrink-0" />
+            )}
           </div>
         </Card>
       ) : (

@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Check,
   CheckCheck,
+  ListChecks,
   Clock,
   PiggyBank,
   RefreshCcw,
@@ -15,6 +16,7 @@ import {
   Copy,
   ChevronRight,
   Loader2,
+  QrCode,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -26,6 +28,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { MoneyValue } from '@/components/ui/money-value';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { StatTile } from '@/components/ui/stat-tile';
+import { PixQrSheet } from '@/features/payments/pix-qr-sheet';
 
 import {
   useTournamentBalances,
@@ -33,6 +36,7 @@ import {
   useCalculatePayments,
   useAdminMarkAsPaid,
   useAdminConfirmPayment,
+  useBulkConfirmPayments,
   useJackpotContribution,
   PaymentStatus,
   PaymentType
@@ -62,6 +66,7 @@ export default function PagamentosRoute() {
 
   const [tab, setTab] = useState<'saldo' | 'pagamentos'>('saldo');
   const [copied, setCopied] = useState<string | null>(null);
+  const [qrFor, setQrFor] = useState<{ key: string; name: string; amount: number } | null>(null);
 
   // ---- Queries ----
   const { data: tournament, isLoading: isLoadingT } = useTournamentData(tId ?? '');
@@ -73,6 +78,7 @@ export default function PagamentosRoute() {
   const calcMut = useCalculatePayments(tId ?? '');
   const markPaidMut = useAdminMarkAsPaid();
   const confirmMut = useAdminConfirmPayment();
+  const bulkMut = useBulkConfirmPayments();
 
   // Auto-calculate on load if no payments exist
   useEffect(() => {
@@ -134,10 +140,20 @@ export default function PagamentosRoute() {
     });
   };
 
+  const bulkConfirm = () => {
+    const ids = transfers.filter((t) => t.status !== PaymentStatus.Confirmed).map((t) => t.id);
+    if (ids.length === 0) return;
+    bulkMut.mutate(ids, {
+      onSuccess: (r) => toast.success(`${r?.confirmed ?? ids.length} pagamento(s) confirmado(s)`),
+      onError: () => toast.error('Falha ao confirmar pagamentos'),
+    });
+  };
+
   // ---- Derived ----
   const pending = transfers.filter((t) => t.status === PaymentStatus.Pending).length;
   const paid = transfers.filter((t) => t.status === PaymentStatus.Paid).length;
   const confirmed = transfers.filter((t) => t.status === PaymentStatus.Confirmed).length;
+  const toConfirm = transfers.filter((t) => t.status !== PaymentStatus.Confirmed);
   const totalReceber = transfers.reduce((s, t) => s + t.amount, 0);
   const pct = transfers.length > 0 ? Math.round((confirmed / transfers.length) * 100) : 0;
 
@@ -377,6 +393,30 @@ export default function PagamentosRoute() {
       {/* ---- Lista de pagamentos ---- */}
       {tab === 'pagamentos' && (
         <div className="flex flex-col gap-[10px]">
+          {/* Confirmar em lote — disponível no mobile e desktop */}
+          {toConfirm.length > 0 && (
+            <div
+              className="flex items-center gap-[10px] px-3 py-[10px] rounded-[var(--radius-md)]"
+              style={{
+                border: '1px solid color-mix(in oklab, var(--positive) 28%, transparent)',
+                background: 'color-mix(in oklab, var(--positive) 10%, var(--card))',
+              }}
+            >
+              <ListChecks className="w-[18px] h-[18px] text-positive shrink-0" />
+              <span className="flex-1 text-[13px]">
+                {toConfirm.length} pagamento{toConfirm.length === 1 ? '' : 's'} em aberto
+              </span>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={CheckCheck}
+                onClick={bulkConfirm}
+                disabled={bulkMut.isPending}
+              >
+                Confirmar todos
+              </Button>
+            </div>
+          )}
           {/* Desktop: header + actions */}
           <div className="hidden lg:flex items-center justify-between mb-2">
             <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
@@ -427,7 +467,8 @@ export default function PagamentosRoute() {
                     onClick={() => copyPix(x.toPlayerPixKey!, x.id)}
                     aria-label={`Copiar chave PIX de ${x.fromPlayerName}`}
                     className={[
-                      'inline-flex items-center gap-[5px] border-0 bg-transparent cursor-pointer',
+                      'inline-flex items-center justify-center gap-[5px] shrink-0 cursor-pointer',
+                      'min-h-[44px] px-3 rounded-[var(--radius-sm)] border border-border bg-transparent',
                       'font-sans font-semibold text-[12px]',
                       copied === x.id ? 'text-positive' : 'text-gold-400',
                     ].join(' ')}
@@ -437,7 +478,17 @@ export default function PagamentosRoute() {
                     ) : (
                       <Copy className="w-[13px] h-[13px]" />
                     )}
-                    {copied === x.id ? 'Copiado' : 'PIX'}
+                    {copied === x.id ? 'Copiado' : 'Copiar'}
+                  </button>
+                ) : null}
+                {!x.isJackpotContribution && x.toPlayerPixKey ? (
+                  <button
+                    type="button"
+                    onClick={() => setQrFor({ key: x.toPlayerPixKey!, name: x.toPlayerName, amount: x.amount })}
+                    aria-label="Mostrar QR Code PIX"
+                    className="inline-flex items-center justify-center shrink-0 min-w-[44px] min-h-[44px] rounded-[var(--radius-sm)] border border-border bg-transparent text-foreground cursor-pointer"
+                  >
+                    <QrCode className="w-[18px] h-[18px]" />
                   </button>
                 ) : null}
                 <span className="ml-auto shrink-0">
@@ -472,6 +523,16 @@ export default function PagamentosRoute() {
           ))}
         </div>
       )}
+
+      {qrFor ? (
+        <PixQrSheet
+          open
+          onClose={() => setQrFor(null)}
+          pixKey={qrFor.key}
+          recipientName={qrFor.name}
+          amount={qrFor.amount}
+        />
+      ) : null}
     </div>
   );
 }
