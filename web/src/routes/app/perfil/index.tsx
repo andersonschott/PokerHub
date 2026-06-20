@@ -23,6 +23,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
+import { useActiveLeague } from '@/features/leagues/league-context';
+import { useJackpotContributions, useJackpotUsages } from '@/lib/api/hooks/use-jackpot';
+import { jackpotBalance } from '@/features/jackpot/jackpot-balance';
 import { Avatar } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,7 +33,7 @@ import { Sheet } from '@/components/ui/sheet';
 import { StatTile } from '@/components/ui/stat-tile';
 import { MoneyValue } from '@/components/ui/money-value';
 import { Input } from '@/components/ui/input';
-import { mockData } from '@/mocks/data';
+
 
 const STORAGE_PIX = 'ph.pix_key';
 const STORAGE_WHATSAPP = 'ph.whatsapp';
@@ -124,7 +127,10 @@ export default function PerfilRoute() {
   const [sheet, setSheet] = useState<SheetKind>(null);
   const [draft, setDraft] = useState('');
 
-  const caixinhaBalance = mockData.caixinha.balance;
+  const { activeLeagueId } = useActiveLeague();
+  const { data: contributions } = useJackpotContributions(activeLeagueId);
+  const { data: usages } = useJackpotUsages(activeLeagueId);
+  const caixinhaBalance = jackpotBalance(contributions, usages);
 
   const openSheet = (kind: SheetKind) => {
     setDraft(kind === 'pix' ? pix : whatsapp);
