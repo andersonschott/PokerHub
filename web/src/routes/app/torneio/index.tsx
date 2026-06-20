@@ -10,7 +10,7 @@
  */
 import { useEffect, useRef, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CalendarClock, Plus, TimerOff, Users, Trophy, Repeat, Loader2 } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Plus, TimerOff, Users, Trophy, Repeat, Loader2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
@@ -317,6 +317,14 @@ function TorneioVazio({
                   </div>
                 </div>
                 <Badge tone="neutral"><MoneyValue value={u.buyIn} cents={false} color="none" /></Badge>
+                <IconButton
+                  icon={Pencil}
+                  aria-label="Editar torneio"
+                  size="sm"
+                  variant="solid"
+                  onClick={() => navigate(`/app/torneio/novo?edit=1&id=${u.id}`)}
+                  className="shrink-0"
+                />
               </div>
             </Card>
           ))

@@ -1,24 +1,33 @@
 /**
  * /app/torneio/novo — Wizard de 5 passos para criar/editar torneio.
  * Port fiel de TorneioWizard.jsx (mobile) + DesktopWizard.jsx (desktop lg:).
- * Suporta ?edit=1 para modo edição (pré-preenche com mockData.tournament).
  *
- * Estado todo local (useState por passo).
- * Na Fase 2+: substituir o handler de submit por mutation real.
+ * Modos:
+ *  - create  → /app/torneio/novo            (defaults nomeados em CREATE_DEFAULTS)
+ *  - edit    → /app/torneio/novo?edit=1&id={id}  (prefill REAL via useTournament)
+ *
+ * Padrão sem race: a rota (NovoTorneioRoute) resolve os dados e só então monta o
+ * <TournamentWizard initial={...} />, cujos useState inicializam a partir de `initial`
+ * na montagem — sem useEffect de sincronização.
  */
 import { useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Check } from 'lucide-react';
+import { ArrowLeft, Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useActiveLeague } from '@/features/leagues/league-context';
 import {
   useCreateTournament,
+  useUpdateTournament,
+  useTournament,
   useTournaments,
   PrizeDistributionType,
   RebuyLimitType,
-  CreateTournamentDto,
+  type CreateTournamentDto,
+  type TournamentDto,
+  type TournamentDetailDto,
 } from '@/lib/api/hooks/use-tournaments';
+import { ApiError } from '@/lib/api/client';
 
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
@@ -36,8 +45,12 @@ import {
   getTemplateConfig,
   type BlindTemplate,
 } from '@/features/tournaments/blind-utils';
+import {
+  parseScheduled,
+  reverseBlindTemplate,
+  parsePrizeStructure,
+} from '@/features/tournaments/edit-prefill';
 import { MoneyValue } from '@/components/ui/money-value';
-import { mockData } from '@/mocks/data';
 import { cn } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
@@ -45,6 +58,95 @@ import { cn } from '@/lib/utils';
 // ---------------------------------------------------------------------------
 
 type PrizeMode = 'pct' | 'fixo';
+
+/** Estado inicial completo do wizard (uma única fonte para create e edit). */
+interface WizardInitial {
+  name: string;
+  tourDate: string;
+  tourTime: string;
+  local: string;
+  buyIn: string;
+  stack: string;
+  rebuy: boolean;
+  rebuyVal: string;
+  rebuyStack: string;
+  rebuyLvl: number;
+  addon: boolean;
+  addonVal: string;
+  addonStack: string;
+  lateCheckin: boolean;
+  lateLvl: number;
+  template: BlindTemplate;
+  customMin: number;
+  customBreak: number;
+  usePrizeTable: boolean;
+  prizeMode: PrizeMode;
+  positions: number[];
+}
+
+/**
+ * Defaults visuais do modo create — substituem o antigo `t = mockData.tournament`.
+ * buyIn/rebuy/addon = 50 (o que mockData.tournament.buyIn exibia); stacks 10000;
+ * data/hora e demais defaults preservados exatamente como antes.
+ */
+const CREATE_DEFAULTS: WizardInitial = {
+  name: '',
+  tourDate: '2026-06-12',
+  tourTime: '20:00',
+  local: '',
+  buyIn: '50',
+  stack: '10000',
+  rebuy: true,
+  rebuyVal: '50',
+  rebuyStack: '10000',
+  rebuyLvl: 4,
+  addon: true,
+  addonVal: '50',
+  addonStack: '10000',
+  lateCheckin: false,
+  lateLvl: 2,
+  template: 'regular',
+  customMin: 15,
+  customBreak: 4,
+  usePrizeTable: true,
+  prizeMode: 'pct',
+  positions: [50, 30, 20],
+};
+
+/** Constrói o estado inicial do wizard a partir do detalhe REAL do torneio. */
+function buildEditInitial(d: TournamentDetailDto): WizardInitial {
+  const { date, time } = parseScheduled(d.scheduledDateTime);
+  const { template, customMin, customBreak } = reverseBlindTemplate(d.blindLevels);
+  const { usePrizeTable, prizeMode, positions } = parsePrizeStructure(
+    d.prizeStructure,
+    d.prizeDistributionType,
+    d.usePrizeTable,
+  );
+
+  return {
+    name: d.name,
+    tourDate: date,
+    tourTime: time,
+    local: d.location ?? '',
+    buyIn: String(d.buyIn),
+    stack: String(d.startingStack),
+    rebuy: d.rebuyValue !== null && d.rebuyValue !== undefined,
+    rebuyVal: String(d.rebuyValue ?? d.buyIn),
+    rebuyStack: String(d.rebuyStack ?? d.startingStack),
+    rebuyLvl: d.rebuyLimitLevel ?? 4,
+    addon: d.addonValue !== null && d.addonValue !== undefined,
+    addonVal: String(d.addonValue ?? d.buyIn),
+    addonStack: String(d.addonStack ?? d.startingStack),
+    lateCheckin: d.allowCheckInUntilLevel !== null && d.allowCheckInUntilLevel !== undefined,
+    lateLvl: d.allowCheckInUntilLevel ?? 2,
+    template,
+    customMin,
+    customBreak,
+    usePrizeTable,
+    prizeMode,
+    positions,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // NumStep — stepper numérico compacto (− valor +)
@@ -179,53 +281,56 @@ function StepRail({ step, onNavigate, onCancel }: StepRailProps) {
 }
 
 // ---------------------------------------------------------------------------
-// Main component
+// TournamentWizard — corpo do wizard (estado local inicializado a partir de `initial`)
 // ---------------------------------------------------------------------------
 
-export default function NovoTorneioRoute() {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const isEdit = searchParams.get('edit') === '1';
-  const t = mockData.tournament;
+interface TournamentWizardProps {
+  initial: WizardInitial;
+  mode: 'create' | 'edit';
+  leagueId: string;
+  tournamentId?: string;
+  pastTournaments: TournamentDto[];
+}
 
-  const { activeLeagueId } = useActiveLeague();
-  const id = activeLeagueId ?? '';
-  const { data: allTournaments } = useTournaments(id);
-  const pastTournaments = (allTournaments ?? []).slice(0, 3);
-  const create = useCreateTournament(id);
+function TournamentWizard({ initial, mode, leagueId, tournamentId, pastTournaments }: TournamentWizardProps) {
+  const navigate = useNavigate();
+  const isEdit = mode === 'edit';
+
+  const create = useCreateTournament(leagueId);
+  const update = useUpdateTournament(tournamentId ?? '', leagueId);
 
   // Stepper state
   const [step, setStep] = useState(0);
   const [copied, setCopied] = useState<string | null>(null);
 
   // Step 1 — Informações
-  const [name, setName] = useState(isEdit ? t.name : '');
-  const [tourDate, setTourDate] = useState('2026-06-12');
-  const [tourTime, setTourTime] = useState('20:00');
-  const [local, setLocal] = useState('');
+  const [name, setName] = useState(initial.name);
+  const [tourDate, setTourDate] = useState(initial.tourDate);
+  const [tourTime, setTourTime] = useState(initial.tourTime);
+  const [local, setLocal] = useState(initial.local);
 
   // Step 2 — Valores
-  const [buyIn, setBuyIn] = useState(String(t.buyIn));
-  const [stack, setStack] = useState('10000');
-  const [rebuy, setRebuy] = useState(true);
-  const [rebuyVal, setRebuyVal] = useState(String(t.buyIn));
-  const [rebuyStack, setRebuyStack] = useState('10000');
-  const [rebuyLvl, setRebuyLvl] = useState(4);
-  const [addon, setAddon] = useState(true);
-  const [addonVal, setAddonVal] = useState(String(t.buyIn));
-  const [addonStack, setAddonStack] = useState('10000');
-  const [lateCheckin, setLateCheckin] = useState(false);
-  const [lateLvl, setLateLvl] = useState(2);
+  const [buyIn, setBuyIn] = useState(initial.buyIn);
+  const [stack, setStack] = useState(initial.stack);
+  const [rebuy, setRebuy] = useState(initial.rebuy);
+  const [rebuyVal, setRebuyVal] = useState(initial.rebuyVal);
+  const [rebuyStack, setRebuyStack] = useState(initial.rebuyStack);
+  const [rebuyLvl, setRebuyLvl] = useState(initial.rebuyLvl);
+  const [addon, setAddon] = useState(initial.addon);
+  const [addonVal, setAddonVal] = useState(initial.addonVal);
+  const [addonStack, setAddonStack] = useState(initial.addonStack);
+  const [lateCheckin, setLateCheckin] = useState(initial.lateCheckin);
+  const [lateLvl, setLateLvl] = useState(initial.lateLvl);
 
   // Step 3 — Blinds
-  const [template, setTemplate] = useState<BlindTemplate>('regular');
-  const [customMin, setCustomMin] = useState(15);
-  const [customBreak, setCustomBreak] = useState(4);
+  const [template, setTemplate] = useState<BlindTemplate>(initial.template);
+  const [customMin, setCustomMin] = useState(initial.customMin);
+  const [customBreak, setCustomBreak] = useState(initial.customBreak);
 
   // Step 4 — Premiação
-  const [usePrizeTable, setUsePrizeTable] = useState(true);
-  const [prizeMode, setPrizeMode] = useState<PrizeMode>('pct');
-  const [positions, setPositions] = useState([50, 30, 20]);
+  const [usePrizeTable, setUsePrizeTable] = useState(initial.usePrizeTable);
+  const [prizeMode, setPrizeMode] = useState<PrizeMode>(initial.prizeMode);
+  const [positions, setPositions] = useState(initial.positions);
 
   // Derived
   const blindCfg = getTemplateConfig(template, customMin, customBreak);
@@ -236,58 +341,67 @@ export default function NovoTorneioRoute() {
   const prizeOk = usePrizeTable || prizeMode === 'fixo' || prizeTotal === 100;
   const canNext = step !== 0 || !!name.trim();
 
-  const back = () => navigate(isEdit ? '/app/torneio/dashboard' : (activeLeagueId ? `/app/ligas/${activeLeagueId}` : '/app/ligas'));
+  const back = () => navigate(leagueId ? `/app/ligas/${leagueId}` : '/app/ligas');
 
   const next = async () => {
     if (step < 4) {
       setStep(step + 1);
-    } else {
-      if (!activeLeagueId) {
-        toast.error('Nenhuma liga ativa selecionada.');
-        return;
-      }
-      try {
-        const dto: CreateTournamentDto = {
-          name,
-          scheduledDateTime: new Date(`${tourDate}T${tourTime}:00`).toISOString(),
-          location: local || null,
-          buyIn: Number(buyIn) || 0,
-          startingStack: Number(stack) || 0,
-          rebuyValue: rebuy ? (Number(rebuyVal) || 0) : null,
-          rebuyStack: rebuy ? (Number(rebuyStack) || 0) : null,
-          rebuyLimitLevel: rebuy ? rebuyLvl : null,
-          rebuyLimitMinutes: null,
-          rebuyLimitType: RebuyLimitType.Level,
-          addonValue: addon ? (Number(addonVal) || 0) : null,
-          addonStack: addon ? (Number(addonStack) || 0) : null,
-          prizeStructure: usePrizeTable ? null : positions.join(','),
-          prizeDistributionType: usePrizeTable ? PrizeDistributionType.Percentage : (prizeMode === 'pct' ? PrizeDistributionType.Percentage : PrizeDistributionType.Fixed),
-          usePrizeTable,
-          prizeTableId: null,
-          allowCheckInUntilLevel: lateCheckin ? lateLvl : null,
-          blindLevels: blinds.map((b) => ({
-            order: b.level,
-            smallBlind: b.sb || 0,
-            bigBlind: b.bb || 0,
-            ante: b.ante || 0,
-            durationMinutes: b.min || 15,
-            isBreak: b.type === 'intervalo',
-            breakDescription: b.type === 'intervalo' ? 'Intervalo' : null
-          }))
-        };
+      return;
+    }
+    if (!isEdit && !leagueId) {
+      toast.error('Nenhuma liga ativa selecionada.');
+      return;
+    }
+    const dto: CreateTournamentDto = {
+      name,
+      scheduledDateTime: new Date(`${tourDate}T${tourTime}:00`).toISOString(),
+      location: local || null,
+      buyIn: Number(buyIn) || 0,
+      startingStack: Number(stack) || 0,
+      rebuyValue: rebuy ? (Number(rebuyVal) || 0) : null,
+      rebuyStack: rebuy ? (Number(rebuyStack) || 0) : null,
+      rebuyLimitLevel: rebuy ? rebuyLvl : null,
+      rebuyLimitMinutes: null,
+      rebuyLimitType: RebuyLimitType.Level,
+      addonValue: addon ? (Number(addonVal) || 0) : null,
+      addonStack: addon ? (Number(addonStack) || 0) : null,
+      prizeStructure: usePrizeTable ? null : positions.join(','),
+      prizeDistributionType: usePrizeTable ? PrizeDistributionType.Percentage : (prizeMode === 'pct' ? PrizeDistributionType.Percentage : PrizeDistributionType.Fixed),
+      usePrizeTable,
+      prizeTableId: null,
+      allowCheckInUntilLevel: lateCheckin ? lateLvl : null,
+      blindLevels: blinds.map((b) => ({
+        order: b.level,
+        smallBlind: b.sb || 0,
+        bigBlind: b.bb || 0,
+        ante: b.ante || 0,
+        durationMinutes: b.min || 15,
+        isBreak: b.type === 'intervalo',
+        breakDescription: b.type === 'intervalo' ? 'Intervalo' : null
+      }))
+    };
+    try {
+      if (isEdit && tournamentId) {
+        await update.mutateAsync(dto);
+        toast.success('Torneio atualizado!');
+      } else {
         await create.mutateAsync(dto);
-        toast.success(isEdit ? 'Torneio atualizado!' : 'Torneio criado!');
-        navigate(`/app/ligas/${activeLeagueId}`);
-      } catch (err) {
+        toast.success('Torneio criado!');
+      }
+      navigate(`/app/ligas/${leagueId}`);
+    } catch (err) {
+      if (isEdit && err instanceof ApiError && err.status === 404) {
+        toast.error('Apenas torneios agendados podem ser editados.');
+      } else {
         toast.error('Erro ao salvar o torneio.');
       }
     }
   };
 
-  const copyFrom = (pt: any) => {
+  const copyFrom = (pt: TournamentDto) => {
     if (!isEdit) setName(pt.name);
     setBuyIn(String(pt.buyIn));
-    setStack(String(pt.startingStack || pt.stack || 10000));
+    setStack(String(pt.startingStack || 10000));
     setRebuy(pt.rebuyValue !== null && pt.rebuyValue !== undefined);
     setRebuyVal(String(pt.rebuyValue || pt.buyIn));
     setAddon(pt.addonValue !== null && pt.addonValue !== undefined);
@@ -803,5 +917,76 @@ export default function NovoTorneioRoute() {
         {desktopLayout}
       </div>
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Route resolver — decide create vs edit e só monta o wizard quando há dados
+// ---------------------------------------------------------------------------
+
+function WizardFallback({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center text-center p-4">
+      {children}
+    </div>
+  );
+}
+
+export default function NovoTorneioRoute() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const idParam = searchParams.get('id') ?? '';
+  const isEdit = searchParams.get('edit') === '1' && !!idParam;
+
+  const { activeLeagueId } = useActiveLeague();
+  const leagueId = activeLeagueId ?? '';
+
+  // pastTournaments alimenta o "Copiar configurações de" (só usado no create).
+  const { data: allTournaments } = useTournaments(leagueId);
+  const pastTournaments = (allTournaments ?? []).slice(0, 3);
+
+  // Detalhe real para o modo edição (enabled só quando há id).
+  const { data: detail, isLoading, isError } = useTournament(isEdit ? idParam : '');
+
+  if (isEdit && isLoading) {
+    return (
+      <WizardFallback>
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </WizardFallback>
+    );
+  }
+
+  if (isEdit && (isError || !detail)) {
+    return (
+      <WizardFallback>
+        <div className="flex flex-col items-center">
+          <p className="text-muted-foreground mb-4">Torneio não encontrado.</p>
+          <Button onClick={() => navigate(leagueId ? `/app/ligas/${leagueId}` : '/app/ligas')}>
+            Voltar
+          </Button>
+        </div>
+      </WizardFallback>
+    );
+  }
+
+  if (isEdit && detail) {
+    return (
+      <TournamentWizard
+        initial={buildEditInitial(detail)}
+        mode="edit"
+        leagueId={detail.leagueId}
+        tournamentId={detail.id}
+        pastTournaments={pastTournaments}
+      />
+    );
+  }
+
+  return (
+    <TournamentWizard
+      initial={CREATE_DEFAULTS}
+      mode="create"
+      leagueId={leagueId}
+      pastTournaments={pastTournaments}
+    />
   );
 }

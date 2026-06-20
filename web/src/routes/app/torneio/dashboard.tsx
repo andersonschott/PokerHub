@@ -187,7 +187,7 @@ export default function DashboardRoute() {
             aria-label="Configurar torneio"
             variant="solid"
             size="sm"
-            onClick={() => navigate('/app/torneio/novo?edit=1')}
+            onClick={() => navigate(`/app/torneio/novo?edit=1&id=${tDetail.id}`)}
             className="shrink-0"
           />
           <StatusPill status={clock.paused ? 'paused' : 'live'} className="shrink-0" />

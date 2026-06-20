@@ -43,7 +43,8 @@ public class TournamentServiceTests
         bool usePrizeTable,
         int checkedInPlayers = 4,
         decimal buyIn = 50m,
-        string inviteCode = "TVCODE01")
+        string inviteCode = "TVCODE01",
+        PrizeDistributionType prizeDistributionType = PrizeDistributionType.Percentage)
     {
         var leagueId = Guid.NewGuid();
         var tournamentId = Guid.NewGuid();
@@ -67,6 +68,7 @@ public class TournamentServiceTests
             BuyIn = buyIn,
             StartingStack = 10000,
             PrizeStructure = prizeStructure,
+            PrizeDistributionType = prizeDistributionType,
             UsePrizeTable = usePrizeTable,
             InviteCode = inviteCode,
             Status = TournamentStatus.InProgress,
@@ -190,6 +192,42 @@ public class TournamentServiceTests
         Assert.Equal(50m, detail.Prizes[0].Percentage);
         // players[] também presente no detalhe via by-invite (alimenta o modo TV)
         Assert.Equal(4, detail.Players.Count);
+    }
+
+    // ── PrizeDistributionType exposto no detalhe (edição precisa saber pct vs valor fixo) ──
+
+    [Fact]
+    public async Task GetTournamentDetailAsync_FixedPrizeDistributionType_IsExposedInDetail()
+    {
+        var dbName = $"{nameof(GetTournamentDetailAsync_FixedPrizeDistributionType_IsExposedInDetail)}_{Guid.NewGuid()}";
+        await using var ctx = CreateInMemoryContext(dbName);
+
+        // Torneio com premiação em valor fixo ("300,180,120") — o detalhe deve devolver Fixed
+        // para o front pré-preencher o passo de premiação no modo "valor fixo".
+        var (_, tournamentId, _) = SeedTournament(
+            ctx,
+            prizeStructure: "300,180,120",
+            usePrizeTable: false,
+            prizeDistributionType: PrizeDistributionType.Fixed);
+
+        var detail = await CreateService(ctx).GetTournamentDetailAsync(tournamentId);
+
+        Assert.NotNull(detail);
+        Assert.Equal(PrizeDistributionType.Fixed, detail!.PrizeDistributionType);
+    }
+
+    [Fact]
+    public async Task GetTournamentDetailAsync_DefaultPrizeDistributionType_IsPercentage()
+    {
+        var dbName = $"{nameof(GetTournamentDetailAsync_DefaultPrizeDistributionType_IsPercentage)}_{Guid.NewGuid()}";
+        await using var ctx = CreateInMemoryContext(dbName);
+
+        var (_, tournamentId, _) = SeedTournament(ctx, prizeStructure: "50,30,20", usePrizeTable: false);
+
+        var detail = await CreateService(ctx).GetTournamentDetailAsync(tournamentId);
+
+        Assert.NotNull(detail);
+        Assert.Equal(PrizeDistributionType.Percentage, detail!.PrizeDistributionType);
     }
 
     [Fact]

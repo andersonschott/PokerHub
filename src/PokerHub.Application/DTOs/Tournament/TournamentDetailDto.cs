@@ -32,7 +32,8 @@ public record TournamentDetailDto(
     decimal PrizePool,
     IReadOnlyList<BlindLevelDto> BlindLevels,
     IReadOnlyList<TournamentPlayerDto> Players,
-    IReadOnlyList<TournamentPrizeDto> Prizes
+    IReadOnlyList<TournamentPrizeDto> Prizes,
+    PrizeDistributionType PrizeDistributionType
 )
 {
     public bool IsCheckInAllowed => Status == TournamentStatus.Scheduled ||

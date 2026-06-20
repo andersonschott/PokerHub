@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { tournamentDetailToHistorico, type HistoricoDetail } from './historico-map';
-import { TournamentStatus, type TournamentDetailDto, type TournamentPlayerDto } from '@/lib/api/hooks/use-tournaments';
+import { TournamentStatus, PrizeDistributionType, type TournamentDetailDto, type TournamentPlayerDto } from '@/lib/api/hooks/use-tournaments';
 
 function makePlayer(overrides: Partial<TournamentPlayerDto> = {}): TournamentPlayerDto {
   return {
@@ -42,6 +42,7 @@ function makeDetail(overrides: Partial<TournamentDetailDto> = {}): TournamentDet
     addonValue: null,
     addonStack: null,
     prizeStructure: null,
+    prizeDistributionType: PrizeDistributionType.Percentage,
     usePrizeTable: false,
     inviteCode: 'ABC',
     allowCheckInUntilLevel: null,

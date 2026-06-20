@@ -106,6 +106,7 @@ export interface TournamentDetailDto {
   addonValue: number | null;
   addonStack: number | null;
   prizeStructure: string | null;
+  prizeDistributionType: PrizeDistributionType;
   usePrizeTable: boolean;
   inviteCode: string;
   allowCheckInUntilLevel: number | null;
@@ -177,6 +178,21 @@ export function useCreateTournament(leagueId: string) {
         body: data,
       }),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournaments', leagueId] });
+    },
+  });
+}
+
+export function useUpdateTournament(id: string, leagueId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: CreateTournamentDto) =>
+      api<void>(`/tournaments/${id}`, {
+        method: 'PUT',
+        body: data,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournament', id] });
       queryClient.invalidateQueries({ queryKey: ['tournaments', leagueId] });
     },
   });

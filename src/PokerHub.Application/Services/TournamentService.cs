@@ -162,7 +162,8 @@ public class TournamentService : ITournamentService
             prizePool,
             blindLevels,
             players,
-            prizes
+            prizes,
+            tournament.PrizeDistributionType
         );
     }
 
