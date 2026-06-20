@@ -1,13 +1,14 @@
 /**
  * Administração da liga — hub do organizador.
- * Port fiel de Admin.jsx do kit.
  *
  * Seções: Liga (editar / convite / caixinha), Temporada, Premiação, Jogadores.
- * Código de convite REAL: useActiveLeague() → useLeague(id) → inviteCode.
- * Regenerar convite REAL: useRegenerateInvite(id).
- * Editar liga REAL: PUT /leagues/{id} via useUpdateLeague (mock fallback).
- * Gestão de jogadores: mock local com confirm sheet para remoção.
- * Encerrar temporada: mock com toast.
+ * Tudo consome a API real:
+ *  - Código de convite: useActiveLeague() → useLeague(id) → inviteCode; regenerar via useRegenerateInvite.
+ *  - Editar liga: PUT /leagues/{id} + caixinha % via useUpdateJackpotSettings.
+ *  - Caixinha: % real (league.jackpotPercentage) + saldo (jackpotBalance de contribuições/usos).
+ *  - Temporada: useActiveSeason + useSeasonSummaries; encerrar via useUpdateSeason({ isActive: false }).
+ *  - Premiação: usePrizeTables (fallback estático 50/30/20 quando não há tabela configurada).
+ *  - Jogadores: usePlayers + useDeletePlayer (DELETE /api/players/{id}).
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -28,22 +29,31 @@ import {
   Check,
   Settings2,
   RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
 import { SectionTitle } from '@/components/ui/section-title';
-import { ProgressBar } from '@/components/ui/progress-bar';
 import { Avatar } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Chips } from '@/components/ui/chips';
 import { MoneyValue } from '@/components/ui/money-value';
 import { useActiveLeague } from '@/features/leagues/league-context';
-import { useLeague, useRegenerateInvite, leagueKeys } from '@/lib/api/hooks/use-leagues';
+import { useLeague, useRegenerateInvite, leagueKeys, type PlayerDto } from '@/lib/api/hooks/use-leagues';
+import { useActiveSeason, useSeasonSummaries, useUpdateSeason } from '@/lib/api/hooks/use-seasons';
+import {
+  useJackpotContributions,
+  useJackpotUsages,
+  useUpdateJackpotSettings,
+} from '@/lib/api/hooks/use-jackpot';
+import { jackpotBalance } from '@/features/jackpot/jackpot-balance';
+import { usePlayers, useDeletePlayer } from '@/lib/api/hooks/use-players';
+import { usePrizeTables } from '@/lib/api/hooks/use-prize-tables';
+import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api/client';
-import { mockData } from '@/mocks/data';
 
 // ---------------------------------------------------------------------------
 // Edit-liga form schema (RHF + Zod)
@@ -111,6 +121,117 @@ function AdminRow({ icon, label, sub, trailing, onClick, last }: AdminRowProps) 
 }
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Label de posição para a tabela de premiação. */
+function posLabel(position: number): string {
+  return `${position}º lugar`;
+}
+
+/** Cor do "dot" por posição (1º ouro, 2º prata, 3º bronze, demais neutro). */
+function posColor(position: number): string {
+  switch (position) {
+    case 1:
+      return 'var(--podium-gold)';
+    case 2:
+      return 'var(--podium-silver)';
+    case 3:
+      return 'var(--podium-bronze)';
+    default:
+      return 'var(--muted-foreground)';
+  }
+}
+
+/** Range de datas da temporada formatado (dd/mm – dd/mm | em andamento). */
+function formatSeasonRange(startDate?: string, endDate?: string | null): string {
+  if (!startDate) return '';
+  const fmt = (d: string) =>
+    new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  const start = fmt(startDate);
+  return endDate ? `${start} – ${fmt(endDate)}` : `${start} – em andamento`;
+}
+
+// ---------------------------------------------------------------------------
+// Sub-component: player row (delete isolado por jogador — hook fora de .map)
+// ---------------------------------------------------------------------------
+
+interface PlayerRowProps {
+  player: PlayerDto;
+  last: boolean;
+  onRemoved: (name: string) => void;
+  onError: () => void;
+}
+
+function PlayerRow({ player, last, onRemoved, onError }: PlayerRowProps) {
+  const deletePlayer = useDeletePlayer(player.id);
+  const [confirm, setConfirm] = useState(false);
+
+  const handleConfirm = () => {
+    deletePlayer.mutate(undefined, {
+      onSuccess: () => {
+        setConfirm(false);
+        onRemoved(player.name);
+      },
+      onError: () => {
+        setConfirm(false);
+        onError();
+      },
+    });
+  };
+
+  return (
+    <>
+      <div
+        className={
+          'flex items-center gap-3 px-[14px] py-2.5 ' + (last ? '' : 'border-b border-border')
+        }
+      >
+        <Avatar name={player.name} size={36} />
+        <div className="flex-1 min-w-0">
+          <div className="font-sans font-semibold text-[14px] truncate">{player.name}</div>
+          {player.nickname ? (
+            <div className="text-[11.5px] text-muted-foreground">@{player.nickname}</div>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          onClick={() => setConfirm(true)}
+          aria-label={`Remover ${player.name} da liga`}
+          className="inline-flex items-center h-[30px] px-2.5 rounded-[var(--radius-sm)] border border-border bg-transparent text-muted-foreground font-sans font-semibold text-[12px] cursor-pointer hover:border-negative hover:text-negative transition-colors shrink-0"
+        >
+          Remover
+        </button>
+      </div>
+
+      {confirm && (
+        <Sheet
+          fixed
+          open
+          onClose={() => setConfirm(false)}
+          title={`Remover ${player.name}?`}
+          subtitle="O jogador perderá acesso à liga e ao histórico."
+        >
+          <div className="flex flex-col gap-2.5">
+            <Button
+              variant="destructive"
+              block
+              disabled={deletePlayer.isPending}
+              onClick={handleConfirm}
+            >
+              {deletePlayer.isPending ? 'Removendo…' : 'Confirmar remoção'}
+            </Button>
+            <Button variant="ghost" block onClick={() => setConfirm(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </Sheet>
+      )}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -118,25 +239,34 @@ export default function AdminRoute() {
   const navigate = useNavigate();
   const { activeLeagueId } = useActiveLeague();
   const qc = useQueryClient();
-  const S = mockData.season;
+  const { user } = useAuth();
 
-  // Real league data (if active league is from API)
-  const { data: league } = useLeague(activeLeagueId ?? '');
+  // Real data
+  const { data: league, isLoading: isLoadingLeague } = useLeague(activeLeagueId ?? '');
+  const { data: activeSeason, isLoading: isLoadingSeason } = useActiveSeason(activeLeagueId ?? '');
+  const { data: summaries } = useSeasonSummaries(activeLeagueId ?? '');
+  const { data: players, isLoading: isLoadingPlayers } = usePlayers(activeLeagueId ?? '');
+  const { data: prizeTables } = usePrizeTables(activeLeagueId ?? '');
+  const { data: contributions } = useJackpotContributions(activeLeagueId);
+  const { data: usages } = useJackpotUsages(activeLeagueId);
+
+  const balance = jackpotBalance(contributions, usages);
+  const seasonSummary =
+    summaries?.find((s) => s.id === activeSeason?.id) ?? summaries?.find((s) => s.isActive);
+  const isOrganizer = league?.organizerId === user?.userId;
+
+  // Mutations
   const regenerateInvite = useRegenerateInvite(activeLeagueId ?? '');
+  const updateSeason = useUpdateSeason(activeSeason?.id ?? '');
+  const updateJackpot = useUpdateJackpotSettings(activeLeagueId);
 
-  // Local state
+  // Local UI state
   const [sheet, setSheet] = useState<SheetKind>(null);
-  const [players, setPlayers] = useState(() =>
-    mockData.ranking.map((p) => ({ name: p.name, nick: p.nick })),
-  );
-  const [pct, setPct] = useState(mockData.caixinha.percent);
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [confirmRemove, setConfirmRemove] = useState<{ name: string; nick: string } | null>(null);
 
-  const displayName = league?.name ?? mockData.league.name;
-  const inviteCode = league?.inviteCode ?? 'AMIGOS-2K6';
-  const caixinhaBalance = mockData.caixinha.balance;
+  const displayName = league?.name ?? '';
+  const inviteCode = league?.inviteCode ?? '';
 
   // RHF form for edit-liga sheet
   const {
@@ -148,9 +278,9 @@ export default function AdminRoute() {
   } = useForm<EditFormData>({
     resolver: zodResolver(EditSchema),
     defaultValues: {
-      name: displayName,
+      name: league?.name ?? '',
       blockCheckInWithDebt: league?.blockCheckInWithDebt ?? true,
-      jackpotPercentage: mockData.caixinha.percent,
+      jackpotPercentage: league?.jackpotPercentage ?? 0,
     },
   });
 
@@ -161,9 +291,9 @@ export default function AdminRoute() {
 
   const openEditSheet = () => {
     reset({
-      name: league?.name ?? mockData.league.name,
+      name: league?.name ?? '',
       blockCheckInWithDebt: league?.blockCheckInWithDebt ?? true,
-      jackpotPercentage: pct,
+      jackpotPercentage: league?.jackpotPercentage ?? 0,
     });
     setSheet('edit');
   };
@@ -191,41 +321,69 @@ export default function AdminRoute() {
     });
   };
 
-  // Update league (REAL if active league is API league, mock fallback)
+  // Encerrar temporada (REAL — PUT /seasons/{id} { isActive: false })
+  const handleCloseSeason = () => {
+    if (!activeSeason) return;
+    updateSeason.mutate(
+      { isActive: false },
+      {
+        onSuccess: () => fire('Temporada encerrada'),
+        onError: () => fire('Erro ao encerrar temporada'),
+      },
+    );
+  };
+
+  // Update league (PUT /leagues/{id}) + persistir % da caixinha (PUT /leagues/{id}/jackpot/settings)
   const updateMutation = useMutation({
     mutationFn: async (data: EditFormData) => {
-      if (activeLeagueId) {
-        await api(`/leagues/${activeLeagueId}`, {
-          method: 'PUT',
-          body: {
-            name: data.name,
-            description: null,
-            blockCheckInWithDebt: data.blockCheckInWithDebt,
-          },
-        });
-        void qc.invalidateQueries({ queryKey: leagueKeys.detail(activeLeagueId) });
-        void qc.invalidateQueries({ queryKey: leagueKeys.list() });
-      }
-      setPct(data.jackpotPercentage);
+      if (!activeLeagueId) return;
+      await api(`/leagues/${activeLeagueId}`, {
+        method: 'PUT',
+        body: {
+          name: data.name,
+          description: league?.description ?? null,
+          blockCheckInWithDebt: data.blockCheckInWithDebt,
+        },
+      });
+      await updateJackpot.mutateAsync({ jackpotPercentage: data.jackpotPercentage });
+      void qc.invalidateQueries({ queryKey: leagueKeys.detail(activeLeagueId) });
+      void qc.invalidateQueries({ queryKey: leagueKeys.list() });
     },
     onSuccess: () => {
       setSheet(null);
       fire('Liga atualizada');
     },
     onError: () => {
-      // fallback: apply locally anyway
       setSheet(null);
-      fire('Liga atualizada (local)');
+      fire('Erro ao atualizar liga');
     },
   });
 
   const onEditSubmit = handleSubmit((data) => updateMutation.mutate(data));
 
-  const removePlayer = (p: { name: string; nick: string }) => {
-    setPlayers((prev) => prev.filter((x) => x.nick !== p.nick));
-    setConfirmRemove(null);
-    fire(`${p.name} removido da liga`);
-  };
+  // Tabela de premiação real (primeira tabela; fallback estático se não houver)
+  const tiers = prizeTables?.[0]?.tiers;
+  const hasTiers = !!tiers && tiers.length > 0;
+
+  // --- Guards ---
+  if (!activeLeagueId) {
+    return (
+      <div className="p-4 text-center mt-10">
+        <p className="text-muted-foreground">Nenhuma liga selecionada.</p>
+        <Button className="mt-4" onClick={() => navigate('/app/ligas')}>
+          Voltar
+        </Button>
+      </div>
+    );
+  }
+
+  if (isLoadingLeague || isLoadingSeason || isLoadingPlayers) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="pb-24 px-4 pt-3 relative min-h-full">
@@ -267,10 +425,10 @@ export default function AdminRoute() {
         <AdminRow
           icon={<PiggyBank />}
           label="Caixinha"
-          sub={`${pct}% de cada prize pool`}
+          sub={`${league?.jackpotPercentage ?? 0}% de cada prize pool`}
           trailing={
             <span className="font-mono font-bold text-[14px] text-gold-400 shrink-0 whitespace-nowrap">
-              <MoneyValue value={caixinhaBalance} cents={false} color="none" size="14px" />
+              <MoneyValue value={balance} cents={false} color="none" size="14px" />
             </span>
           }
           onClick={() => navigate('/app/perfil/caixinha')}
@@ -282,80 +440,107 @@ export default function AdminRoute() {
       <SectionTitle icon={CalendarRange}>Temporada</SectionTitle>
       <Card pad="md" className="mb-[18px]">
         <div className="flex justify-between items-baseline mb-2">
-          <span className="font-sans font-semibold text-[14.5px]">{S.name}</span>
+          <span className="font-sans font-semibold text-[14.5px]">
+            {activeSeason?.name ?? 'Temporada'}
+          </span>
           <span className="font-mono text-[12.5px] text-muted-foreground whitespace-nowrap shrink-0">
-            {S.range}
+            {activeSeason ? formatSeasonRange(activeSeason.startDate, activeSeason.endDate) : '—'}
           </span>
         </div>
-        <ProgressBar value={(S.played / S.total) * 100} tone="gold" />
-        <div className="flex justify-between items-center mt-2">
+        <div className="flex justify-between items-center">
           <span className="text-[12px] text-muted-foreground">
-            <span className="font-mono font-bold text-foreground">{S.played}</span>/{S.total}{' '}
+            <span className="font-mono font-bold text-foreground">
+              {seasonSummary?.tournamentsCount ?? 0}
+            </span>{' '}
             torneios realizados
           </span>
-          <button
-            type="button"
-            onClick={() => fire('Temporada encerrada (exemplo)')}
-            className="border-0 bg-transparent cursor-pointer font-sans font-semibold text-[12.5px] text-negative py-1.5 hover:opacity-80 transition-opacity"
-          >
-            Encerrar temporada
-          </button>
+          {isOrganizer && (
+            <button
+              type="button"
+              onClick={handleCloseSeason}
+              disabled={!activeSeason || updateSeason.isPending}
+              className="border-0 bg-transparent cursor-pointer font-sans font-semibold text-[12.5px] text-negative py-1.5 hover:opacity-80 transition-opacity disabled:opacity-50 disabled:cursor-default"
+            >
+              {updateSeason.isPending ? 'Encerrando…' : 'Encerrar temporada'}
+            </button>
+          )}
         </div>
       </Card>
 
       {/* --- Premiação --- */}
       <SectionTitle icon={Trophy}>Tabela de premiação</SectionTitle>
       <Card pad="none" className="mb-[18px]">
-        {(
-          [
-            ['1º lugar', 50, 'var(--podium-gold)'],
-            ['2º lugar', 30, 'var(--podium-silver)'],
-            ['3º lugar', 20, 'var(--podium-bronze)'],
-          ] as const
-        ).map(([label, pctVal, color], i, arr) => (
-          <div
-            key={label}
-            className={
-              'flex items-center gap-3 px-[14px] py-3 ' +
-              (i < arr.length - 1 ? 'border-b border-border' : '')
-            }
-          >
-            <span
-              className="w-2.5 h-2.5 rounded-full shrink-0"
-              style={{ background: color }}
-            />
-            <span className="flex-1 font-sans font-medium text-[14.5px]">{label}</span>
-            <span className="font-mono font-bold text-[15px]">{pctVal}%</span>
-          </div>
-        ))}
+        {hasTiers ? (
+          tiers!
+            .slice()
+            .sort((a, b) => a.position - b.position)
+            .map((tier, i, arr) => (
+              <div
+                key={tier.id}
+                className={
+                  'flex items-center gap-3 px-[14px] py-3 ' +
+                  (i < arr.length - 1 ? 'border-b border-border' : '')
+                }
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ background: posColor(tier.position) }}
+                />
+                <span className="flex-1 font-sans font-medium text-[14.5px]">
+                  {posLabel(tier.position)}
+                </span>
+                <span className="font-mono font-bold text-[15px]">{tier.percentage}%</span>
+              </div>
+            ))
+        ) : (
+          <>
+            {(
+              [
+                ['1º lugar', 50, 'var(--podium-gold)'],
+                ['2º lugar', 30, 'var(--podium-silver)'],
+                ['3º lugar', 20, 'var(--podium-bronze)'],
+              ] as const
+            ).map(([label, pctVal, color], i, arr) => (
+              <div
+                key={label}
+                className={
+                  'flex items-center gap-3 px-[14px] py-3 ' +
+                  (i < arr.length - 1 ? 'border-b border-border' : '')
+                }
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-full shrink-0"
+                  style={{ background: color }}
+                />
+                <span className="flex-1 font-sans font-medium text-[14.5px]">{label}</span>
+                <span className="font-mono font-bold text-[15px]">{pctVal}%</span>
+              </div>
+            ))}
+            <p className="px-[14px] pb-3 pt-1 text-[12px] text-muted-foreground">
+              Tabela padrão — nenhuma tabela de premiação configurada.
+            </p>
+          </>
+        )}
       </Card>
 
       {/* --- Jogadores --- */}
-      <SectionTitle icon={Users}>Jogadores · {players.length}</SectionTitle>
+      <SectionTitle icon={Users}>Jogadores · {players?.length ?? 0}</SectionTitle>
       <Card pad="none" className="mt-2">
-        {players.map((p, i) => (
-          <div
-            key={p.nick}
-            className={
-              'flex items-center gap-3 px-[14px] py-2.5 ' +
-              (i < players.length - 1 ? 'border-b border-border' : '')
-            }
-          >
-            <Avatar name={p.name} size={36} />
-            <div className="flex-1 min-w-0">
-              <div className="font-sans font-semibold text-[14px] truncate">{p.name}</div>
-              <div className="text-[11.5px] text-muted-foreground">@{p.nick}</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setConfirmRemove(p)}
-              aria-label={`Remover ${p.name} da liga`}
-              className="inline-flex items-center h-[30px] px-2.5 rounded-[var(--radius-sm)] border border-border bg-transparent text-muted-foreground font-sans font-semibold text-[12px] cursor-pointer hover:border-negative hover:text-negative transition-colors shrink-0"
-            >
-              Remover
-            </button>
-          </div>
-        ))}
+        {players && players.length > 0 ? (
+          players.map((p, i) => (
+            <PlayerRow
+              key={p.id}
+              player={p}
+              last={i === players.length - 1}
+              onRemoved={(name) => fire(`${name} removido da liga`)}
+              onError={() => fire('Erro ao remover (pode ter histórico)')}
+            />
+          ))
+        ) : (
+          <p className="px-[14px] py-4 text-[12.5px] text-muted-foreground text-center">
+            Nenhum jogador cadastrado.
+          </p>
+        )}
       </Card>
       <div className="mt-2.5">
         <Button variant="secondary" icon={UserPlus} block onClick={() => setSheet('invite')}>
@@ -455,34 +640,6 @@ export default function AdminRoute() {
                 onClick={handleRegenerate}
               />
             )}
-          </div>
-        </Sheet>
-      )}
-
-      {/* --- Confirm remove sheet --- */}
-      {confirmRemove && (
-        <Sheet
-          fixed
-          open
-          onClose={() => setConfirmRemove(null)}
-          title={`Remover ${confirmRemove.name}?`}
-          subtitle="O jogador perderá acesso à liga e ao histórico."
-        >
-          <div className="flex flex-col gap-2.5">
-            <Button
-              variant="destructive"
-              block
-              onClick={() => removePlayer(confirmRemove)}
-            >
-              Confirmar remoção
-            </Button>
-            <Button
-              variant="ghost"
-              block
-              onClick={() => setConfirmRemove(null)}
-            >
-              Cancelar
-            </Button>
           </div>
         </Sheet>
       )}
