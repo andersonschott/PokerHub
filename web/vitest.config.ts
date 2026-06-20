@@ -8,6 +8,8 @@ export default defineConfig({
     alias: { '@': path.resolve(__dirname, 'src') },
   },
   test: {
+    // Testes unitários vivem em src/; e2e/ (Playwright) roda à parte via `npm run e2e`.
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
     environment: 'happy-dom',
     // URL base para que window.location.href = '/login' resolva sem erro.
     environmentOptions: { happyDOM: { url: 'http://localhost:5173/app' } },
