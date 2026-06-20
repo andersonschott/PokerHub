@@ -261,35 +261,75 @@ export function useCheckInPlayer(tournamentId: string) {
 }
 
 export function useAddRebuy(tournamentId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (playerId: string) =>
       api<void>(`/tournaments/${tournamentId}/players/${playerId}/rebuy`, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] });
+    },
   });
 }
 
 export function useSetAddon(tournamentId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ playerId, hasAddon }: { playerId: string; hasAddon: boolean }) =>
       api<void>(`/tournaments/${tournamentId}/players/${playerId}/addon`, {
         method: 'POST',
         body: { hasAddon },
       }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] });
+    },
   });
 }
 
 export function useEliminatePlayer(tournamentId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ playerId, eliminatedByPlayerId, position }: { playerId: string; eliminatedByPlayerId?: string | null; position?: number | null }) =>
       api<{ message: string }>(`/tournaments/${tournamentId}/players/${playerId}/eliminate`, {
         method: 'POST',
         body: { eliminatedByPlayerId, position },
       }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] });
+    },
   });
 }
 
 export function useUndoElimination(tournamentId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (playerId: string) =>
       api<void>(`/tournaments/${tournamentId}/players/${playerId}/restore`, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Finish Tournament
+// ---------------------------------------------------------------------------
+
+export interface FinishPlayerPosition {
+  playerId: string;
+  position: number;
+}
+
+export function useFinishTournament(tournamentId: string, leagueId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ positions }: { positions: FinishPlayerPosition[] }) =>
+      api<{ message: string }>(`/tournaments/${tournamentId}/finish`, {
+        method: 'POST',
+        body: { positions },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] });
+      queryClient.invalidateQueries({ queryKey: ['tournaments', leagueId] });
+    },
   });
 }

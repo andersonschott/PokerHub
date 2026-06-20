@@ -16,10 +16,12 @@ import { LevelControl } from '@/features/live/level-control';
 import { PlayerRow } from '@/features/live/player-row';
 import { ActionSheet } from '@/features/live/action-sheet';
 import { EliminateSheet } from '@/features/live/eliminate-sheet';
+import { Sheet } from '@/components/ui/sheet';
 
-import { useTournaments, useTournament, TournamentStatus, usePauseTournament, useResumeTournament, useNextLevel, usePrevLevel, useCheckInPlayer, useEliminatePlayer, useAddRebuy, useSetAddon, useUndoElimination } from '@/lib/api/hooks/use-tournaments';
+import { useTournaments, useTournament, TournamentStatus, usePauseTournament, useResumeTournament, useNextLevel, usePrevLevel, useCheckInPlayer, useEliminatePlayer, useAddRebuy, useSetAddon, useUndoElimination, useFinishTournament, type FinishPlayerPosition } from '@/lib/api/hooks/use-tournaments';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { useTournamentClock } from '@/lib/api/hooks/use-tournament-clock';
+import { ApiError } from '@/lib/api/client';
 import { type MockTablePlayer } from '@/mocks/data';
 
 type SheetStep = 'actions' | 'eliminate';
@@ -46,9 +48,11 @@ export default function DashboardRoute() {
   const rebuyMut = useAddRebuy(activeTId);
   const addonMut = useSetAddon(activeTId);
   const undoEliminateMut = useUndoElimination(activeTId);
+  const finishMut = useFinishTournament(activeTId, activeLeagueId ?? '');
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [step, setStep] = useState<SheetStep>('actions');
+  const [finishOpen, setFinishOpen] = useState(false);
 
   if (isLoadingTournaments || (activeTId && isLoadingDetail)) {
     return (
@@ -93,6 +97,47 @@ export default function DashboardRoute() {
   const prizePool = tDetail.prizePool; // Provided by backend
 
   const selectedPlayer = selectedId ? table.find(p => p.id === selectedId) ?? null : null;
+
+  // ---- Final standings (derived from RAW tDetail.players) ----
+  // participants = checked-in OR already eliminated (position != null)
+  const participants = (tDetail.players ?? []).filter(p => p.isCheckedIn || p.position !== null);
+  const eliminatedParticipants = participants.filter(p => p.position !== null);
+  // alive = still in play (no position) → ordered by the on-table display order
+  const aliveParticipants = inPlay
+    .map(row => participants.find(p => p.playerId === row.id))
+    .filter((p): p is NonNullable<typeof p> => p != null && p.position === null);
+
+  // alive get positions 1..k (champion = 1)
+  const finishPositions: FinishPlayerPosition[] = [
+    ...eliminatedParticipants.map(p => ({ playerId: p.playerId, position: p.position as number })),
+    ...aliveParticipants.map((p, i) => ({ playerId: p.playerId, position: i + 1 })),
+  ];
+
+  // Display ranking ordered by position (1º, 2º, 3º…)
+  const finishRanking = [
+    ...aliveParticipants.map((p, i) => ({
+      playerId: p.playerId,
+      name: p.playerName,
+      position: i + 1,
+    })),
+    ...eliminatedParticipants.map(p => ({
+      playerId: p.playerId,
+      name: p.playerName,
+      position: p.position as number,
+    })),
+  ].sort((a, b) => a.position - b.position);
+
+  const handleConfirmFinish = async () => {
+    try {
+      await finishMut.mutateAsync({ positions: finishPositions });
+      toast.success('Torneio encerrado!');
+      setFinishOpen(false);
+      navigate(`/app/debitos/pagamentos?t=${activeTId}`);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : 'Falha ao encerrar o torneio.';
+      toast.error(message);
+    }
+  };
 
   // Actions
   // Pausado → resume (/resume), nunca /start; o estado de sucesso chega via SignalR.
@@ -206,7 +251,7 @@ export default function DashboardRoute() {
             </div>
 
             <div className="mt-1">
-              <Button variant="primary" icon={Flag} block onClick={() => navigate(`/app/debitos/pagamentos?t=${activeTId}`)}>
+              <Button variant="primary" icon={Flag} block onClick={() => setFinishOpen(true)}>
                 Encerrar torneio
               </Button>
               <div className="text-[12px] text-muted-foreground text-center mt-2">
@@ -277,6 +322,67 @@ export default function DashboardRoute() {
           onBack={() => setStep('actions')}
           onClose={closeSheet}
         />
+      )}
+
+      {finishOpen && (
+        <Sheet
+          open
+          onClose={() => setFinishOpen(false)}
+          title="Encerrar torneio"
+          subtitle="Confira a classificação final antes de confirmar"
+          fixed
+        >
+          <div className="flex flex-col gap-2">
+            {aliveParticipants.length > 1 && (
+              <div className="text-[12px] text-muted-foreground px-[2px] pb-1">
+                Há mais de um jogador na mesa: a ordem de exibição vira o ranking (primeiro = campeão).
+              </div>
+            )}
+
+            {finishRanking.length === 0 ? (
+              <div className="text-[12.5px] text-muted-foreground px-[2px] py-1">
+                Nenhum participante para classificar.
+              </div>
+            ) : (
+              finishRanking.map((r) => (
+                <div
+                  key={r.playerId}
+                  className="flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)] border border-border bg-card"
+                >
+                  <span
+                    className={`w-[30px] h-[30px] rounded-[8px] flex items-center justify-center font-mono font-bold text-[13px] shrink-0 ${
+                      r.position === 1 ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'
+                    }`}
+                  >
+                    {r.position}º
+                  </span>
+                  <span className="flex-1 min-w-0 font-sans font-medium text-[14px] text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
+                    {r.name}
+                  </span>
+                </div>
+              ))
+            )}
+
+            <Button
+              variant="primary"
+              icon={finishMut.isPending ? Loader2 : Flag}
+              block
+              disabled={finishMut.isPending || finishRanking.length === 0}
+              onClick={handleConfirmFinish}
+              className={finishMut.isPending ? '[&_svg]:animate-spin' : undefined}
+            >
+              Confirmar encerramento
+            </Button>
+            <Button
+              variant="ghost"
+              block
+              disabled={finishMut.isPending}
+              onClick={() => setFinishOpen(false)}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </Sheet>
       )}
     </>
   );
