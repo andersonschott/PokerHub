@@ -55,31 +55,19 @@ export default function DashboardRoute() {
   const [step, setStep] = useState<SheetStep>('actions');
   const [finishOpen, setFinishOpen] = useState(false);
 
-  if (isLoadingTournaments || (activeTId && isLoadingDetail)) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (!activeTId || !tDetail) {
-    return (
-      <div className="flex flex-col min-h-screen items-center justify-center text-center p-4">
-        <p className="text-muted-foreground mb-4">Nenhum torneio em andamento na liga.</p>
-        <Button onClick={() => navigate('/app/torneio')}>Voltar</Button>
-      </div>
-    );
-  }
+  // NB: nenhum `return` antecipado pode vir ANTES dos hooks abaixo (useCallback).
+  // As derivações são null-safe (tDetail pode ser undefined durante o carregamento) e os
+  // guards de render ficam DEPOIS de todos os hooks — caso contrário a contagem de hooks
+  // muda entre renders e o React quebra ("change in the order of Hooks").
 
   // Derived state from real data
-  const tName = tDetail.name;
-  const tBuyIn = tDetail.buyIn;
-  const tMaxPlayers = tDetail.players?.length ?? 0;
-  
+  const tName = tDetail?.name ?? '';
+  const tBuyIn = tDetail?.buyIn ?? 0;
+  const tMaxPlayers = tDetail?.players?.length ?? 0;
+
   // Transform API players to MockTablePlayer shape for existing UI components
   // Consider checked-in players or eliminated ones
-  const table: MockTablePlayer[] = (tDetail.players ?? [])
+  const table: MockTablePlayer[] = (tDetail?.players ?? [])
     .filter(p => p.isCheckedIn || p.position !== null)
     .map(p => ({
       id: p.playerId,
@@ -95,18 +83,18 @@ export default function DashboardRoute() {
   const out = table.filter(p => p.status === 'out').sort((a, b) => (a.place ?? 99) - (b.place ?? 99));
 
   // Inscritos que ainda não fizeram check-in (RAW: não passam pelo filtro de `table`).
-  const awaitingCheckIn = (tDetail.players ?? []).filter(
+  const awaitingCheckIn = (tDetail?.players ?? []).filter(
     (p) => !p.isCheckedIn && p.position === null,
   );
 
   const totalRebuys = table.reduce((s, p) => s + (p.rebuys || 0), 0);
-  const prizePool = tDetail.prizePool; // Provided by backend
+  const prizePool = tDetail?.prizePool ?? 0; // Provided by backend
 
   const selectedPlayer = selectedId ? table.find(p => p.id === selectedId) ?? null : null;
 
   // ---- Final standings (derived from RAW tDetail.players) ----
   // participants = checked-in OR already eliminated (position != null)
-  const participants = (tDetail.players ?? []).filter(p => p.isCheckedIn || p.position !== null);
+  const participants = (tDetail?.players ?? []).filter(p => p.isCheckedIn || p.position !== null);
   const eliminatedParticipants = participants.filter(p => p.position !== null);
   // alive = still in play (no position) → ordered by the on-table display order
   const aliveParticipants = inPlay
@@ -221,6 +209,24 @@ export default function DashboardRoute() {
     },
     [undoEliminateMut],
   );
+
+  // ---- Render guards (DEPOIS de todos os hooks) ----
+  if (isLoadingTournaments || (activeTId && isLoadingDetail)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!activeTId || !tDetail) {
+    return (
+      <div className="flex flex-col min-h-screen items-center justify-center text-center p-4">
+        <p className="text-muted-foreground mb-4">Nenhum torneio em andamento na liga.</p>
+        <Button onClick={() => navigate('/app/torneio')}>Voltar</Button>
+      </div>
+    );
+  }
 
   return (
     <>
