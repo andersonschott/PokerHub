@@ -198,6 +198,34 @@ h1:focus {
     background: rgba(255, 193, 7, 0.1);
 }
 
+/* Segmented section switcher (topo do lobby da liga) */
+.seg-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--mud-palette-surface);
+    padding: 4px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.seg-tab {
+    flex: 1;
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--mud-palette-text-secondary);
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.seg-tab.active {
+    background: var(--mud-palette-background-gray);
+    color: var(--mud-palette-text-primary);
+}
+
 .bottom-nav-item .mud-icon-root {
     font-size: 20px;
 }

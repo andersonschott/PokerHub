@@ -435,18 +435,31 @@
     flex: 1;
 }
 
-.debt-pix-copy {
+.debt-pix-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 8px;
+    border: 1px solid var(--mud-palette-lines-default);
+    background: var(--mud-palette-surface);
+    color: var(--accent-green);
+    font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
-    padding: 4px;
-    transition: transform 0.2s;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
 }
 
-.debt-pix-copy:hover {
-    transform: scale(1.1);
+.debt-pix-copy-btn:hover {
+    border-color: var(--accent-green);
 }
 
-.debt-pix-copy:active {
-    transform: scale(0.95);
+.debt-pix-copy-btn:active {
+    transform: scale(0.97);
 }
 
 .debt-no-pix {

@@ -52,28 +52,26 @@ else
                             }
                         </div>
                         <div class="d-flex gap-1" style="flex-shrink: 0;">
-                            <MudIconButton Icon="@Icons.Material.Filled.Savings" Color="Color.Warning"
-                                           Href="@($"/ligas/{LeagueId}/jackpot")" Size="Size.Small" />
                             @if (_isOrganizer)
                             {
-                                <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Color="Color.Primary"
-                                               OnClick="ShowInviteCode" Size="Size.Small" />
-                                <MudMenu Icon="@Icons.Material.Filled.Settings" Size="Size.Small">
+                                <MudIconButton Icon="@Icons.Material.Filled.PersonAddAlt1" Color="Color.Primary"
+                                               OnClick="ShowInviteCode" aria-label="Convidar jogadores" />
+                                <MudMenu Icon="@Icons.Material.Filled.Settings">
                                     <MudMenuItem Href="@($"/ligas/{LeagueId}/editar")" Icon="@Icons.Material.Filled.Edit">
-                                        Editar Liga
+                                        Editar liga
                                     </MudMenuItem>
                                     <MudMenuItem Href="@($"/ligas/{LeagueId}/temporadas")" Icon="@Icons.Material.Filled.CalendarMonth">
                                         Temporadas
                                     </MudMenuItem>
                                     <MudMenuItem Href="@($"/ligas/{LeagueId}/tabelas-premiacao")" Icon="@Icons.Material.Filled.TableChart">
-                                        Tabelas de Premiacao
+                                        Tabelas de premiação
                                     </MudMenuItem>
                                 </MudMenu>
                             }
                             else
                             {
-                                <MudIconButton Icon="@Icons.Material.Filled.ExitToApp" Size="Size.Small" Color="Color.Error"
-                                               OnClick="LeaveLeague" />
+                                <MudIconButton Icon="@Icons.Material.Filled.ExitToApp" Color="Color.Error"
+                                               OnClick="LeaveLeague" aria-label="Sair da liga" />
                             }
                         </div>
                     </div>
@@ -82,6 +80,11 @@ else
                 @* Conteúdo com Scroll *@
                 <div class="mobile-scroll-content">
                     <div class="pa-3">
+                        <div class="seg-tabs mb-3">
+                            <button class="seg-tab @(_activeTab == 0 ? "active" : "")" @onclick="@(() => _activeTab = 0)">Jogadores</button>
+                            <button class="seg-tab @(_activeTab == 1 ? "active" : "")" @onclick="@(() => _activeTab = 1)">Torneios</button>
+                            <button class="seg-tab @(_activeTab == 2 ? "active" : "")" @onclick="@(() => _activeTab = 2)">Ranking</button>
+                        </div>
                         @switch (_activeTab)
                         {
                             case 0:
@@ -546,16 +549,10 @@ else
                                                         </MudGrid>
                                                         <div class="d-flex gap-2 mt-3">
                                                             <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small" FullWidth="true"
-                                                                       StartIcon="@Icons.Material.Filled.History"
+                                                                       StartIcon="@Icons.Material.Filled.BarChart"
                                                                        Href="@($"/jogador/{player.PlayerId}/stats")"
                                                                        @onclick:stopPropagation="true">
-                                                                Histórico
-                                                            </MudButton>
-                                                            <MudButton Variant="Variant.Outlined" Color="Color.Default" Size="Size.Small" FullWidth="true"
-                                                                       StartIcon="@Icons.Material.Filled.TrendingUp"
-                                                                       Href="@($"/jogador/{player.PlayerId}/stats")"
-                                                                       @onclick:stopPropagation="true">
-                                                                Evolução
+                                                                Ver estatísticas
                                                             </MudButton>
                                                         </div>
                                                     }
@@ -576,26 +573,22 @@ else
 
                 @* Bottom Navigation Fixo *@
                 <div class="bottom-nav-container">
-                    <button class="bottom-nav-item @(_activeTab == 0 ? "active" : "")" @onclick="@(() => _activeTab = 0)">
-                        <MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Small" />
-                        <span>Jogadores</span>
-                    </button>
-                    <button class="bottom-nav-item @(_activeTab == 1 ? "active" : "")" @onclick="@(() => _activeTab = 1)">
-                        <MudIcon Icon="@Icons.Material.Filled.EmojiEvents" Size="Size.Small" />
-                        <span>Torneios</span>
-                    </button>
-                    <button class="bottom-nav-item @(_activeTab == 2 ? "active" : "")" @onclick="@(() => _activeTab = 2)">
-                        <MudIcon Icon="@Icons.Material.Filled.Leaderboard" Size="Size.Small" />
-                        <span>Ranking</span>
-                    </button>
+                    <a class="bottom-nav-item" href="/ligas">
+                        <MudIcon Icon="@Icons.Material.Filled.Groups" Size="Size.Small" />
+                        <span>Ligas</span>
+                    </a>
                     <a class="bottom-nav-item" href="@($"/ligas/{LeagueId}/jackpot")">
                         <MudIcon Icon="@Icons.Material.Filled.Savings" Size="Size.Small" />
                         <span>Caixa</span>
                     </a>
+                    <a class="bottom-nav-item" href="/meus-debitos">
+                        <MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Small" />
+                        <span>Débitos</span>
+                    </a>
                 </div>
 
-                @* FAB para adicionar jogador/torneio *@
-                @if (_isOrganizer)
+                @* FAB para adicionar jogador/torneio (oculto na aba Ranking) *@
+                @if (_isOrganizer && _activeTab != 2)
                 {
                     <MudFab Class="mobile-fab"
                             Color="Color.Primary"

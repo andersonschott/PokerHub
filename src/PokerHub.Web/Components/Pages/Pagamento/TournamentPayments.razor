@@ -68,7 +68,7 @@ else
                         <div class="summary-stats">
                             <div class="summary-stat">
                                 <div class="summary-stat-value positive">
-                                    R$ @GetTotalToReceive().ToString("N0")
+                                    @GetTotalToReceive().ToBrl()
                                 </div>
                                 <div class="summary-stat-label">A Receber</div>
                             </div>
@@ -134,12 +134,12 @@ else
                                             <div class="balance-info">
                                                 <div class="balance-name">@balance.PlayerName</div>
                                                 <div class="balance-details">
-                                                    <span>Inv: R$ @balance.TotalInvestment.ToString("N0")</span>
-                                                    <span>Premio: R$ @balance.Prize.ToString("N0")</span>
+                                                    <span>Inv: @balance.TotalInvestment.ToBrl()</span>
+                                                    <span>Premio: @balance.Prize.ToBrl()</span>
                                                 </div>
                                             </div>
                                             <div class="balance-amount @(balance.Balance >= 0 ? "positive" : "negative")">
-                                                @(balance.Balance >= 0 ? "+" : "")R$ @balance.Balance.ToString("N0")
+                                                @(balance.Balance >= 0 ? "+" : "")@balance.Balance.ToBrl()
                                             </div>
                                         </div>
                                     }
@@ -153,7 +153,7 @@ else
                                             <span>Caixinha</span>
                                         </div>
                                         <div class="jackpot-value">
-                                            R$ @_jackpotContribution.ToString("N0")
+                                            @_jackpotContribution.ToBrl()
                                         </div>
                                     </div>
                                 }
@@ -161,7 +161,7 @@ else
                                 <div class="total-card">
                                     <div class="total-label">Total Prize Pool</div>
                                     <div class="total-value">
-                                        R$ @(_balances.Sum(b => b.TotalInvestment).ToString("N0"))
+                                        @(_balances.Sum(b => b.TotalInvestment).ToBrl())
                                     </div>
                                 </div>
                             }
@@ -220,6 +220,14 @@ else
                             }
                             else
                             {
+                                @if (_isOrganizer && FilteredPayments.Any(p => p.Status != PaymentStatus.Confirmed))
+                                {
+                                    <button class="mobile-bulk-confirm" @onclick="MobileConfirmAllPending" disabled="@_processing">
+                                        <MudIcon Icon="@Icons.Material.Filled.DoneAll" Size="Size.Small" />
+                                        Confirmar todos (@FilteredPayments.Count(p => p.Status != PaymentStatus.Confirmed))
+                                    </button>
+                                }
+
                                 <div class="payment-list">
                                     @foreach (var payment in FilteredPayments)
                                     {
@@ -270,7 +278,7 @@ else
 
                                                 <div class="payment-footer">
                                                     <div class="payment-amount @(payment.IsJackpotContribution ? "jackpot" : "")">
-                                                        R$ @payment.Amount.ToString("N0")
+                                                        @payment.Amount.ToBrl()
                                                     </div>
 
                                                     <div class="payment-actions">
@@ -412,15 +420,15 @@ else
                                                 </div>
                                             </MudTd>
                                             <MudTd DataLabel="Investimento" Style="text-align: right;">
-                                                <span class="mono-font">R$ @context.TotalInvestment.ToString("N0")</span>
+                                                <span class="mono-font">@context.TotalInvestment.ToBrl()</span>
                                             </MudTd>
                                             <MudTd DataLabel="Premio" Style="text-align: right;">
-                                                <span class="mono-font">R$ @context.Prize.ToString("N0")</span>
+                                                <span class="mono-font">@context.Prize.ToBrl()</span>
                                             </MudTd>
                                             <MudTd DataLabel="Saldo" Style="text-align: right;">
                                                 <span class="mono-font font-weight-bold"
                                                       style="color: @(context.Balance >= 0 ? "#22c55e" : "#ef4444")">
-                                                    @(context.Balance >= 0 ? "+" : "")R$ @context.Balance.ToString("N0")
+                                                    @(context.Balance >= 0 ? "+" : "")@context.Balance.ToBrl()
                                                 </span>
                                             </MudTd>
                                         </RowTemplate>
@@ -435,12 +443,12 @@ else
                                                 <MudIcon Icon="@Icons.Material.Filled.Savings" Size="Size.Small" Color="Color.Warning" />
                                                 <span>Contribuicao para Caixinha</span>
                                             </div>
-                                            <span class="totals-row-value">R$ @_jackpotContribution.ToString("N0")</span>
+                                            <span class="totals-row-value">@_jackpotContribution.ToBrl()</span>
                                         </div>
                                     }
                                     <div class="totals-row total">
                                         <span class="totals-row-label">Total Prize Pool</span>
-                                        <span class="totals-row-value">R$ @_balances.Sum(b => b.TotalInvestment).ToString("N0")</span>
+                                        <span class="totals-row-value">@_balances.Sum(b => b.TotalInvestment).ToBrl()</span>
                                     </div>
                                 </div>
                             </div>
@@ -456,7 +464,7 @@ else
                             <div class="summary-row">
                                 <span class="summary-row-label">Total a receber</span>
                                 <span class="summary-row-value success">
-                                    R$ @GetTotalToReceive().ToString("N0")
+                                    @GetTotalToReceive().ToBrl()
                                 </span>
                             </div>
                             <div class="summary-row">
@@ -598,7 +606,7 @@ else
                                         <MudTd DataLabel="Valor" Style="text-align: right;">
                                             <span class="mono-font font-weight-bold"
                                                   style="color: @(context.IsJackpotContribution ? "#eab308" : "inherit")">
-                                                R$ @context.Amount.ToString("N0")
+                                                @context.Amount.ToBrl()
                                             </span>
                                         </MudTd>
                                         <MudTd DataLabel="PIX">
@@ -869,13 +877,6 @@ else
     {
         if (string.IsNullOrEmpty(_currentUserId)) return;
 
-        var confirmed = await DialogService.ShowMessageBox(
-            "Confirmar Pagamento",
-            "Deseja marcar este pagamento como pago?",
-            yesText: "Sim", cancelText: "Cancelar");
-
-        if (confirmed != true) return;
-
         _processingPayment = paymentId;
         try
         {
@@ -921,6 +922,38 @@ else
                 toConfirm.Select(p => p.Id).ToList(), _currentUserId);
             Snackbar.Add($"{count} pagamento(s) confirmado(s)", Severity.Success);
             _selectedPayments.Clear();
+            _payments = await PaymentService.GetPaymentsByTournamentAsync(TournamentId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private async Task MobileConfirmAllPending()
+    {
+        if (string.IsNullOrEmpty(_currentUserId)) return;
+
+        var toConfirm = FilteredPayments.Where(p => p.Status != PaymentStatus.Confirmed).ToList();
+        if (!toConfirm.Any()) return;
+
+        var confirmedDialog = await DialogService.ShowMessageBox(
+            "Confirmar pagamentos",
+            $"Confirmar {toConfirm.Count} pagamento(s) em aberto?",
+            yesText: "Confirmar", cancelText: "Cancelar");
+
+        if (confirmedDialog != true) return;
+
+        _processing = true;
+        try
+        {
+            var count = await PaymentService.BulkConfirmPaymentsAsync(
+                toConfirm.Select(p => p.Id).ToList(), _currentUserId);
+            Snackbar.Add($"{count} pagamento(s) confirmado(s)", Severity.Success);
             _payments = await PaymentService.GetPaymentsByTournamentAsync(TournamentId);
         }
         catch (Exception ex)
