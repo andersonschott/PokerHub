@@ -4,8 +4,9 @@
  */
 import { useState, useCallback, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Settings2, Flag, Users, Trophy, Repeat, Undo2, Loader2, MonitorPlay } from 'lucide-react';
+import { ArrowLeft, Settings2, Flag, Users, Trophy, Repeat, Undo2, Loader2, MonitorPlay, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
+import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
 import { Badge } from '@/components/ui/badge';
@@ -93,6 +94,11 @@ export default function DashboardRoute() {
   const inPlay = table.filter(p => p.status === 'in');
   const out = table.filter(p => p.status === 'out').sort((a, b) => (a.place ?? 99) - (b.place ?? 99));
 
+  // Inscritos que ainda não fizeram check-in (RAW: não passam pelo filtro de `table`).
+  const awaitingCheckIn = (tDetail.players ?? []).filter(
+    (p) => !p.isCheckedIn && p.position === null,
+  );
+
   const totalRebuys = table.reduce((s, p) => s + (p.rebuys || 0), 0);
   const prizePool = tDetail.prizePool; // Provided by backend
 
@@ -179,6 +185,18 @@ export default function DashboardRoute() {
     });
   }, [selectedPlayer, checkInMut, closeSheet]);
 
+  // Check-in inline da seção "Aguardando check-in" (não depende de `selectedPlayer` do sheet).
+  const handleCheckInPending = useCallback(
+    (playerId: string, playerName: string) => {
+      checkInMut.mutate(playerId, {
+        onSuccess: () => toast.success(`${playerName}: check-in confirmado`),
+        onError: (err) =>
+          toast.error(err instanceof ApiError ? err.message : 'Falha no check-in.'),
+      });
+    },
+    [checkInMut],
+  );
+
   const handleEliminate = useCallback(
     (eliminatedBy: MockTablePlayer) => {
       if (!selectedPlayer) return;
@@ -262,6 +280,45 @@ export default function DashboardRoute() {
 
           {/* Right column */}
           <div className="mt-3 lg:mt-0">
+            {awaitingCheckIn.length > 0 && (
+              <>
+                <div className="font-sans text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-2">
+                  Aguardando check-in · {awaitingCheckIn.length}
+                </div>
+                <div className="flex flex-col gap-2 mb-[18px]">
+                  {awaitingCheckIn.map((p) => {
+                    const pending = checkInMut.isPending && checkInMut.variables === p.playerId;
+                    return (
+                      <div
+                        key={p.playerId}
+                        className="flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)] border border-border bg-card"
+                      >
+                        <Avatar name={p.playerName} />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis">
+                            {p.playerName}
+                          </div>
+                          <div className="text-[12px] text-muted-foreground">
+                            @{p.nickname ?? p.playerName.split(' ')[0]}
+                          </div>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          icon={pending ? Loader2 : UserCheck}
+                          disabled={checkInMut.isPending}
+                          onClick={() => handleCheckInPending(p.playerId, p.playerName)}
+                          className={pending ? '[&_svg]:animate-spin' : undefined}
+                        >
+                          Check-in
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
             <div className="font-sans text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-2">
               Na mesa · {inPlay.length}
             </div>
