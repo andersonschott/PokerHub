@@ -333,3 +333,67 @@ export function useFinishTournament(tournamentId: string, leagueId: string) {
     },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Cancelar torneio
+// ---------------------------------------------------------------------------
+
+export function useCancelTournament(tournamentId: string, leagueId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<void>(`/tournaments/${tournamentId}/cancel`, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] });
+      queryClient.invalidateQueries({ queryKey: ['tournaments', leagueId] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Delegados
+// ---------------------------------------------------------------------------
+
+export interface TournamentDelegateDto {
+  id: string;
+  tournamentId: string;
+  userId: string;
+  userName: string;
+  permissions: number;
+  assignedAt: string;
+}
+
+/** DelegatePermissions.All (CheckIn|Eliminate|ManageRebuys|Finish). */
+export const DELEGATE_ALL = 15;
+
+export function useDelegates(tournamentId: string) {
+  return useQuery({
+    queryKey: ['tournament', tournamentId, 'delegates'],
+    queryFn: () => api<TournamentDelegateDto[]>(`/tournaments/${tournamentId}/delegates`),
+    enabled: !!tournamentId,
+  });
+}
+
+export function useAddDelegate(tournamentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, permissions = DELEGATE_ALL }: { userId: string; permissions?: number }) =>
+      api<void>(`/tournaments/${tournamentId}/delegates`, {
+        method: 'POST',
+        body: { userId, permissions },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId, 'delegates'] });
+    },
+  });
+}
+
+export function useRemoveDelegate(tournamentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      api<void>(`/tournaments/${tournamentId}/delegates/${userId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId, 'delegates'] });
+    },
+  });
+}

@@ -1,30 +1,44 @@
 /**
- * /app/torneio/:tournamentId — Detalhe de torneio agendado / próximo (somente leitura).
+ * /app/torneio/:tournamentId — Detalhe de torneio agendado / próximo.
  *
- * Mostra header (voltar + nome + status + data/buy-in), stat tiles
- * (jogadores / buy-in / prize pool) e a lista de inscritos (players[])
- * com avatar, nome e indicador de check-in.
+ * Mostra header, stat tiles (jogadores / buy-in / prize pool), o código de
+ * convite (copiável), a lista de inscritos e — para o organizador — ações de
+ * administração: gerir delegados e cancelar o torneio.
  *
- * Segue o padrão de historico/[id].tsx (mesmo design system).
- * Não controla nada — sem mutations, sem dinheiro novo. Para operar o
- * torneio ao vivo use /app/torneio/dashboard; para encerrados, o histórico.
+ * Operar o torneio ao vivo continua em /app/torneio/dashboard; encerrados, no histórico.
  */
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Users, Wallet, Trophy, CheckCircle2, Loader2 } from 'lucide-react';
+import {
+  ArrowLeft, Users, Wallet, Trophy, CheckCircle2, Loader2,
+  Ticket, Copy, Check, ShieldCheck, Ban, UserPlus, Trash2,
+} from 'lucide-react';
+import { toast } from 'sonner';
 
 import { IconButton } from '@/components/ui/icon-button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Sheet } from '@/components/ui/sheet';
 import { StatTile } from '@/components/ui/stat-tile';
 import { MoneyValue } from '@/components/ui/money-value';
 import { SectionTitle } from '@/components/ui/section-title';
 import { Avatar } from '@/components/ui/avatar';
 
-import { useTournament, TournamentStatus } from '@/lib/api/hooks/use-tournaments';
+import { useAuth } from '@/lib/auth-context';
+import { useLeague, useLeaguePlayers } from '@/lib/api/hooks/use-leagues';
+import {
+  useTournament,
+  useCancelTournament,
+  useDelegates,
+  useAddDelegate,
+  useRemoveDelegate,
+  TournamentStatus,
+} from '@/lib/api/hooks/use-tournaments';
 import { formatPtBrDate } from '@/routes/app/torneio/historico-map';
 
 // ---------------------------------------------------------------------------
-// Status → rótulo + tom do badge (derivado, sem campo novo no backend)
+// Status → rótulo + tom do badge
 // ---------------------------------------------------------------------------
 
 type StatusTone = 'neutral' | 'gold' | 'emerald' | 'positive' | 'negative' | 'warning';
@@ -47,18 +61,154 @@ function statusLabel(status: TournamentStatus): { label: string; tone: StatusTon
 }
 
 // ---------------------------------------------------------------------------
+// Sheet de gestão de delegados (organizador)
+// ---------------------------------------------------------------------------
+
+function DelegatesSheet({
+  tournamentId,
+  leagueId,
+  organizerId,
+  onClose,
+}: {
+  tournamentId: string;
+  leagueId: string;
+  organizerId?: string;
+  onClose: () => void;
+}) {
+  const { data: delegates } = useDelegates(tournamentId);
+  const { data: members } = useLeaguePlayers(leagueId);
+  const addMut = useAddDelegate(tournamentId);
+  const removeMut = useRemoveDelegate(tournamentId);
+
+  const delegateUserIds = new Set((delegates ?? []).map((d) => d.userId));
+  // Elegíveis: membros com conta (userId), que não são o organizador nem já delegados.
+  const candidates = (members ?? []).filter(
+    (m) => m.userId && m.userId !== organizerId && !delegateUserIds.has(m.userId),
+  );
+
+  const add = (userId: string, name: string) =>
+    addMut.mutate({ userId }, { onSuccess: () => toast.success(`${name.split(' ')[0]} agora é delegado`) });
+  const remove = (userId: string, name: string) =>
+    removeMut.mutate(userId, { onSuccess: () => toast.success(`${name.split(' ')[0]} removido`) });
+
+  return (
+    <Sheet
+      open
+      fixed
+      onClose={onClose}
+      title="Delegados"
+      subtitle="Quem pode operar a mesa (check-in, rebuy, eliminar)"
+    >
+      <div className="flex flex-col gap-4">
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground mb-2">
+            Delegados atuais
+          </div>
+          {(delegates ?? []).length === 0 ? (
+            <div className="text-[13px] text-muted-foreground">Nenhum delegado ainda.</div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {(delegates ?? []).map((d) => (
+                <div key={d.id} className="flex items-center gap-3">
+                  <Avatar name={d.userName} size={32} />
+                  <span className="flex-1 min-w-0 font-sans font-semibold text-[14px] truncate">
+                    {d.userName}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => remove(d.userId, d.userName)}
+                    aria-label="Remover delegado"
+                    className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-[var(--radius-sm)] border border-border bg-transparent text-muted-foreground hover:text-negative cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground mb-2">
+            Adicionar membro
+          </div>
+          {candidates.length === 0 ? (
+            <div className="text-[13px] text-muted-foreground">
+              Nenhum membro com conta disponível.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 max-h-[40vh] overflow-y-auto">
+              {candidates.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => add(m.userId!, m.name)}
+                  className="flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)] border border-border bg-card cursor-pointer text-left"
+                >
+                  <Avatar name={m.name} size={32} />
+                  <span className="flex-1 min-w-0 font-sans font-semibold text-[14px] truncate">
+                    {m.name}
+                  </span>
+                  <UserPlus className="w-[18px] h-[18px] text-gold-400 shrink-0" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Route
 // ---------------------------------------------------------------------------
 
 export default function TorneioDetalheRoute() {
   const navigate = useNavigate();
   const { tournamentId = '' } = useParams<{ tournamentId: string }>();
+  const { user } = useAuth();
 
   const { data: detail, isLoading } = useTournament(tournamentId);
+  const leagueId = detail?.leagueId ?? '';
+  const { data: league } = useLeague(leagueId);
+  const isOrganizer = !!user && !!league && league.organizerId === user.userId;
+
+  const [copied, setCopied] = useState(false);
+  const [delegatesOpen, setDelegatesOpen] = useState(false);
+  const cancelMut = useCancelTournament(tournamentId, leagueId);
 
   const status = detail ? statusLabel(detail.status) : null;
   const players = detail?.players ?? [];
   const checkedInCount = players.filter((p) => p.isCheckedIn).length;
+  const canCancel =
+    !!detail &&
+    detail.status !== TournamentStatus.Finished &&
+    detail.status !== TournamentStatus.Cancelled;
+
+  const copyInvite = () => {
+    if (!detail) return;
+    const link = `${window.location.origin}/app/torneio/entrar/${detail.inviteCode}`;
+    try {
+      void navigator.clipboard.writeText(link);
+    } catch {
+      // clipboard indisponível
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1600);
+    toast.success('Convite copiado');
+  };
+
+  const cancelTournament = () => {
+    if (!window.confirm('Cancelar este torneio? Esta ação não pode ser desfeita.')) return;
+    cancelMut.mutate(undefined, {
+      onSuccess: () => {
+        toast.success('Torneio cancelado');
+        navigate(-1);
+      },
+      onError: () => toast.error('Não foi possível cancelar o torneio.'),
+    });
+  };
 
   return (
     <div className="px-4 pt-[14px] pb-24 min-h-full lg:px-8 lg:py-6">
@@ -122,6 +272,52 @@ export default function TorneioDetalheRoute() {
               />
             </div>
 
+            {/* Convite */}
+            {detail.inviteCode ? (
+              <Card pad="md" className="mb-4">
+                <div className="flex items-center gap-[10px]">
+                  <Ticket className="w-[18px] h-[18px] text-gold-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
+                      Convite
+                    </div>
+                    <div className="font-mono font-bold text-[15px] tracking-[0.08em] text-gold-400 truncate">
+                      {detail.inviteCode}
+                    </div>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={copied ? Check : Copy}
+                    onClick={copyInvite}
+                    className="shrink-0"
+                  >
+                    {copied ? 'Copiado' : 'Copiar'}
+                  </Button>
+                </div>
+              </Card>
+            ) : null}
+
+            {/* Ações de administração (organizador) */}
+            {isOrganizer ? (
+              <div className="flex gap-2 mb-4">
+                <Button variant="secondary" icon={ShieldCheck} block onClick={() => setDelegatesOpen(true)}>
+                  Delegados
+                </Button>
+                {canCancel ? (
+                  <Button
+                    variant="destructive"
+                    icon={Ban}
+                    block
+                    onClick={cancelTournament}
+                    disabled={cancelMut.isPending}
+                  >
+                    Cancelar torneio
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+
             {/* Inscritos */}
             <SectionTitle icon={Users}>
               Inscritos · {players.length}
@@ -171,6 +367,16 @@ export default function TorneioDetalheRoute() {
           </>
         )}
       </div>
+
+      {/* Sheet de delegados */}
+      {delegatesOpen && detail ? (
+        <DelegatesSheet
+          tournamentId={tournamentId}
+          leagueId={leagueId}
+          organizerId={league?.organizerId}
+          onClose={() => setDelegatesOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
