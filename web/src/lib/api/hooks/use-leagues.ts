@@ -39,6 +39,8 @@ export interface PlayerDto {
   userId: string | null;
   createdAt: string;
   isActive: boolean;
+  /** Status de participação na liga: 0 = Ativo, 1 = Inativo (independente do soft-delete `isActive`). */
+  membershipStatus: number;
   totalProfit: number;
   tournamentsPlayed: number;
   wins: number;

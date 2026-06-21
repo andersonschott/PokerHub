@@ -34,6 +34,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Sheet } from '@/components/ui/sheet';
 import { SectionTitle } from '@/components/ui/section-title';
 import { Avatar } from '@/components/ui/avatar';
@@ -50,7 +51,7 @@ import {
   useUpdateJackpotSettings,
 } from '@/lib/api/hooks/use-jackpot';
 import { jackpotBalance } from '@/features/jackpot/jackpot-balance';
-import { usePlayers, useDeletePlayer } from '@/lib/api/hooks/use-players';
+import { usePlayers, useDeletePlayer, isPlayerInactive } from '@/lib/api/hooks/use-players';
 import { usePrizeTables } from '@/lib/api/hooks/use-prize-tables';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api/client';
@@ -166,6 +167,7 @@ interface PlayerRowProps {
 function PlayerRow({ player, last, onRemoved, onError }: PlayerRowProps) {
   const deletePlayer = useDeletePlayer(player.id);
   const [confirm, setConfirm] = useState(false);
+  const inactive = isPlayerInactive(player);
 
   const handleConfirm = () => {
     deletePlayer.mutate(undefined, {
@@ -184,12 +186,21 @@ function PlayerRow({ player, last, onRemoved, onError }: PlayerRowProps) {
     <>
       <div
         className={
-          'flex items-center gap-3 px-[14px] py-2.5 ' + (last ? '' : 'border-b border-border')
+          'flex items-center gap-3 px-[14px] py-2.5 ' +
+          (last ? '' : 'border-b border-border') +
+          (inactive ? ' opacity-60' : '')
         }
       >
         <Avatar name={player.name} size={36} />
         <div className="flex-1 min-w-0">
-          <div className="font-sans font-semibold text-[14px] truncate">{player.name}</div>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-sans font-semibold text-[14px] truncate">{player.name}</span>
+            {inactive ? (
+              <Badge tone="neutral" className="shrink-0">
+                Inativo
+              </Badge>
+            ) : null}
+          </div>
           {player.nickname ? (
             <div className="text-[11.5px] text-muted-foreground">@{player.nickname}</div>
           ) : null}
@@ -245,7 +256,9 @@ export default function AdminRoute() {
   const { data: league, isLoading: isLoadingLeague } = useLeague(activeLeagueId ?? '');
   const { data: activeSeason, isLoading: isLoadingSeason } = useActiveSeason(activeLeagueId ?? '');
   const { data: summaries } = useSeasonSummaries(activeLeagueId ?? '');
-  const { data: players, isLoading: isLoadingPlayers } = usePlayers(activeLeagueId ?? '');
+  const { data: players, isLoading: isLoadingPlayers } = usePlayers(activeLeagueId ?? '', {
+    includeInactive: true,
+  });
   const { data: prizeTables } = usePrizeTables(activeLeagueId ?? '');
   const { data: contributions } = useJackpotContributions(activeLeagueId);
   const { data: usages } = useJackpotUsages(activeLeagueId);
