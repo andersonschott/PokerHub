@@ -48,6 +48,7 @@ export const LOADING_CLOCK_STATE: MockClockState = {
   paused: true,
   blinds: { sb: 0, bb: 0, ante: 0 },
   nextBlinds: { sb: 0, bb: 0, ante: 0 },
+  nextIsBreak: false,
   elapsedPct: 0,
 };
 
@@ -139,6 +140,7 @@ export function projectClock(
     paused,
     blinds: blindsOf(dto.currentBlind),
     nextBlinds: blindsOf(dto.nextBlind),
+    nextIsBreak: dto.nextBlind?.isBreak ?? false,
     elapsedPct,
   };
 }

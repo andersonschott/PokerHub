@@ -139,6 +139,7 @@ export function restFallbackClock(t: RestClockInput): MockClockState {
     paused: t.status !== TournamentStatus.InProgress,
     blinds: blindInfo(current),
     nextBlinds: blindInfo(next),
+    nextIsBreak: next?.isBreak ?? false,
     elapsedPct,
   };
 }

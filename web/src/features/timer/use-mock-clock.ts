@@ -30,6 +30,8 @@ export interface MockClockState {
   paused: boolean;
   blinds: BlindInfo;
   nextBlinds: BlindInfo;
+  /** True quando o PRÓXIMO passo é um intervalo (exibir "Intervalo" em vez de blinds). */
+  nextIsBreak: boolean;
   elapsedPct: number;
 }
 
@@ -101,6 +103,7 @@ export function useMockClock() {
     paused,
     blinds,
     nextBlinds,
+    nextIsBreak: false,
     elapsedPct,
   };
 

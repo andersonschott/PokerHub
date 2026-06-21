@@ -9,8 +9,6 @@ import { toast } from 'sonner';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
-import { Badge } from '@/components/ui/badge';
-import { StatusPill } from '@/components/ui/status-pill';
 import { StatTile } from '@/components/ui/stat-tile';
 import { MoneyValue } from '@/components/ui/money-value';
 import { LevelControl } from '@/features/live/level-control';
@@ -231,18 +229,12 @@ export default function DashboardRoute() {
   return (
     <>
       <div className="px-4 pb-24 min-h-full" style={{ '--dashboard-content': 'block' } as CSSProperties}>
-        {/* ---- Header ---- */}
-        <div className="flex items-center gap-[10px] mb-[14px] pt-1">
+        {/* ---- Header (uma linha enxuta: título prioritário + ações) ---- */}
+        <div className="flex items-center gap-2 mb-[14px] pt-1">
           <IconButton icon={ArrowLeft} aria-label="Voltar" size="md" onClick={() => navigate('/app/torneio')} className="shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="font-sans font-bold text-[17px] whitespace-nowrap overflow-hidden text-ellipsis">
-                {tName}
-              </span>
-              <Badge tone="gold">Operando</Badge>
-            </div>
-            <div className="text-[12px] text-muted-foreground">Você controla a mesa e o nível</div>
-          </div>
+          <span className="flex-1 min-w-0 font-sans font-bold text-[17px] whitespace-nowrap overflow-hidden text-ellipsis">
+            {tName}
+          </span>
           <IconButton
             icon={MonitorPlay}
             aria-label="Modo TV"
@@ -259,7 +251,6 @@ export default function DashboardRoute() {
             onClick={() => navigate(`/app/torneio/novo?edit=1&id=${tDetail.id}`)}
             className="shrink-0"
           />
-          <StatusPill status={clock.paused ? 'paused' : 'live'} className="shrink-0" />
         </div>
 
         {/* ---- Desktop lg: two-column layout ---- */}

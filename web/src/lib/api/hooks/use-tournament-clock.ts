@@ -38,7 +38,18 @@ export function useTournamentClock(tournamentId: string) {
     const url = (import.meta.env.VITE_API_BASE_URL ?? '') + '/hub/tournaments';
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(url)
-      .withAutomaticReconnect()
+      // Reconexão PERSISTENTE (nunca desiste). O padrão do SignalR só tenta ~42s e para — um
+      // celular que perde a rede por minutos ficaria offline pra sempre. Backoff: 0, 2s, 5s, 10s fixo.
+      .withAutomaticReconnect({
+        nextRetryDelayInMilliseconds: (ctx) =>
+          ctx.previousRetryCount === 0
+            ? 0
+            : ctx.previousRetryCount < 3
+              ? 2000
+              : ctx.previousRetryCount < 6
+                ? 5000
+                : 10000,
+      })
       .build();
 
     connectionRef.current = connection;
@@ -48,14 +59,40 @@ export function useTournamentClock(tournamentId: string) {
       syncRef.current = reduceSync(syncRef.current, dto, Date.now());
     });
 
-    connection.start().then(() => {
-      connection.invoke('JoinTorneio', tournamentId).catch(err => {
-        console.error('Error joining tournament group:', err);
-      });
-    }).catch(err => console.error('SignalR start error', err));
+    // Rejunta o grupo e puxa o estado atual. O JoinTorneio do hub adiciona ao grupo E reenvia
+    // um TimerStateSync com seq novo (NextSeq) → o reduceSync aceita e RE-ANCORA o relógio.
+    const join = () =>
+      connection.invoke('JoinTorneio', tournamentId).catch((err) =>
+        console.error('Error joining tournament group:', err),
+      );
+
+    // ZERO-DRIFT: ao reconectar o connectionId é novo e saiu do grupo no servidor → sem rejuntar,
+    // o cliente nunca mais recebe sync e fica preso na âncora velha (o bug do drift de 5s que só
+    // o refresh corrigia). Rejuntar aqui reenvia o estado e corrige o relógio automaticamente.
+    connection.onreconnected(() => {
+      void join();
+    });
+
+    connection
+      .start()
+      .then(() => join())
+      .catch((err) => console.error('SignalR start error', err));
+
+    // Aba volta ao foco (celular destravado / app reaberto): força um sync fresco para corrigir
+    // qualquer defasagem causada por throttling de aba em background.
+    const onVisible = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        connection.state === signalR.HubConnectionState.Connected
+      ) {
+        void join();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
 
     return () => {
-      connection.stop();
+      document.removeEventListener('visibilitychange', onVisible);
+      void connection.stop();
       connectionRef.current = null;
       syncRef.current = EMPTY_SYNC_STATE;
     };

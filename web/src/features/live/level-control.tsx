@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { IconButton } from '@/components/ui/icon-button';
 import { fmtTime, type MockClockState } from '@/features/timer/use-mock-clock';
+import { nextLevelLabel } from '@/features/timer/next-level-label';
 
 interface LevelControlProps {
   state: MockClockState;
@@ -16,21 +17,31 @@ interface LevelControlProps {
 }
 
 export function LevelControl({ state, onPrev, onTogglePause, onNext }: LevelControlProps) {
-  const { level, remainingSeconds, paused, blinds } = state;
+  const { displayLevel, isBreak, remainingSeconds, paused, blinds, nextBlinds, nextIsBreak } = state;
 
   return (
     <Card variant="gold" pad="md">
-      <div className="flex items-center justify-between gap-4">
-        {/* Level info + time */}
-        <div className="min-w-0">
-          <div className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground">
-            Nível {level} · {blinds.sb}/{blinds.bb}
+      <div className="flex items-start justify-between gap-4">
+        {/* Level info + time + blind */}
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            {isBreak ? 'Intervalo' : `Nível ${displayLevel}`}
           </div>
+          {/* Tempo — herói do card */}
           <div
-            className="font-mono font-bold text-[30px] tracking-[-0.02em] mt-0.5 leading-none"
+            className="font-mono font-bold text-[40px] tracking-[-0.02em] mt-0.5 leading-none"
             style={{ color: paused ? 'var(--warning)' : 'var(--foreground)' }}
           >
             {fmtTime(remainingSeconds)}
+          </div>
+          {/* Blind atual — destaque em ouro, legível p/ quem monitora só por aqui */}
+          {!isBreak && (
+            <div className="font-mono font-bold text-gold-400 text-[20px] tracking-[-0.01em] mt-1.5 leading-none whitespace-nowrap">
+              {blinds.sb} / {blinds.bb}
+            </div>
+          )}
+          <div className="text-[12px] text-muted-foreground font-mono mt-1.5 whitespace-nowrap">
+            ante {blinds.ante} · próximo {nextLevelLabel(nextBlinds, nextIsBreak)}
           </div>
         </div>
 
