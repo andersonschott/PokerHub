@@ -308,7 +308,12 @@ function TorneioVazio({
           <div className="text-[13px] text-muted-foreground px-0.5">Nenhum torneio agendado.</div>
         ) : (
           upcoming.map((u) => (
-            <Card key={u.id} pad="md">
+            <Card
+              key={u.id}
+              interactive
+              pad="md"
+              onClick={() => navigate(`/app/torneio/${u.id}`)}
+            >
               <div className="flex items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="font-sans font-semibold text-[15px]">{u.name}</div>
@@ -322,7 +327,10 @@ function TorneioVazio({
                   aria-label="Editar torneio"
                   size="sm"
                   variant="solid"
-                  onClick={() => navigate(`/app/torneio/novo?edit=1&id=${u.id}`)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/app/torneio/novo?edit=1&id=${u.id}`);
+                  }}
                   className="shrink-0"
                 />
               </div>

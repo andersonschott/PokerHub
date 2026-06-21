@@ -48,6 +48,9 @@ const NovoTorneioRoute = lazy(() => import('@/routes/app/torneio/novo'));
 const HistoricoDetalheRoute = lazy(() => import('@/routes/app/torneio/historico/[id]'));
 const EntrarTorneioRoute = lazy(() => import('@/routes/app/torneio/entrar'));
 
+// Detalhe de torneio agendado/próximo (somente leitura)
+const TorneioDetalheRoute = lazy(() => import('@/routes/app/torneio/[id]'));
+
 const RouteFallback = () => (
   <div className="flex min-h-dvh items-center justify-center">
     <div className="animate-ph-pulse text-sm text-muted-foreground">Carregando…</div>
@@ -105,6 +108,8 @@ export default function App() {
                     <Route path="torneio/novo" element={<NovoTorneioRoute />} />
                     <Route path="torneio/entrar/:code" element={<EntrarTorneioRoute />} />
                     <Route path="torneio/historico/:tournamentId" element={<HistoricoDetalheRoute />} />
+                    {/* :tournamentId depois das estáticas (dashboard/novo) para não capturá-las */}
+                    <Route path="torneio/:tournamentId" element={<TorneioDetalheRoute />} />
                     <Route path="debitos" element={<DebitosRoute />} />
                     <Route path="debitos/pagamentos" element={<PagamentosRoute />} />
                     <Route path="ranking" element={<RankingRoute />} />

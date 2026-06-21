@@ -311,7 +311,12 @@ export default function LeagueHomeRoute() {
               {toursLoading && <div className="text-sm text-muted-foreground">Carregando...</div>}
               {upcoming.length === 0 && !toursLoading && <div className="text-sm text-muted-foreground">Nenhum torneio próximo.</div>}
               {upcoming.map((u) => (
-                <Card key={u.id} interactive pad="md">
+                <Card
+                  key={u.id}
+                  interactive
+                  pad="md"
+                  onClick={() => navigate(`/app/torneio/${u.id}`)}
+                >
                   <div className="flex items-center gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
