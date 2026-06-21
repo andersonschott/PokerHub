@@ -6,14 +6,14 @@
  * - Deslogado → "Entrar" / "Criar conta" com returnUrl de volta a esta página.
  */
 import { useParams, useNavigate } from 'react-router-dom';
-import { useTournamentByInvite, useSelfRegister } from '@/lib/api/hooks/use-tournaments';
+import { useTournamentByInvite, useSelfRegister, useIsRegistered } from '@/lib/api/hooks/use-tournaments';
 import { useAuth } from '@/lib/auth-context';
 import { ApiError } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { MoneyValue } from '@/components/ui/money-value';
 import { toast } from 'sonner';
-import { Loader2, Calendar, DollarSign, MapPin } from 'lucide-react';
+import { Loader2, Calendar, DollarSign, MapPin, CheckCircle2 } from 'lucide-react';
 
 export default function EntrarTorneioRoute() {
   const { code } = useParams<{ code: string }>();
@@ -22,6 +22,8 @@ export default function EntrarTorneioRoute() {
 
   const { data: tournament, isLoading, error } = useTournamentByInvite(code || '');
   const { mutate: selfRegister, isPending } = useSelfRegister(tournament?.id || '');
+  // is-registered exige auth → só consulta logado.
+  const { data: reg } = useIsRegistered(tournament?.id ?? '', !!user);
 
   const returnUrl = `/torneio/entrar/${code}`;
 
@@ -103,16 +105,7 @@ export default function EntrarTorneioRoute() {
               </div>
             </div>
 
-            {user ? (
-              <div className="space-y-2">
-                <Button variant="primary" block onClick={handleRegister} disabled={isPending}>
-                  {isPending ? 'Entrando…' : 'Entrar no torneio'}
-                </Button>
-                <Button variant="ghost" block onClick={() => navigate('/app/torneio')}>
-                  Cancelar
-                </Button>
-              </div>
-            ) : (
+            {!user ? (
               <div className="space-y-2">
                 <p className="text-[13px] text-muted-foreground text-center mb-1">
                   Entre ou crie sua conta para participar.
@@ -130,6 +123,29 @@ export default function EntrarTorneioRoute() {
                   onClick={() => navigate(`/cadastro?returnUrl=${encodeURIComponent(returnUrl)}`)}
                 >
                   Criar conta
+                </Button>
+              </div>
+            ) : reg?.isRegistered ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-center gap-2 py-1 text-[14px] font-semibold text-positive">
+                  <CheckCircle2 className="w-5 h-5" />
+                  Você já está inscrito
+                </div>
+                <Button
+                  variant="primary"
+                  block
+                  onClick={() => navigate(`/app/ligas/${tournament.leagueId}`)}
+                >
+                  Ver liga
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Button variant="primary" block onClick={handleRegister} disabled={isPending}>
+                  {isPending ? 'Entrando…' : 'Entrar no torneio'}
+                </Button>
+                <Button variant="ghost" block onClick={() => navigate('/app/torneio')}>
+                  Cancelar
                 </Button>
               </div>
             )}

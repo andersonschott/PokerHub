@@ -217,6 +217,15 @@ export function useSelfRegister(tournamentId: string) {
   });
 }
 
+/** GET /api/tournaments/{id}/is-registered — requer auth; só consultar quando logado. */
+export function useIsRegistered(tournamentId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['tournament', tournamentId, 'is-registered'],
+    queryFn: () => api<{ isRegistered: boolean }>(`/tournaments/${tournamentId}/is-registered`),
+    enabled: enabled && !!tournamentId,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Timer Actions
 // ---------------------------------------------------------------------------
