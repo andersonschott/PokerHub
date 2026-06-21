@@ -552,6 +552,7 @@ public class TournamentService : ITournamentService
         };
 
         _context.TournamentPlayers.Add(tp);
+        await MarkPlayerActivityAsync(playerId);
         await _context.SaveChangesAsync();
         return true;
     }
@@ -575,6 +576,7 @@ public class TournamentService : ITournamentService
 
         tp.IsCheckedIn = true;
         tp.CheckedInAt = DateTime.UtcNow;
+        await MarkPlayerActivityAsync(playerId);
         await _context.SaveChangesAsync();
         return true;
     }
@@ -589,6 +591,23 @@ public class TournamentService : ITournamentService
         tp.CheckedInAt = null;
         await _context.SaveChangesAsync();
         return true;
+    }
+
+    /// <summary>
+    /// Marca atividade do jogador (atividade = participar de torneio) e reativa
+    /// automaticamente quem foi inativado por POLÍTICA (não manualmente).
+    /// Não persiste — o chamador faz SaveChanges.
+    /// </summary>
+    private async Task MarkPlayerActivityAsync(Guid playerId)
+    {
+        var player = await _context.Players.FirstOrDefaultAsync(p => p.Id == playerId);
+        if (player == null) return;
+        player.LastActivityAt = DateTime.UtcNow;
+        if (player.MembershipStatus == PlayerMembershipStatus.Inactive && !player.DeactivatedManually)
+        {
+            player.MembershipStatus = PlayerMembershipStatus.Active;
+            player.DeactivatedAt = null;
+        }
     }
 
     public async Task<bool> AddRebuyAsync(Guid tournamentId, Guid playerId)
@@ -1167,6 +1186,14 @@ public class TournamentService : ITournamentService
             IsCheckedIn = tournament.Status != TournamentStatus.Scheduled,
             CheckedInAt = tournament.Status != TournamentStatus.Scheduled ? DateTime.UtcNow : null
         };
+
+        // Atividade = participar de torneio; reativa quem estava inativo por política (não manual).
+        player.LastActivityAt = DateTime.UtcNow;
+        if (player.MembershipStatus == PlayerMembershipStatus.Inactive && !player.DeactivatedManually)
+        {
+            player.MembershipStatus = PlayerMembershipStatus.Active;
+            player.DeactivatedAt = null;
+        }
 
         _context.TournamentPlayers.Add(tournamentPlayer);
         await _context.SaveChangesAsync();
