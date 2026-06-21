@@ -3,7 +3,7 @@ import { useTournamentByInvite, useSelfRegister } from '@/lib/api/hooks/use-tour
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Loader2, Calendar, DollarSign } from 'lucide-react';
+import { Loader2, Calendar, DollarSign, MapPin } from 'lucide-react';
 import { MoneyValue } from '@/components/ui/money-value';
 
 export default function EntrarTorneioRoute() {
@@ -62,6 +62,12 @@ export default function EntrarTorneioRoute() {
               {new Date(tournament.scheduledDateTime).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
             </span>
           </div>
+          {tournament.location ? (
+            <div className="flex items-center text-sm">
+              <MapPin className="mr-3 h-5 w-5 text-gold-400" />
+              <span className="text-foreground/90 font-medium">{tournament.location}</span>
+            </div>
+          ) : null}
           <div className="flex items-center text-sm">
             <DollarSign className="mr-3 h-5 w-5 text-positive" />
             <span className="text-foreground/90 font-medium">
