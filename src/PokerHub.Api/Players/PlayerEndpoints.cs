@@ -21,14 +21,25 @@ public static class PlayerEndpoints
         // GET /api/leagues/{leagueId}/players-list
         leagueGroup.MapGet("/", async (
             Guid leagueId,
+            bool? includeInactive,
             ClaimsPrincipal user,
             ILeagueService leagues,
             IPlayerService players) =>
         {
-            if (!await leagues.CanUserAccessLeagueAsync(leagueId, user.GetUserId()))
+            var uid = user.GetUserId();
+            var inc = includeInactive == true;
+            // includeInactive (telas de admin) exige organizador; lista normal exige acesso.
+            if (inc)
+            {
+                if (!await leagues.IsUserOrganizerAsync(leagueId, uid))
+                    return Results.Forbid();
+            }
+            else if (!await leagues.CanUserAccessLeagueAsync(leagueId, uid))
+            {
                 return Results.Forbid();
+            }
 
-            var list = await players.GetPlayersByLeagueAsync(leagueId);
+            var list = await players.GetPlayersByLeagueAsync(leagueId, inc);
             return Results.Ok(list);
         });
 
@@ -123,6 +134,36 @@ public static class PlayerEndpoints
 
             var (success, _) = await players.DeletePlayerAsync(playerId);
             return success ? Results.NoContent() : Results.NotFound();
+        });
+
+        // POST /api/players/{playerId}/deactivate  (organizador) — inativa sem soft-delete
+        playerGroup.MapPost("/{playerId:guid}/deactivate", async (
+            Guid playerId,
+            ClaimsPrincipal user,
+            ILeagueService leagues,
+            IPlayerService players) =>
+        {
+            var player = await players.GetPlayerByIdAsync(playerId);
+            if (player is null) return Results.NotFound();
+            if (!await leagues.IsUserOrganizerAsync(player.LeagueId, user.GetUserId()))
+                return Results.Forbid();
+            var ok = await players.DeactivatePlayerAsync(playerId);
+            return ok ? Results.NoContent() : Results.NotFound();
+        });
+
+        // POST /api/players/{playerId}/activate  (organizador)
+        playerGroup.MapPost("/{playerId:guid}/activate", async (
+            Guid playerId,
+            ClaimsPrincipal user,
+            ILeagueService leagues,
+            IPlayerService players) =>
+        {
+            var player = await players.GetPlayerByIdAsync(playerId);
+            if (player is null) return Results.NotFound();
+            if (!await leagues.IsUserOrganizerAsync(player.LeagueId, user.GetUserId()))
+                return Results.Forbid();
+            var ok = await players.ActivatePlayerAsync(playerId);
+            return ok ? Results.NoContent() : Results.NotFound();
         });
 
         // POST /api/players/{playerId}/link-user

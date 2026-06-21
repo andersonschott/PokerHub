@@ -5,7 +5,9 @@ namespace PokerHub.Application.Interfaces;
 
 public interface IPlayerService
 {
-    Task<IReadOnlyList<PlayerDto>> GetPlayersByLeagueAsync(Guid leagueId);
+    Task<IReadOnlyList<PlayerDto>> GetPlayersByLeagueAsync(Guid leagueId, bool includeInactive = false);
+    Task<bool> DeactivatePlayerAsync(Guid playerId);
+    Task<bool> ActivatePlayerAsync(Guid playerId);
     Task<PlayerDto?> GetPlayerByIdAsync(Guid playerId);
     Task<PlayerDto?> GetPlayerByUserIdAsync(string userId);
     Task<IReadOnlyList<PlayerDto>> GetAllPlayersByUserAsync(string userId);

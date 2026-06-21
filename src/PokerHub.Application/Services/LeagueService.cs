@@ -70,7 +70,7 @@ public class LeagueService : ILeagueService
         var league = await _context.Leagues
             .Where(l => l.Id == leagueId)
             .Include(l => l.Organizer)
-            .Include(l => l.Players.Where(p => p.IsActive))
+            .Include(l => l.Players.Where(p => p.IsActive && p.MembershipStatus == PlayerMembershipStatus.Active))
                 .ThenInclude(p => p.Participations)
                     .ThenInclude(tp => tp.Tournament)
             .FirstOrDefaultAsync();
@@ -97,6 +97,7 @@ public class LeagueService : ILeagueService
                 p.UserId,
                 p.CreatedAt,
                 p.IsActive,
+                p.MembershipStatus,
                 totalPrizes - totalBuyIns,
                 finishedParticipations.Count,
                 finishedParticipations.Count(tp => tp.Position == 1),
