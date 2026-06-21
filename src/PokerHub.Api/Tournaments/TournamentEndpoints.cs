@@ -60,17 +60,17 @@ public static class TournamentEndpoints
             .RequireAuthorization();
 
         // GET /api/tournaments/by-invite/{inviteCode}
-        // Policy exception (security-reviewed): acessível a qualquer usuário autenticado SEM
-        // membership — é o fluxo de auto-inscrição via código de convite (paridade com
-        // Torneio/Join.razor do Blazor). O código de convite é a credencial de acesso;
-        // não devolver nada além do TournamentDetailDto já exposto aos membros.
+        // Público (AllowAnonymous): landing de convite (deslogado decide entrar/cadastrar) e
+        // modo TV. O código de convite é a credencial de acesso; devolve só o TournamentDetailDto
+        // já exposto aos membros. Paridade com Torneio/Join.razor do Blazor.
         t.MapGet("/by-invite/{inviteCode}", async (
             string inviteCode,
             ITournamentService tournaments) =>
         {
             var tournament = await tournaments.GetTournamentByInviteCodeAsync(inviteCode);
             return tournament is null ? Results.NotFound() : Results.Ok(tournament);
-        });
+        })
+        .AllowAnonymous();
 
         // GET /api/tournaments/{id}
         t.MapGet("/{id:guid}", async (

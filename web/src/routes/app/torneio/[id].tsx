@@ -262,7 +262,7 @@ export default function TorneioDetalheRoute() {
 
   const copyInvite = () => {
     if (!detail) return;
-    const link = `${window.location.origin}/app/torneio/entrar/${detail.inviteCode}`;
+    const link = `${window.location.origin}/torneio/entrar/${detail.inviteCode}`;
     try {
       void navigator.clipboard.writeText(link);
     } catch {

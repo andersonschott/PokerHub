@@ -92,6 +92,8 @@ export default function App() {
                   <Route path="/tv/:inviteCode" element={<TvRoute />} />
                   {/* Convite de liga: landing pública (sem menus) */}
                   <Route path="/liga/entrar/:inviteCode" element={<LigaEntrarRoute />} />
+                  {/* Convite de torneio: landing pública (sem menus) */}
+                  <Route path="/torneio/entrar/:code" element={<EntrarTorneioRoute />} />
                   <Route
                     path="/app"
                     element={
@@ -111,7 +113,6 @@ export default function App() {
                     <Route path="torneio" element={<TorneioRoute />} />
                     <Route path="torneio/dashboard" element={<DashboardRoute />} />
                     <Route path="torneio/novo" element={<NovoTorneioRoute />} />
-                    <Route path="torneio/entrar/:code" element={<EntrarTorneioRoute />} />
                     <Route path="torneio/historico/:tournamentId" element={<HistoricoDetalheRoute />} />
                     {/* :tournamentId depois das estáticas (dashboard/novo) para não capturá-las */}
                     <Route path="torneio/:tournamentId" element={<TorneioDetalheRoute />} />
