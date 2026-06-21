@@ -2,7 +2,7 @@
  * StandingsList — lista de classificação escaneável com uma mão.
  * Port do standings list de Ranking.jsx.
  */
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Trophy } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Avatar } from '@/components/ui/avatar';
 import { MoneyValue } from '@/components/ui/money-value';
@@ -72,14 +72,14 @@ export function StandingsList({ data, sorted, sort, onPick }: StandingsListProps
               <Avatar name={p.name} size={40} />
               <div className="flex-1 min-w-0">
                 <div className="font-sans font-semibold text-[15px]">{p.name}</div>
-                <div className="text-[12px] text-muted-foreground">
-                  {p.tournaments} torneios · {p.wins}×1º
+                <div className="text-[12px] text-muted-foreground flex items-center gap-1.5 min-w-0">
+                  <span className="truncate">{p.tournaments} torneios</span>
+                  <span className="flex items-center gap-1 shrink-0 text-gold-400">
+                    <Trophy className="w-3 h-3" />
+                    {p.wins}
+                  </span>
+                  {p.part != null ? <span className="shrink-0">· {p.part}%</span> : null}
                 </div>
-                {p.part != null ? (
-                  <div className="text-[12px] text-muted-foreground">
-                    {p.part}% de participação
-                  </div>
-                ) : null}
               </div>
               <MetricValue p={p} sort={sort} />
               <ChevronRight className="w-[18px] h-[18px] text-muted-foreground shrink-0" />
