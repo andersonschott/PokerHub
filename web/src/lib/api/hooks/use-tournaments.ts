@@ -242,26 +242,34 @@ export function useRemovePlayerFromTournament(tournamentId: string) {
 }
 
 export function usePauseTournament(tournamentId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => api<void>(`/tournaments/${tournamentId}/pause`, { method: 'POST' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] }),
   });
 }
 
 export function useResumeTournament(tournamentId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => api<void>(`/tournaments/${tournamentId}/resume`, { method: 'POST' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] }),
   });
 }
 
 export function useNextLevel(tournamentId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => api<void>(`/tournaments/${tournamentId}/timer/next-level`, { method: 'POST' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] }),
   });
 }
 
 export function usePrevLevel(tournamentId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => api<void>(`/tournaments/${tournamentId}/timer/prev-level`, { method: 'POST' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] }),
   });
 }
 
