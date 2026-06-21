@@ -116,6 +116,26 @@ export function useLeaguePlayers(id: string) {
   });
 }
 
+/** Dados públicos da liga por convite (landing /liga/entrar). Sem auth. */
+export interface LeagueInviteDto {
+  id: string;
+  name: string;
+  description: string | null;
+  organizerName: string;
+  playerCount: number;
+  tournamentCount: number;
+}
+
+/** GET público /api/leagues/by-invite/{code} — landing de convite (sem auth). */
+export function useLeagueByInvite(inviteCode: string) {
+  return useQuery({
+    queryKey: ['league-invite', inviteCode],
+    queryFn: () => api<LeagueInviteDto>(`/leagues/by-invite/${inviteCode}`),
+    enabled: !!inviteCode,
+    retry: false,
+  });
+}
+
 /** POST /api/leagues — create a new league */
 export function useCreateLeague() {
   const qc = useQueryClient();

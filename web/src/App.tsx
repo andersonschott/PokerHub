@@ -51,6 +51,9 @@ const EntrarTorneioRoute = lazy(() => import('@/routes/app/torneio/entrar'));
 // Detalhe de torneio agendado/próximo (somente leitura)
 const TorneioDetalheRoute = lazy(() => import('@/routes/app/torneio/[id]'));
 
+// Landing pública de convite de liga (sem menus)
+const LigaEntrarRoute = lazy(() => import('@/routes/liga-entrar'));
+
 const RouteFallback = () => (
   <div className="flex min-h-dvh items-center justify-center">
     <div className="animate-ph-pulse text-sm text-muted-foreground">Carregando…</div>
@@ -87,6 +90,8 @@ export default function App() {
                   <Route path="/cadastro" element={<CadastroRoute />} />
                   {/* TV mode: público via invite code */}
                   <Route path="/tv/:inviteCode" element={<TvRoute />} />
+                  {/* Convite de liga: landing pública (sem menus) */}
+                  <Route path="/liga/entrar/:inviteCode" element={<LigaEntrarRoute />} />
                   <Route
                     path="/app"
                     element={

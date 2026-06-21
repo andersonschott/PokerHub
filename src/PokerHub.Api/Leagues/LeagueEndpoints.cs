@@ -11,6 +11,25 @@ public static class LeagueEndpoints
     {
         var group = app.MapGroup("/api/leagues").WithTags("Leagues").RequireAuthorization();
 
+        // GET público (landing de convite): dados básicos da liga por código, sem auth.
+        // Só campos públicos — não expõe inviteCode, financeiro nem organizerId.
+        app.MapGet("/api/leagues/by-invite/{inviteCode}", async (string inviteCode, ILeagueService leagues) =>
+        {
+            var league = await leagues.GetLeagueByInviteCodeAsync(inviteCode);
+            if (league is null) return Results.NotFound();
+            return Results.Ok(new
+            {
+                league.Id,
+                league.Name,
+                league.Description,
+                league.OrganizerName,
+                league.PlayerCount,
+                league.TournamentCount,
+            });
+        })
+        .WithTags("Leagues")
+        .AllowAnonymous();
+
         // Minhas ligas (organizador + jogador), sem duplicatas.
         group.MapGet("/", async (ClaimsPrincipal user, ILeagueService leagues) =>
         {

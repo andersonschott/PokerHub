@@ -2,7 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '@/lib/api/client';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,11 @@ type AuthResponse = {
 export function LoginForm() {
   const { setSession } = useAuth();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  // returnUrl só é aceito se for caminho interno (evita open-redirect).
+  const rawReturn = params.get('returnUrl');
+  const returnUrl =
+    rawReturn && rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : '/app';
   const {
     register,
     handleSubmit,
@@ -44,7 +49,7 @@ export function LoginForm() {
         name: resp.name,
         email: resp.email,
       });
-      navigate('/app', { replace: true });
+      navigate(returnUrl, { replace: true });
     },
   });
 
@@ -90,7 +95,10 @@ export function LoginForm() {
 
       <p className="text-center text-sm text-muted-foreground">
         Primeira vez na mesa?{' '}
-        <Link to="/cadastro" className="font-medium text-primary hover:underline">
+        <Link
+          to={`/cadastro${rawReturn ? `?returnUrl=${encodeURIComponent(returnUrl)}` : ''}`}
+          className="font-medium text-primary hover:underline"
+        >
           Criar conta
         </Link>
       </p>
