@@ -11,7 +11,7 @@ interface BlindTableProps {
   variant?: 'list' | 'table';
 }
 
-function BlindListRow({ r, last }: { r: BlindRow; last: boolean }) {
+function BlindListRow({ r, num, last }: { r: BlindRow; num: number | null; last: boolean }) {
   const isBreak = r.type === 'intervalo';
   return (
     <div
@@ -22,7 +22,7 @@ function BlindListRow({ r, last }: { r: BlindRow; last: boolean }) {
       )}
     >
       <span className="w-[26px] font-mono font-bold text-[12.5px] text-muted-foreground shrink-0">
-        {r.level}
+        {num ?? ''}
       </span>
       {isBreak ? (
         <span className="flex-1 font-sans font-semibold text-[12.5px] text-warning uppercase tracking-[0.05em]">
@@ -44,6 +44,10 @@ function BlindListRow({ r, last }: { r: BlindRow; last: boolean }) {
 }
 
 export function BlindTable({ rows, variant = 'list' }: BlindTableProps) {
+  // Numeração de jogo DERIVADA: o intervalo não recebe número (1, 2, 3, 4, intervalo, 5, ...).
+  let gameCount = 0;
+  const displayNums = rows.map((r) => (r.type === 'intervalo' ? null : ++gameCount));
+
   if (variant === 'table') {
     return (
       <div className="max-h-[320px] overflow-y-auto border border-border rounded-[var(--radius-md)]">
@@ -65,19 +69,19 @@ export function BlindTable({ rows, variant = 'list' }: BlindTableProps) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) =>
+            {rows.map((r, i) =>
               r.type === 'intervalo' ? (
-                <tr key={r.level}>
+                <tr key={i}>
                   <td
                     colSpan={4}
                     className="px-[14px] py-[7px] text-center text-[11.5px] font-sans font-semibold uppercase tracking-[0.07em] text-warning bg-[color-mix(in_oklab,var(--warning)_8%,transparent)]"
                   >
-                    Intervalo · 10 min
+                    Intervalo · {r.min} min
                   </td>
                 </tr>
               ) : (
-                <tr key={r.level} className="border-t border-border">
-                  <td className="px-[14px] py-[9px] font-mono font-bold text-[13px]">{r.level}</td>
+                <tr key={i} className="border-t border-border">
+                  <td className="px-[14px] py-[9px] font-mono font-bold text-[13px]">{displayNums[i]}</td>
                   <td className="px-[14px] py-[9px] text-right font-mono text-[13px] text-gold-400">
                     {r.sb}/{r.bb}
                   </td>
@@ -110,7 +114,7 @@ export function BlindTable({ rows, variant = 'list' }: BlindTableProps) {
         </span>
       </div>
       {rows.map((r, i) => (
-        <BlindListRow key={r.level} r={r} last={i === rows.length - 1} />
+        <BlindListRow key={i} r={r} num={displayNums[i]} last={i === rows.length - 1} />
       ))}
     </div>
   );

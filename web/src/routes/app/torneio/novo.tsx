@@ -27,7 +27,7 @@ import {
   type TournamentDto,
   type TournamentDetailDto,
 } from '@/lib/api/hooks/use-tournaments';
-import { ApiError } from '@/lib/api/client';
+import { ApiError, api } from '@/lib/api/client';
 
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
@@ -38,12 +38,16 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Chips } from '@/components/ui/chips';
 import { BlindTable } from '@/features/tournaments/blind-table';
+import { CustomBlindEditor } from '@/features/tournaments/custom-blind-editor';
 import { PrizeTable } from '@/features/tournaments/prize-table';
 import {
   BLIND_TEMPLATES,
   genBlinds,
   getTemplateConfig,
+  dtoToBlindRows,
+  normalizeBlindOrder,
   type BlindTemplate,
+  type BlindRow,
 } from '@/features/tournaments/blind-utils';
 import {
   parseScheduled,
@@ -79,6 +83,7 @@ interface WizardInitial {
   template: BlindTemplate;
   customMin: number;
   customBreak: number;
+  customLevels: BlindRow[];
   usePrizeTable: boolean;
   prizeMode: PrizeMode;
   positions: number[];
@@ -108,6 +113,7 @@ const CREATE_DEFAULTS: WizardInitial = {
   template: 'regular',
   customMin: 15,
   customBreak: 4,
+  customLevels: genBlinds(getTemplateConfig('regular', 15, 4)),
   usePrizeTable: true,
   prizeMode: 'pct',
   positions: [50, 30, 20],
@@ -142,6 +148,7 @@ function buildEditInitial(d: TournamentDetailDto): WizardInitial {
     template,
     customMin,
     customBreak,
+    customLevels: dtoToBlindRows(d.blindLevels),
     usePrizeTable,
     prizeMode,
     positions,
@@ -324,8 +331,9 @@ function TournamentWizard({ initial, mode, leagueId, tournamentId, pastTournamen
 
   // Step 3 — Blinds
   const [template, setTemplate] = useState<BlindTemplate>(initial.template);
-  const [customMin, setCustomMin] = useState(initial.customMin);
-  const [customBreak, setCustomBreak] = useState(initial.customBreak);
+  const [customMin] = useState(initial.customMin);
+  const [customBreak] = useState(initial.customBreak);
+  const [customLevels, setCustomLevels] = useState<BlindRow[]>(initial.customLevels);
 
   // Step 4 — Premiação
   const [usePrizeTable, setUsePrizeTable] = useState(initial.usePrizeTable);
@@ -333,8 +341,9 @@ function TournamentWizard({ initial, mode, leagueId, tournamentId, pastTournamen
   const [positions, setPositions] = useState(initial.positions);
 
   // Derived
-  const blindCfg = getTemplateConfig(template, customMin, customBreak);
-  const blinds = genBlinds(blindCfg);
+  const blinds = template === 'custom'
+    ? normalizeBlindOrder(customLevels)
+    : genBlinds(getTemplateConfig(template, customMin, customBreak));
   const gamelevels = blinds.filter((b) => b.type === 'jogo').length;
   const totalBlindMins = blinds.reduce((s, b) => s + b.min, 0);
   const prizeTotal = positions.reduce((s, p) => s + (p || 0), 0);
@@ -398,15 +407,42 @@ function TournamentWizard({ initial, mode, leagueId, tournamentId, pastTournamen
     }
   };
 
-  const copyFrom = (pt: TournamentDto) => {
+  const copyFrom = async (pt: TournamentDto) => {
+    setCopied(pt.id);
     if (!isEdit) setName(pt.name);
+    setLocal(pt.location ?? '');
     setBuyIn(String(pt.buyIn));
     setStack(String(pt.startingStack || 10000));
-    setRebuy(pt.rebuyValue !== null && pt.rebuyValue !== undefined);
-    setRebuyVal(String(pt.rebuyValue || pt.buyIn));
-    setAddon(pt.addonValue !== null && pt.addonValue !== undefined);
-    setAddonVal(String(pt.addonValue || pt.buyIn));
-    setCopied(pt.id);
+    setLateCheckin(pt.allowCheckInUntilLevel !== null && pt.allowCheckInUntilLevel !== undefined);
+    setLateLvl(pt.allowCheckInUntilLevel ?? 2);
+    // Detalhe: estrutura de blinds EXATA + valores ricos (rebuy/add-on/prêmio).
+    try {
+      const d = await api<TournamentDetailDto>(`/tournaments/${pt.id}`);
+      setStack(String(d.startingStack));
+      setRebuy(d.rebuyValue !== null && d.rebuyValue !== undefined);
+      setRebuyVal(String(d.rebuyValue ?? d.buyIn));
+      setRebuyStack(String(d.rebuyStack ?? d.startingStack));
+      setRebuyLvl(d.rebuyLimitLevel ?? 4);
+      setAddon(d.addonValue !== null && d.addonValue !== undefined);
+      setAddonVal(String(d.addonValue ?? d.buyIn));
+      setAddonStack(String(d.addonStack ?? d.startingStack));
+      const prize = parsePrizeStructure(d.prizeStructure, d.prizeDistributionType, d.usePrizeTable);
+      setUsePrizeTable(prize.usePrizeTable);
+      setPrizeMode(prize.prizeMode);
+      setPositions(prize.positions);
+      setCustomLevels(dtoToBlindRows(d.blindLevels));
+      setTemplate('custom');
+    } catch {
+      toast.error('Não foi possível copiar a estrutura do torneio.');
+    }
+  };
+
+  // Ao entrar no modo custom a partir de um template, semeia a lista com a estrutura atual.
+  const selectTemplate = (t: BlindTemplate) => {
+    if (t === 'custom' && template !== 'custom') {
+      setCustomLevels(genBlinds(getTemplateConfig(template, customMin, customBreak)));
+    }
+    setTemplate(t);
   };
 
   const numOnly = (setter: (v: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -421,7 +457,7 @@ function TournamentWizard({ initial, mode, leagueId, tournamentId, pastTournamen
     ['Rebuy', rebuy ? <><MoneyValue value={Number(rebuyVal) || 0} cents={false} color="none" size="13.5px" /> · até nível {rebuyLvl}</> : 'não'],
     ['Add-on', addon ? <MoneyValue value={Number(addonVal) || 0} cents={false} color="none" size="13.5px" /> : 'não'],
     ['Check-in tardio', lateCheckin ? `até nível ${lateLvl}` : 'não'],
-    ['Blinds', `${blindCfg.label} · ${blindCfg.min} min · ${gamelevels} níveis`],
+    ['Blinds', `${template === 'custom' ? 'Personalizado' : BLIND_TEMPLATES[template].label} · ${gamelevels} níveis`],
     ['Premiação', usePrizeTable ? 'tabela da liga (50/30/20)' : positions.map((p, i) => `${i + 1}º ${p}${prizeMode === 'pct' ? '%' : ''}`).join(' · ')],
   ];
 
@@ -629,7 +665,7 @@ function TournamentWizard({ initial, mode, leagueId, tournamentId, pastTournamen
                   value={lateLvl}
                   onChange={setLateLvl}
                   min={1}
-                  max={8}
+                  max={20}
                 />
               </div>
             )}
@@ -652,7 +688,7 @@ function TournamentWizard({ initial, mode, leagueId, tournamentId, pastTournamen
                 <button
                   key={tpl}
                   type="button"
-                  onClick={() => setTemplate(tpl)}
+                  onClick={() => selectTemplate(tpl)}
                   className={cn(
                     'flex-1 h-9 rounded-[var(--radius-sm)] border-0 cursor-pointer whitespace-nowrap',
                     'font-sans font-semibold text-[12.5px]',
@@ -674,7 +710,7 @@ function TournamentWizard({ initial, mode, leagueId, tournamentId, pastTournamen
               label="Estrutura"
               options={['turbo', 'regular', 'deep', 'custom']}
               value={template}
-              onChange={setTemplate}
+              onChange={selectTemplate}
               render={(t) =>
                 t === 'custom'
                   ? 'Custom'
@@ -684,38 +720,23 @@ function TournamentWizard({ initial, mode, leagueId, tournamentId, pastTournamen
           </div>
 
           {template === 'custom' && (
-            <Card pad="md">
-              <div className="flex flex-col gap-3">
-                <NumStep
-                  label="Duração de cada nível"
-                  value={customMin}
-                  onChange={setCustomMin}
-                  min={5}
-                  max={45}
-                  suffix=" min"
-                />
-                <NumStep
-                  label="Intervalo a cada"
-                  value={customBreak}
-                  onChange={setCustomBreak}
-                  min={2}
-                  max={8}
-                  suffix=" níveis"
-                />
-              </div>
-            </Card>
+            <CustomBlindEditor levels={customLevels} onChange={setCustomLevels} />
           )}
 
-          {/* Blind table: list on mobile, table on desktop */}
-          <div className="lg:hidden">
-            <BlindTable rows={blinds} variant="list" />
-          </div>
-          <div className="hidden lg:block">
-            <BlindTable rows={blinds} variant="table" />
-          </div>
+          {/* Preview read-only só para templates — no custom o editor já mostra os níveis */}
+          {template !== 'custom' && (
+            <>
+              <div className="lg:hidden">
+                <BlindTable rows={blinds} variant="list" />
+              </div>
+              <div className="hidden lg:block">
+                <BlindTable rows={blinds} variant="table" />
+              </div>
+            </>
+          )}
 
           <p className="text-[12px] text-muted-foreground">
-            {gamelevels} níveis · intervalos de 10 min · duração estimada ~{Math.round(totalBlindMins / 60)}h
+            {gamelevels} níveis · duração estimada ~{Math.round(totalBlindMins / 60)}h
           </p>
         </div>
       )}

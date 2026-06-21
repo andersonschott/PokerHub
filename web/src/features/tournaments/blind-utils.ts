@@ -57,3 +57,31 @@ export function getTemplateConfig(
   }
   return BLIND_TEMPLATES[template];
 }
+
+/** Converte os níveis materializados (DTO do backend) na lista editável do wizard custom. */
+export function dtoToBlindRows(
+  levels: ReadonlyArray<{
+    order: number;
+    smallBlind: number;
+    bigBlind: number;
+    ante: number;
+    durationMinutes: number;
+    isBreak: boolean;
+  }>,
+): BlindRow[] {
+  return [...levels]
+    .sort((a, b) => a.order - b.order)
+    .map((b) => ({
+      level: b.order,
+      sb: b.smallBlind,
+      bb: b.bigBlind,
+      ante: b.ante,
+      min: b.durationMinutes,
+      type: b.isBreak ? 'intervalo' : 'jogo',
+    }));
+}
+
+/** Reatribui `level` como ordem física contínua (1..n, incluindo intervalos) — o que a API espera. */
+export function normalizeBlindOrder(rows: BlindRow[]): BlindRow[] {
+  return rows.map((r, i) => ({ ...r, level: i + 1 }));
+}
