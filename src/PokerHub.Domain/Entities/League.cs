@@ -8,6 +8,7 @@ public class League
     public string InviteCode { get; set; } = string.Empty;
     public string OrganizerId { get; set; } = string.Empty;
     public bool BlockCheckInWithDebt { get; set; }
+    public int? InactivityThresholdMonths { get; set; }  // null = não inativar jogadores automaticamente
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public bool IsActive { get; set; } = true;
 
