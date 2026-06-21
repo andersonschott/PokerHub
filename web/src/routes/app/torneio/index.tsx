@@ -336,6 +336,7 @@ function TorneioVazio({
       {/* Realizados */}
       <RealizadosList
         limit={3}
+        onSelect={(item) => navigate(`/app/torneio/historico/${item.id}`)}
         items={realizados.map((r) => ({
           id: r.id,
           name: r.name,

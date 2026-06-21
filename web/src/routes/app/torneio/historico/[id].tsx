@@ -42,13 +42,15 @@ function DetailPanel({ h, onDuplicate, onViewPayments }: DetailPanelProps) {
       {/* Numbers */}
       <div className="grid grid-cols-3 gap-2.5 mb-4">
         <StatTile
-          value={<MoneyValue value={h.prizePool} cents={false} color="none" size="15px" />}
+          className="px-2.5"
+          valueSize="17px"
+          value={<MoneyValue value={h.prizePool} cents={false} color="none" size="17px" />}
           label="Prize pool"
           tone="emerald"
           center
         />
-        <StatTile value={h.players} label="Jogadores" center />
-        <StatTile value={h.rebuys} label="Rebuys" center />
+        <StatTile className="px-2.5" valueSize="17px" value={h.players} label="Jogadores" center />
+        <StatTile className="px-2.5" valueSize="17px" value={h.rebuys} label="Rebuys" center />
       </div>
 
       {/* Podium */}
@@ -256,7 +258,7 @@ function DesktopHistorico({ tournamentId }: { tournamentId: string }) {
                   variant="primary"
                   icon={Wallet}
                   block
-                  onClick={() => navigate('/app/debitos/pagamentos')}
+                  onClick={() => navigate(`/app/debitos/pagamentos?t=${selectedId}`)}
                 >
                   Ver pagamentos
                 </Button>
@@ -295,7 +297,7 @@ export default function HistoricoDetalheRoute() {
   };
 
   const handleViewPayments = () => {
-    navigate('/app/debitos/pagamentos');
+    navigate(`/app/debitos/pagamentos?t=${tournamentId}`);
   };
 
   return (

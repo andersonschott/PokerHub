@@ -3,12 +3,12 @@
  * Port de RkSort de Ranking.jsx.
  */
 
-export type SortKey = 'profit' | 'roi' | 'itm';
+export type SortKey = 'profit' | 'roi' | 'part';
 
 const OPTS: { k: SortKey; l: string }[] = [
   { k: 'profit', l: 'Lucro' },
   { k: 'roi',    l: 'ROI' },
-  { k: 'itm',    l: 'ITM' },
+  { k: 'part',   l: 'Part.' },
 ];
 
 interface RkSortProps {

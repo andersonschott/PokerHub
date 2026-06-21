@@ -62,7 +62,7 @@ export default function RankingRoute() {
   const isGeral = effectiveId === GERAL;
 
   const seasonLabels = useMemo(
-    () => [...orderedSeasons.map((s) => s.name), GERAL_LABEL],
+    () => [GERAL_LABEL, ...orderedSeasons.map((s) => s.name)],
     [orderedSeasons],
   );
   const currentLabel = isGeral
@@ -90,7 +90,7 @@ export default function RankingRoute() {
     arr.sort((a, b) => {
       if (sort === 'profit') return b.profit - a.profit;
       if (sort === 'roi') return b.roi - a.roi;
-      return b.itm - a.itm;
+      return (b.part ?? 0) - (a.part ?? 0);
     });
     return arr;
   }, [entries, sort]);

@@ -104,7 +104,9 @@ export function PlayerStats({ player: p, rank, onBack }: PlayerStatsProps) {
   const best = detail ? detail.best : p.best;
   const worst = detail ? detail.worst : p.worst;
   const recent = detail ? detail.recent : p.recent ?? [];
-  const chartData: ProfitDatum[] = recent.map((r, i) => ({
+  const RECENT_LIMIT = 10;
+  const recentShown = recent.slice(0, RECENT_LIMIT);
+  const chartData: ProfitDatum[] = recentShown.map((r, i) => ({
     label: String(i + 1),
     name: r.name,
     profit: r.profit,
@@ -139,6 +141,7 @@ export function PlayerStats({ player: p, rank, onBack }: PlayerStatsProps) {
       {/* Hero stats */}
       <div className="grid grid-cols-3 gap-[10px]">
         <StatTile
+          className="px-2.5"
           icon={Target}
           value={p.tournaments}
           label="Torneios"
@@ -146,6 +149,7 @@ export function PlayerStats({ player: p, rank, onBack }: PlayerStatsProps) {
           valueSize="20px"
         />
         <StatTile
+          className="px-2.5"
           icon={Trophy}
           value={p.wins}
           label="Vitórias"
@@ -154,12 +158,13 @@ export function PlayerStats({ player: p, rank, onBack }: PlayerStatsProps) {
           valueSize="20px"
         />
         <StatTile
+          className="px-2.5"
           icon={TrendingUp}
-          value={<MoneyValue value={p.profit} signed cents={false} size="20px" />}
+          value={<MoneyValue value={p.profit} signed cents={false} size="16px" />}
           label="Lucro"
           tone={p.profit >= 0 ? 'positive' : 'negative'}
           center
-          valueSize="20px"
+          valueSize="16px"
         />
       </div>
 
@@ -231,7 +236,7 @@ export function PlayerStats({ player: p, rank, onBack }: PlayerStatsProps) {
               <span className="text-[13px] text-muted-foreground whitespace-nowrap">{label}</span>
               <span className="font-mono font-bold text-[15px] shrink-0">
                 {val != null
-                  ? `${val}%`
+                  ? `${val.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`
                   : statsLoading
                     ? '—'
                     : `${avgPos.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}º`}
@@ -311,7 +316,7 @@ export function PlayerStats({ player: p, rank, onBack }: PlayerStatsProps) {
           {/* Últimos torneios */}
           <SectionLabel>Últimos torneios</SectionLabel>
           <div className="flex flex-col gap-2">
-            {recent.map((r, i) => (
+            {recentShown.map((r, i) => (
               <Card key={i} pad="md">
                 <div className="flex items-center gap-3">
                   <span

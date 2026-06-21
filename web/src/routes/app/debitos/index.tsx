@@ -4,7 +4,7 @@
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowLeftRight, Copy, Check, CheckCheck, Clock, Loader2, QrCode } from 'lucide-react';
+import { ArrowLeft, ArrowLeftRight, ArrowRight, Copy, Check, CheckCheck, Clock, Loader2, QrCode } from 'lucide-react';
 import { toast } from 'sonner';
 import { IconButton } from '@/components/ui/icon-button';
 import { Card } from '@/components/ui/card';
@@ -19,6 +19,9 @@ import {
   useMyCredits,
   useMarkAsPaid,
   useConfirmPayment,
+  useOrganizerPayments,
+  useAdminMarkAsPaid,
+  useAdminConfirmPayment,
   PaymentStatus,
   PaymentType,
 } from '@/lib/api/hooks/use-payments';
@@ -41,7 +44,7 @@ function StatusBadge({ status }: { status: PaymentStatus }) {
 export default function SettlementRoute() {
   const navigate = useNavigate();
 
-  const [tab, setTab] = useState<'pagar' | 'receber'>('pagar');
+  const [tab, setTab] = useState<'pagar' | 'receber' | 'liga'>('pagar');
   const [copied, setCopied] = useState<string | null>(null);
   const [qrFor, setQrFor] = useState<{ key: string; name: string; amount: number } | null>(null);
 
@@ -52,6 +55,13 @@ export default function SettlementRoute() {
   // ---- Mutations ----
   const markPaidMut = useMarkAsPaid();
   const confirmMut = useConfirmPayment();
+
+  // ---- Organizador: pagamentos de toda a liga (gestão) ----
+  const { data: orgPayments } = useOrganizerPayments();
+  const isOrganizer = (orgPayments?.length ?? 0) > 0;
+  const orgPending = orgPayments?.filter((p) => p.status !== PaymentStatus.Confirmed) ?? [];
+  const adminMarkMut = useAdminMarkAsPaid();
+  const adminConfirmMut = useAdminConfirmPayment();
 
   if (isLoadingD || isLoadingC) {
     return (
@@ -90,6 +100,18 @@ export default function SettlementRoute() {
   const confirmCredit = (id: string, fromName: string) => {
     confirmMut.mutate(id, {
       onSuccess: () => toast.success(`Recebimento de ${fromName.split(' ')[0]} confirmado`)
+    });
+  };
+
+  const adminMarkPaid = (id: string, name: string) => {
+    adminMarkMut.mutate(id, {
+      onSuccess: () => toast.success(`${name.split(' ')[0]} marcado como pago`),
+    });
+  };
+
+  const adminConfirm = (id: string, name: string) => {
+    adminConfirmMut.mutate(id, {
+      onSuccess: () => toast.success(`Recebimento de ${name.split(' ')[0]} confirmado`),
     });
   };
 
@@ -143,7 +165,8 @@ export default function SettlementRoute() {
         {([
           { k: 'pagar', l: `A pagar · ${activeDebts.length}` },
           { k: 'receber', l: `A receber · ${activeCredits.length}` },
-        ] as { k: 'pagar' | 'receber'; l: string }[]).map((x) => {
+          ...(isOrganizer ? [{ k: 'liga', l: `Liga · ${orgPending.length}` }] : []),
+        ] as { k: 'pagar' | 'receber' | 'liga'; l: string }[]).map((x) => {
           const active = x.k === tab;
           return (
             <button
@@ -271,6 +294,47 @@ export default function SettlementRoute() {
                 >
                   Confirmar recebimento
                 </Button>
+              ) : null}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* ---- Liga (organizador): gestão de todos os pagamentos ---- */}
+      {tab === 'liga' && (
+        <div className="flex flex-col gap-[10px]">
+          {(orgPayments ?? []).length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">Nenhum pagamento na sua liga.</div>
+          )}
+          {(orgPayments ?? []).map((x) => (
+            <Card key={x.id} pad="md">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis min-w-0">
+                  {x.fromPlayerName.split(' ')[0]}
+                </span>
+                <ArrowRight className="w-[14px] h-[14px] text-muted-foreground shrink-0" />
+                <span className="font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis min-w-0">
+                  {x.toPlayerName.split(' ')[0]}
+                </span>
+                <span className="ml-auto shrink-0">
+                  <StatusBadge status={x.status} />
+                </span>
+              </div>
+              <div className="flex items-center gap-[10px]">
+                <MoneyValue value={x.amount} cents={false} color="none" size="18px" />
+                <span className="text-[12px] text-muted-foreground truncate">{x.tournamentName}</span>
+              </div>
+              {x.status !== PaymentStatus.Confirmed ? (
+                <div className="flex gap-2 mt-[10px]">
+                  {x.status === PaymentStatus.Pending ? (
+                    <Button variant="secondary" size="sm" block onClick={() => adminMarkPaid(x.id, x.fromPlayerName)}>
+                      Pago
+                    </Button>
+                  ) : null}
+                  <Button variant="primary" size="sm" block onClick={() => adminConfirm(x.id, x.fromPlayerName)}>
+                    Confirmar
+                  </Button>
+                </div>
               ) : null}
             </Card>
           ))}

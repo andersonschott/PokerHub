@@ -7,7 +7,7 @@
  * Tabs: Torneios (lista real + Caixinha real) / Jogadores (REAL: useLeaguePlayers).
  * Variante desktop Step 5: grid 2 colunas no lg:.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ChevronsUpDown, Settings2, CalendarPlus, Plus, CalendarClock, PiggyBank, ChevronRight, Users, Sun, Moon, Bell, Trophy } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
@@ -45,7 +45,6 @@ function Segmented({
   const tabs: { key: TabKey; label: string }[] = [
     { key: 'torneios', label: 'Torneios' },
     { key: 'jogadores', label: 'Jogadores' },
-    { key: 'ranking', label: 'Ranking' },
   ];
   return (
     <div className="flex gap-1 bg-secondary p-1 rounded-[var(--radius-md)]">
@@ -116,6 +115,8 @@ export default function LeagueHomeRoute() {
   const { toggle: toggleTheme, theme } = useTheme();
   const { setActiveLeagueId } = useActiveLeague();
   const [tab, setTab] = useState<TabKey>('torneios');
+  const [shownRealizados, setShownRealizados] = useState(6);
+  const moreRef = useRef<HTMLDivElement | null>(null);
 
   const id = leagueId ?? '';
   const { data: league, isLoading: leagueLoading, isError: leagueError } = useLeague(id);
@@ -144,6 +145,19 @@ export default function LeagueHomeRoute() {
   useEffect(() => {
     if (id) setActiveLeagueId(id);
   }, [id, setActiveLeagueId]);
+
+  // Lazy-load incremental dos "Realizados" — carrega mais ao chegar no fim.
+  useEffect(() => {
+    const el = moreRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) {
+        setShownRealizados((n) => Math.min(n + 6, history.length));
+      }
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [tab, history.length, shownRealizados]);
 
   const isOrganizer = league?.organizerId === user?.userId;
 
@@ -263,18 +277,20 @@ export default function LeagueHomeRoute() {
                 Nenhum torneio em andamento
               </div>
               <div className="text-xs text-muted-foreground mt-0.5">
-                Crie o próximo e chame a galera.
+                {isOrganizer ? 'Crie o próximo e chame a galera.' : 'Quando começar, aparece aqui ao vivo.'}
               </div>
             </div>
-            <Button
-              variant="primary"
-              size="sm"
-              icon={Plus}
-              onClick={() => navigate('/app/torneio/novo')}
-              className="shrink-0"
-            >
-              Criar
-            </Button>
+            {isOrganizer ? (
+              <Button
+                variant="primary"
+                size="sm"
+                icon={Plus}
+                onClick={() => navigate('/app/torneio/novo')}
+                className="shrink-0"
+              >
+                Criar
+              </Button>
+            ) : null}
           </div>
         </Card>
       )}
@@ -335,11 +351,11 @@ export default function LeagueHomeRoute() {
 
               <div className="h-[10px]" />
 
-              {/* Realizados (mock) */}
+              {/* Realizados — lazy-load incremental (carrega mais ao rolar) */}
               <SectionTitle icon={CalendarClock}>Realizados</SectionTitle>
               {toursLoading && <div className="text-sm text-muted-foreground">Carregando...</div>}
               {history.length === 0 && !toursLoading && <div className="text-sm text-muted-foreground">Nenhum torneio finalizado.</div>}
-              {history.map((h) => (
+              {history.slice(0, shownRealizados).map((h) => (
                 <Card
                   key={h.id}
                   interactive

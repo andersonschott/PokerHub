@@ -32,7 +32,7 @@ function MetricValue({ p, sort }: { p: RankingEntry; sort: SortKey }) {
   if (sort === 'profit') {
     return <MoneyValue value={p.profit} signed size="15px" />;
   }
-  const v = sort === 'roi' ? p.roi : p.itm;
+  const v = sort === 'roi' ? p.roi : (p.part ?? 0);
   const color =
     sort === 'roi'
       ? v >= 0
@@ -72,9 +72,14 @@ export function StandingsList({ data, sorted, sort, onPick }: StandingsListProps
               <Avatar name={p.name} size={40} />
               <div className="flex-1 min-w-0">
                 <div className="font-sans font-semibold text-[15px]">{p.name}</div>
-                <div className="text-[12px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">
-                  {p.tournaments} torneios{p.part != null ? ` (${p.part}%)` : ''} · {p.wins}×1º · {p.itm}% ITM
+                <div className="text-[12px] text-muted-foreground">
+                  {p.tournaments} torneios · {p.wins}×1º
                 </div>
+                {p.part != null ? (
+                  <div className="text-[12px] text-muted-foreground">
+                    {p.part}% de participação
+                  </div>
+                ) : null}
               </div>
               <MetricValue p={p} sort={sort} />
               <ChevronRight className="w-[18px] h-[18px] text-muted-foreground shrink-0" />
