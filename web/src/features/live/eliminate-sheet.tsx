@@ -2,10 +2,12 @@
  * EliminateSheet — segundo sheet para confirmar quem eliminou o jogador.
  * Port de Dashboard.jsx: lista dos jogadores ativos com Avatar + seleção.
  */
+import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { Sheet } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
+import { SearchField } from '@/components/ui/search-field';
 import type { MockTablePlayer } from '@/mocks/data';
 
 interface EliminateSheetProps {
@@ -23,6 +25,11 @@ export function EliminateSheet({
   onBack,
   onClose,
 }: EliminateSheetProps) {
+  const [q, setQ] = useState('');
+  const list = [...activePlayers]
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+    .filter((p) => p.name.toLowerCase().includes(q.trim().toLowerCase()));
+
   return (
     <Sheet
       open
@@ -32,7 +39,10 @@ export function EliminateSheet({
       fixed
     >
       <div className="flex flex-col gap-2">
-        {activePlayers.map((p) => (
+        {activePlayers.length > 6 ? (
+          <SearchField value={q} onChange={setQ} placeholder="Buscar jogador…" />
+        ) : null}
+        {list.map((p) => (
           <button
             key={p.id}
             type="button"

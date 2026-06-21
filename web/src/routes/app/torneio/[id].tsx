@@ -27,6 +27,7 @@ import { StatTile } from '@/components/ui/stat-tile';
 import { MoneyValue } from '@/components/ui/money-value';
 import { SectionTitle } from '@/components/ui/section-title';
 import { Avatar } from '@/components/ui/avatar';
+import { SearchField } from '@/components/ui/search-field';
 import { cn } from '@/lib/utils';
 
 import { useAuth } from '@/lib/auth-context';
@@ -45,6 +46,10 @@ import {
   TournamentStatus,
 } from '@/lib/api/hooks/use-tournaments';
 import { formatPtBrDate } from '@/routes/app/torneio/historico-map';
+
+// Ordena/filtra seletores de jogador por nome (pt-BR).
+const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'pt-BR');
+const matchesQuery = (name: string, q: string) => name.toLowerCase().includes(q.trim().toLowerCase());
 
 // ---------------------------------------------------------------------------
 // Status → rótulo + tom do badge
@@ -86,7 +91,9 @@ function AddPlayerSheet({
 }) {
   const { data: members } = useLeaguePlayers(leagueId);
   const addMut = useAddPlayerToTournament(tournamentId);
-  const candidates = (members ?? []).filter((m) => !registeredPlayerIds.has(m.id));
+  const [q, setQ] = useState('');
+  const all = (members ?? []).filter((m) => !registeredPlayerIds.has(m.id)).sort(byName);
+  const candidates = q.trim() ? all.filter((m) => matchesQuery(m.name, q)) : all;
 
   const add = (playerId: string, name: string) =>
     addMut.mutate(playerId, {
@@ -96,23 +103,30 @@ function AddPlayerSheet({
 
   return (
     <Sheet open fixed onClose={onClose} title="Adicionar jogador" subtitle="Membros da liga ainda não inscritos">
-      {candidates.length === 0 ? (
+      {all.length === 0 ? (
         <div className="text-[13px] text-muted-foreground">Todos os membros já estão inscritos.</div>
       ) : (
-        <div className="flex flex-col gap-2 max-h-[55vh] overflow-y-auto">
-          {candidates.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              onClick={() => add(m.id, m.name)}
-              className="flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)] border border-border bg-card cursor-pointer text-left"
-            >
-              <Avatar name={m.name} size={32} />
-              <span className="flex-1 min-w-0 font-sans font-semibold text-[14px] truncate">{m.name}</span>
-              <UserPlus className="w-[18px] h-[18px] text-gold-400 shrink-0" />
-            </button>
-          ))}
-        </div>
+        <>
+          <SearchField value={q} onChange={setQ} placeholder="Buscar jogador…" />
+          <div className="flex flex-col gap-2 max-h-[55vh] overflow-y-auto">
+            {candidates.length === 0 ? (
+              <div className="text-[13px] text-muted-foreground">Nenhum jogador encontrado.</div>
+            ) : (
+              candidates.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => add(m.id, m.name)}
+                  className="flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)] border border-border bg-card cursor-pointer text-left"
+                >
+                  <Avatar name={m.name} size={32} />
+                  <span className="flex-1 min-w-0 font-sans font-semibold text-[14px] truncate">{m.name}</span>
+                  <UserPlus className="w-[18px] h-[18px] text-gold-400 shrink-0" />
+                </button>
+              ))
+            )}
+          </div>
+        </>
       )}
     </Sheet>
   );
@@ -138,10 +152,15 @@ function DelegatesSheet({
   const addMut = useAddDelegate(tournamentId);
   const removeMut = useRemoveDelegate(tournamentId);
 
+  const [q, setQ] = useState('');
   const delegateUserIds = new Set((delegates ?? []).map((d) => d.userId));
-  const candidates = (members ?? []).filter(
-    (m) => m.userId && m.userId !== organizerId && !delegateUserIds.has(m.userId),
-  );
+  const currentDelegates = (delegates ?? [])
+    .slice()
+    .sort((a, b) => a.userName.localeCompare(b.userName, 'pt-BR'));
+  const allCandidates = (members ?? [])
+    .filter((m) => m.userId && m.userId !== organizerId && !delegateUserIds.has(m.userId))
+    .sort(byName);
+  const candidates = q.trim() ? allCandidates.filter((m) => matchesQuery(m.name, q)) : allCandidates;
 
   const add = (userId: string, name: string) =>
     addMut.mutate({ userId }, { onSuccess: () => toast.success(`${name.split(' ')[0]} agora é delegado`) });
@@ -153,11 +172,11 @@ function DelegatesSheet({
       <div className="flex flex-col gap-4">
         <div>
           <div className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground mb-2">Delegados atuais</div>
-          {(delegates ?? []).length === 0 ? (
+          {currentDelegates.length === 0 ? (
             <div className="text-[13px] text-muted-foreground">Nenhum delegado ainda.</div>
           ) : (
             <div className="flex flex-col gap-2">
-              {(delegates ?? []).map((d) => (
+              {currentDelegates.map((d) => (
                 <div key={d.id} className="flex items-center gap-3">
                   <Avatar name={d.userName} size={32} />
                   <span className="flex-1 min-w-0 font-sans font-semibold text-[14px] truncate">{d.userName}</span>
@@ -177,23 +196,30 @@ function DelegatesSheet({
 
         <div>
           <div className="text-[11px] uppercase tracking-[0.06em] text-muted-foreground mb-2">Adicionar membro</div>
-          {candidates.length === 0 ? (
+          {allCandidates.length === 0 ? (
             <div className="text-[13px] text-muted-foreground">Nenhum membro com conta disponível.</div>
           ) : (
-            <div className="flex flex-col gap-2 max-h-[40vh] overflow-y-auto">
-              {candidates.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => add(m.userId!, m.name)}
-                  className="flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)] border border-border bg-card cursor-pointer text-left"
-                >
-                  <Avatar name={m.name} size={32} />
-                  <span className="flex-1 min-w-0 font-sans font-semibold text-[14px] truncate">{m.name}</span>
-                  <UserPlus className="w-[18px] h-[18px] text-gold-400 shrink-0" />
-                </button>
-              ))}
-            </div>
+            <>
+              <SearchField value={q} onChange={setQ} placeholder="Buscar membro…" />
+              <div className="flex flex-col gap-2 max-h-[40vh] overflow-y-auto">
+                {candidates.length === 0 ? (
+                  <div className="text-[13px] text-muted-foreground">Nenhum membro encontrado.</div>
+                ) : (
+                  candidates.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => add(m.userId!, m.name)}
+                      className="flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)] border border-border bg-card cursor-pointer text-left"
+                    >
+                      <Avatar name={m.name} size={32} />
+                      <span className="flex-1 min-w-0 font-sans font-semibold text-[14px] truncate">{m.name}</span>
+                      <UserPlus className="w-[18px] h-[18px] text-gold-400 shrink-0" />
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>
