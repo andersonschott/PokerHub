@@ -216,8 +216,28 @@ export function useSelfRegister(tournamentId: string) {
 // ---------------------------------------------------------------------------
 
 export function useStartTournament(tournamentId: string) {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => api<void>(`/tournaments/${tournamentId}/start`, { method: 'POST' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] }),
+  });
+}
+
+export function useAddPlayerToTournament(tournamentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (playerId: string) =>
+      api<void>(`/tournaments/${tournamentId}/players`, { method: 'POST', body: { playerId } }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] }),
+  });
+}
+
+export function useRemovePlayerFromTournament(tournamentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (playerId: string) =>
+      api<void>(`/tournaments/${tournamentId}/players/${playerId}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] }),
   });
 }
 
@@ -254,6 +274,17 @@ export function useCheckInPlayer(tournamentId: string) {
   return useMutation({
     mutationFn: (playerId: string) =>
       api<void>(`/tournaments/${tournamentId}/players/${playerId}/checkin`, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] });
+    },
+  });
+}
+
+export function useCheckoutPlayer(tournamentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (playerId: string) =>
+      api<void>(`/tournaments/${tournamentId}/players/${playerId}/checkout`, { method: 'POST' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] });
     },
