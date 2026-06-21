@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { ThemeProvider } from '@/lib/theme-context';
 import { Toaster } from '@/components/ui/sonner';
 import { Splash } from '@/components/splash';
+import { InstallPrompt } from '@/components/install-prompt';
 import LoginRoute from '@/routes/login';
 import CadastroRoute from '@/routes/cadastro';
 import { AppShell } from '@/components/app-shell/app-shell';
@@ -130,6 +131,7 @@ export default function App() {
               </Suspense>
             </BrowserRouter>
             <Toaster position="top-center" richColors />
+            <InstallPrompt />
             {splash && <Splash onDone={() => setSplash(false)} />}
           </ActiveLeagueProvider>
         </AuthProvider>
