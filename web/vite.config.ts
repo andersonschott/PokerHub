@@ -14,10 +14,15 @@ export default defineConfig({
     port: 5173,
     proxy: {
       // Tudo sob /api vai para a PokerHub.Api local (launchSettings: http://localhost:5100).
-      // /hubs (SignalR) entra só na Fase 4.
       '/api': {
         target: 'http://localhost:5100',
         changeOrigin: true,
+      },
+      // SignalR do timer (hub em /hub/tournaments) — precisa de WebSocket.
+      '/hub': {
+        target: 'http://localhost:5100',
+        changeOrigin: true,
+        ws: true,
       },
     },
   },

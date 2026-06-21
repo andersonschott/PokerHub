@@ -33,7 +33,9 @@ export function useTournamentClock(tournamentId: string) {
     // relógio do torneio anterior até o 1º sync chegar.
     setState(LOADING_CLOCK_STATE);
 
-    const url = import.meta.env.VITE_API_URL + '/hub/tournaments';
+    // Mesma base do cliente HTTP (base.ts): vazio em dev → '/hub/tournaments' (proxy Vite, ws),
+    // origem da API em prod. (Antes usava VITE_API_URL, que não existe → 'undefined/hub...'.)
+    const url = (import.meta.env.VITE_API_BASE_URL ?? '') + '/hub/tournaments';
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(url)
       .withAutomaticReconnect()
