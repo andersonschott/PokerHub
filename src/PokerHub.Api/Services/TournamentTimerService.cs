@@ -231,6 +231,11 @@ public class TournamentTimerService : BackgroundService
             CurrentLevel = timerState.CurrentLevel,
             CurrentBlindLevel = currentBlind?.Order,
             NextBlindLevel = nextBlind?.Order,
+            // Derived game-level number: count only non-break levels up to the current Order, so an
+            // interval never inflates the displayed number (1,2,3,4,BREAK,5...). IsBreak lets the UI
+            // render "Intervalo" instead of "Nível N" while on a break.
+            IsBreak = currentBlind?.IsBreak ?? false,
+            CurrentLevelDisplay = tournament.BlindLevels.Count(bl => !bl.IsBreak && bl.Order <= timerState.CurrentLevel),
             CurrentBlind = MapBlind(currentBlind),
             NextBlind = MapBlind(nextBlind),
             // No anchor while paused: a non-null LevelEndsAtUtc would make the client tick down a
@@ -522,6 +527,9 @@ public class TournamentTimerService : BackgroundService
             CurrentLevel = timerState.CurrentLevel,
             CurrentBlindLevel = currentBlind?.Order,
             NextBlindLevel = nextBlind?.Order,
+            // See SyncState: derived non-break game number + break flag for the initial state fetch.
+            IsBreak = currentBlind?.IsBreak ?? false,
+            CurrentLevelDisplay = tournament.BlindLevels.Count(bl => !bl.IsBreak && bl.Order <= timerState.CurrentLevel),
             CurrentBlind = MapBlind(currentBlind),
             NextBlind = MapBlind(nextBlind),
             // See SyncState: null anchor while paused (client must not tick down a frozen level) and

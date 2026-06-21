@@ -16,7 +16,15 @@ export interface BlindInfo {
 }
 
 export interface MockClockState {
+  /** Posição física (Order) do passo atual — inclui intervalos. Continua ponteiro do timer. */
   level: number;
+  /**
+   * Número de nível de JOGO derivado: conta apenas níveis !isBreak até a posição atual, de modo
+   * que o intervalo não infla a numeração (1,2,3,4,INTERVALO,5...). Usar este na exibição.
+   */
+  displayLevel: number;
+  /** True quando o passo atual é um intervalo (exibir "Intervalo" em vez de "Nível N"). */
+  isBreak: boolean;
   remainingSeconds: number;
   levelSeconds: number;
   paused: boolean;
@@ -85,6 +93,9 @@ export function useMockClock() {
 
   const state: MockClockState = {
     level,
+    // Mock não modela intervalos: o número de jogo coincide com a posição física.
+    displayLevel: level,
+    isBreak: false,
     remainingSeconds,
     levelSeconds: t.levelSeconds,
     paused,

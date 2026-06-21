@@ -124,8 +124,16 @@ export function restFallbackClock(t: RestClockInput): MockClockState {
   if (elapsedPct < 0) elapsedPct = 0;
   if (elapsedPct > 100) elapsedPct = 100;
 
+  // Número de jogo derivado (mesma fórmula do backend): conta só níveis !isBreak até a posição
+  // atual, para o intervalo não inflar a numeração. O fallback REST não recebe o campo do DTO,
+  // então derivamos aqui a partir da lista real de blindLevels do torneio.
+  const physicalOrder = current?.order ?? t.currentLevel;
+  const displayLevel = levels.filter((b) => !b.isBreak && b.order <= physicalOrder).length;
+
   return {
-    level: current?.order ?? t.currentLevel,
+    level: physicalOrder,
+    displayLevel,
+    isBreak: current?.isBreak ?? false,
     remainingSeconds: remaining,
     levelSeconds,
     paused: t.status !== TournamentStatus.InProgress,

@@ -25,6 +25,10 @@ export interface TimerStateSyncDto {
   tournamentId: string;
   status: string;
   currentLevel: number;
+  /** Número de jogo derivado pelo backend (intervalo não conta). Ver TimerStateSyncDto.cs. */
+  currentLevelDisplay?: number;
+  /** True quando o passo atual é um intervalo/break. */
+  isBreak?: boolean;
   currentBlindLevel?: number;
   nextBlindLevel?: number;
   currentBlind?: BlindLevelDto | null;
@@ -37,6 +41,8 @@ export interface TimerStateSyncDto {
 /** Estado de "carregando": forma válida de MockClockState, porém sem dados reais (zero mock). */
 export const LOADING_CLOCK_STATE: MockClockState = {
   level: 0,
+  displayLevel: 0,
+  isBreak: false,
   remainingSeconds: 0,
   levelSeconds: 0,
   paused: true,
@@ -124,6 +130,10 @@ export function projectClock(
 
   return {
     level: dto.currentLevel,
+    // Número de jogo derivado pelo backend (intervalo não conta). Fallbacks defensivos para
+    // payloads antigos: displayLevel ← currentLevel; isBreak ← flag do blind atual, senão false.
+    displayLevel: dto.currentLevelDisplay ?? dto.currentLevel,
+    isBreak: dto.isBreak ?? dto.currentBlind?.isBreak ?? false,
     remainingSeconds: roundedRemaining,
     levelSeconds,
     paused,

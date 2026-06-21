@@ -105,7 +105,7 @@ function TimerView({ tournamentId }: { tournamentId: string }) {
         timeRemainingSeconds: tDetail.timeRemainingSeconds,
         blindLevels: tDetail.blindLevels,
       });
-  const { level, remainingSeconds, levelSeconds, paused, blinds, nextBlinds, elapsedPct } = clock;
+  const { displayLevel, isBreak, remainingSeconds, levelSeconds, paused, blinds, nextBlinds, elapsedPct } = clock;
 
   // players → shape de UI (mesmo transform de dashboard.tsx, já extraído/testado em tv-projection).
   const table = mapPlayersToTable(tDetail.players);
@@ -142,7 +142,7 @@ function TimerView({ tournamentId }: { tournamentId: string }) {
           className="font-sans text-[13px] font-semibold uppercase tracking-[0.18em]"
           style={{ color: paused ? 'var(--warning)' : 'var(--emerald-400)' } as CSSProperties}
         >
-          {paused ? 'Pausado' : `Nível ${level}`}
+          {paused ? 'Pausado' : isBreak ? 'Intervalo' : `Nível ${displayLevel}`}
         </span>
       </div>
 

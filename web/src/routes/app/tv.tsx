@@ -129,7 +129,7 @@ export default function TvRoute() {
         timeRemainingSeconds: tReal.timeRemainingSeconds,
         blindLevels: tReal.blindLevels,
       });
-  const { level, remainingSeconds, paused, blinds, nextBlinds } = clock;
+  const { displayLevel, isBreak, remainingSeconds, paused, blinds, nextBlinds } = clock;
   const phase = tvPhase(tReal.status, hasLive);
 
   const table = mapPlayersToTable(tReal.players);
@@ -283,7 +283,7 @@ export default function TvRoute() {
           className="font-sans font-bold uppercase tracking-[0.3em] text-emerald-400"
           style={{ fontSize: 'clamp(18px, 5cqi, 28px)' } as CSSProperties}
         >
-          Nível {level}
+          {isBreak ? 'Intervalo' : `Nível ${displayLevel}`}
         </div>
 
         {/* Countdown (ao vivo) ou estado da fase (aguardando / encerrado) */}
