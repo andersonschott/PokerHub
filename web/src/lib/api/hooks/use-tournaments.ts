@@ -161,11 +161,17 @@ export function useTournament(id: string) {
   });
 }
 
-export function useTournamentByInvite(inviteCode: string) {
+export function useTournamentByInvite(
+  inviteCode: string,
+  options?: { refetchInterval?: number | false },
+) {
   return useQuery({
     queryKey: ['tournament-invite', inviteCode],
     queryFn: () => api<TournamentDetailDto>(`/tournaments/by-invite/${inviteCode}`),
     enabled: !!inviteCode,
+    // TV: jogadores/prêmios não chegam pelo SignalR (só o timer) → poll para refletir
+    // rebuys/eliminações/prize pool ao vivo.
+    refetchInterval: options?.refetchInterval,
   });
 }
 

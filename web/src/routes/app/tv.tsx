@@ -21,7 +21,6 @@ import { useTournamentClock } from '@/lib/api/hooks/use-tournament-clock';
 import {
   mapPlayersToTable,
   aggregateStats,
-  eliminatedFromTable,
   normalizePrizes,
   restFallbackClock,
   isLiveClock,
@@ -55,7 +54,11 @@ export default function TvRoute() {
   const { inviteCode } = useParams<{ inviteCode: string }>();
 
   // Fetch from API using public invite code endpoint (TournamentDetailDto: players[], blindLevels[], prizes[]).
-  const { data: tReal, isLoading, error } = useTournamentByInvite(inviteCode ?? '');
+  // Poll a cada 5s: jogadores ativos e premiação (prize pool/prêmios) não vêm pelo SignalR (só o timer),
+  // então o polling os mantém ao vivo na TV (rebuys/eliminações refletem em até 5s).
+  const { data: tReal, isLoading, error } = useTournamentByInvite(inviteCode ?? '', {
+    refetchInterval: 5000,
+  });
 
   // Clock fiel via SignalR. Id vazio enquanto carrega → hook não conecta (no-op).
   const { state: liveClock } = useTournamentClock(tReal?.id ?? '');
@@ -134,7 +137,7 @@ export default function TvRoute() {
 
   const table = mapPlayersToTable(tReal.players);
   const stats = aggregateStats(table);
-  const eliminated = eliminatedFromTable(table);
+  const inPlay = table.filter((p) => p.status === 'in');
   const prizes = normalizePrizes(tReal.prizes);
 
   const podiumColors = [
@@ -361,24 +364,33 @@ export default function TvRoute() {
             </div>
           </div>
 
-          {/* Eliminations list */}
+          {/* Jogadores ativos (ao vivo) */}
           <div
-            className="rounded-2xl p-5 flex-1 bg-card"
+            className="rounded-2xl p-5 flex-1 min-h-0 bg-card flex flex-col"
             style={{ border: '1px solid var(--border)' } as CSSProperties}
           >
             <div className="text-[14px] text-muted-foreground uppercase tracking-[0.06em] mb-3">
-              Eliminações
+              Jogadores ativos
             </div>
-            <div className="flex flex-col gap-2.5">
-              {eliminated.length === 0 ? (
-                <div className="text-[15px] text-muted-foreground">Ninguém eliminado ainda.</div>
+            <div className="flex flex-col gap-2.5 overflow-y-auto">
+              {inPlay.length === 0 ? (
+                <div className="text-[15px] text-muted-foreground">Ninguém na mesa.</div>
               ) : (
-                eliminated.map((p) => (
+                inPlay.map((p) => (
                   <div key={p.id} className="flex items-center gap-3">
-                    <span className="font-mono font-bold text-[18px] text-muted-foreground w-[34px]">
-                      {p.place}º
+                    <span
+                      aria-hidden
+                      className="shrink-0 w-2.5 h-2.5 rounded-full"
+                      style={{ background: 'var(--emerald-400)' } as CSSProperties}
+                    />
+                    <span className="font-sans font-semibold text-[19px] flex-1 min-w-0 truncate">
+                      {p.name}
                     </span>
-                    <span className="font-sans font-semibold text-[19px]">{p.name}</span>
+                    {p.rebuys > 0 ? (
+                      <span className="font-mono text-[15px] text-muted-foreground shrink-0">
+                        {p.rebuys}R
+                      </span>
+                    ) : null}
                   </div>
                 ))
               )}
