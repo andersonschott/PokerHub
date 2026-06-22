@@ -595,7 +595,7 @@ public static class TournamentEndpoints
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
 
-            if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
+            if (!await leagues.CanUserAccessLeagueAsync(existing.LeagueId, user.GetUserId()))
                 return Results.Forbid();
 
             var delegates = await tournaments.GetDelegatesAsync(id);

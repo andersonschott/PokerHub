@@ -2,7 +2,7 @@
  * /app/debitos/pagamentos — Pagamentos do torneio (pós-encerramento).
  * Refatorado na Fase 5 para consumir a API Real.
  */
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -171,7 +171,7 @@ export default function PagamentosRoute() {
   const tName = tournament.name;
   const shareModel = buildShareCardModel(tName, tournament.scheduledDateTime, aggregated);
 
-  const downloadPng = useCallback((blob: Blob, filename: string) => {
+  const downloadPng = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -180,9 +180,9 @@ export default function PagamentosRoute() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
-  }, []);
+  };
 
-  const handleShare = useCallback(async () => {
+  const handleShare = async () => {
     if (!shareCardRef.current) return;
     setIsSharing(true);
     try {
@@ -214,7 +214,7 @@ export default function PagamentosRoute() {
     } finally {
       setIsSharing(false);
     }
-  }, [shareModel.title, downloadPng]);
+  };
 
   // ---- Derived ----
   const pending = aggregated.filter((g) => !g.allConfirmed && g.hasPending).length;
