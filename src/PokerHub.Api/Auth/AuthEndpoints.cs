@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using PokerHub.Api.Common;
 using PokerHub.Domain.Entities;
 using PokerHub.Infrastructure.Data;
 
@@ -161,6 +163,50 @@ public static class AuthEndpoints
             }
             return Results.NoContent();
         });
+
+        app.MapPost("/api/auth/change-password", async (
+            ChangePasswordRequest req,
+            ClaimsPrincipal principal,
+            UserManager<User> userManager) =>
+        {
+            if (string.IsNullOrWhiteSpace(req.CurrentPassword) || string.IsNullOrWhiteSpace(req.NewPassword))
+            {
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["changePassword"] = ["Senha atual e nova senha são obrigatórias."]
+                });
+            }
+
+            var user = await userManager.FindByIdAsync(principal.GetUserId());
+            if (user is null) return Results.Unauthorized();
+
+            var result = await userManager.ChangePasswordAsync(user, req.CurrentPassword, req.NewPassword);
+            if (!result.Succeeded)
+            {
+                var errors = result.Errors
+                    .Select(e => e.Code switch
+                    {
+                        "PasswordMismatch" => "Senha atual incorreta.",
+                        "PasswordTooShort" => "Senha muito curta.",
+                        "PasswordRequiresNonAlphanumeric" => "Senha deve conter ao menos um caractere especial.",
+                        "PasswordRequiresDigit" => "Senha deve conter ao menos um número.",
+                        "PasswordRequiresLower" => "Senha deve conter ao menos uma letra minúscula.",
+                        "PasswordRequiresUpper" => "Senha deve conter ao menos uma letra maiúscula.",
+                        "PasswordRequiresUniqueChars" => "Senha deve conter mais caracteres distintos.",
+                        _ => "Requisição inválida."
+                    })
+                    .ToArray();
+
+                return Results.ValidationProblem(new Dictionary<string, string[]>
+                {
+                    ["changePassword"] = errors
+                });
+            }
+
+            return Results.NoContent();
+        })
+        .WithTags("Auth")
+        .RequireAuthorization();
     }
 
     private static async Task<AuthResponse> IssueTokensAsync(
