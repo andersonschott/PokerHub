@@ -196,6 +196,10 @@ export default function PagamentosRoute() {
         backgroundColor: '#191816',
         width: node.offsetWidth,
         height: node.offsetHeight,
+        // ShareCard fica off-screen (position:fixed; left:-9999px); o html-to-image copia
+        // esse deslocamento pro clone e o conteudo rasteriza fora do viewport (imagem so com
+        // o fundo). Sobrescreve a posicao do clone para 0,0 e o conteudo volta a aparecer.
+        style: { position: 'static', left: '0px', top: '0px', margin: '0' },
       };
       // html-to-image costuma retornar imagem vazia/preta na 1ª chamada
       // (corrida de carregamento de recursos) — renderiza 2x e usa a última.
