@@ -2,10 +2,11 @@
  * Perfil — conta + preferências.
  * Port fiel de App.jsx#Perfil (kit) + DesktopPerfil.jsx.
  * Dados REAIS: useAuth().user (nome / e-mail).
- * Stats mock: lucro temporada / ITM.
- * Ações REAIS: toggle tema (useTheme), sair (useAuth().clear() → /login).
+ * Stats REAIS: lucro temporada / ITM via ranking da temporada ativa.
+ * Ações REAIS: toggle tema (useTheme), sair (useAuth().clear() → /login),
+ *              PIX/WhatsApp via /api/me/contact, troca de senha.
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   MoonStar,
@@ -25,7 +26,17 @@ import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { useJackpotContributions, useJackpotUsages } from '@/lib/api/hooks/use-jackpot';
+import { useActiveSeason } from '@/lib/api/hooks/use-seasons';
+import { useSeasonRanking } from '@/lib/api/hooks/use-rankings';
+import { useLeaguePlayers } from '@/lib/api/hooks/use-leagues';
+import {
+  useMyContact,
+  useUpdateMyContact,
+  useChangePassword,
+  type MyContactDto,
+} from '@/lib/api/hooks/use-me';
 import { jackpotBalance } from '@/features/jackpot/jackpot-balance';
+import { resolveProfileStats } from '@/features/profile/profile-stats';
 import { Avatar } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,9 +45,10 @@ import { StatTile } from '@/components/ui/stat-tile';
 import { MoneyValue } from '@/components/ui/money-value';
 import { Input } from '@/components/ui/input';
 
-
 const STORAGE_PIX = 'ph.pix_key';
 const STORAGE_WHATSAPP = 'ph.whatsapp';
+
+type SheetKind = 'pix' | 'whatsapp' | 'senha' | null;
 
 function fmtPhone(v: string): string {
   const d = v.replace(/\D/g, '').slice(0, 11);
@@ -60,8 +72,6 @@ function saveStorage(key: string, value: string): void {
     // storage unavailable
   }
 }
-
-type SheetKind = 'pix' | 'whatsapp' | null;
 
 // ----------------------------------------------------------------------------
 // Shared row item component
@@ -127,24 +137,56 @@ export default function PerfilRoute() {
   const [sheet, setSheet] = useState<SheetKind>(null);
   const [draft, setDraft] = useState('');
 
+  const [curPw, setCurPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [pwError, setPwError] = useState<string | null>(null);
+
   const { activeLeagueId } = useActiveLeague();
   const { data: contributions } = useJackpotContributions(activeLeagueId);
   const { data: usages } = useJackpotUsages(activeLeagueId);
   const caixinhaBalance = jackpotBalance(contributions, usages);
 
+  const { data: activeSeason } = useActiveSeason(activeLeagueId ?? '');
+  const { data: seasonRanking } = useSeasonRanking(activeSeason?.id ?? '');
+  const { data: leaguePlayers } = useLeaguePlayers(activeLeagueId ?? '');
+  const stats = resolveProfileStats(leaguePlayers, seasonRanking, user?.userId);
+
+  const { data: myContact } = useMyContact();
+  const updateContact = useUpdateMyContact();
+  const changePassword = useChangePassword();
+
+  useEffect(() => {
+    if (!myContact) return;
+    if (myContact.pixKey != null) {
+      setPix(myContact.pixKey);
+      saveStorage(STORAGE_PIX, myContact.pixKey);
+    }
+    if (myContact.phone != null) {
+      setWhatsapp(myContact.phone);
+      saveStorage(STORAGE_WHATSAPP, myContact.phone);
+    }
+  }, [myContact]);
+
   const openSheet = (kind: SheetKind) => {
     setDraft(kind === 'pix' ? pix : whatsapp);
+    setPwError(null);
     setSheet(kind);
   };
 
   const saveSheet = () => {
-    if (sheet === 'pix') {
-      setPix(draft.trim());
-      saveStorage(STORAGE_PIX, draft.trim());
-    } else if (sheet === 'whatsapp') {
-      setWhatsapp(draft);
-      saveStorage(STORAGE_WHATSAPP, draft);
-    }
+    const nextPix = sheet === 'pix' ? draft.trim() : pix;
+    const nextPhone = sheet === 'whatsapp' ? draft : whatsapp;
+    const payload: MyContactDto = {
+      pixKey: nextPix || null,
+      pixKeyType: myContact?.pixKeyType ?? null,
+      phone: nextPhone || null,
+    };
+    updateContact.mutate(payload);
+    setPix(nextPix);
+    saveStorage(STORAGE_PIX, nextPix);
+    setWhatsapp(nextPhone);
+    saveStorage(STORAGE_WHATSAPP, nextPhone);
     setSheet(null);
   };
 
@@ -165,19 +207,25 @@ export default function PerfilRoute() {
         <div className="text-[13px] text-muted-foreground">{displayEmail}</div>
       </div>
 
-      {/* Stat cards — mock */}
+      {/* Stat cards — reais (temporada ativa) */}
       <div className="grid grid-cols-2 gap-2.5 mb-4">
         <StatTile
           icon={TrendingUp}
-          value={<MoneyValue value={1840} signed cents={false} size="19px" />}
+          value={
+            stats.profit === null ? (
+              '—'
+            ) : (
+              <MoneyValue value={stats.profit} signed cents={false} size="19px" />
+            )
+          }
           label="Lucro na temporada"
-          tone="positive"
+          tone={stats.profit !== null && stats.profit >= 0 ? 'positive' : undefined}
           center
           valueSize="19px"
         />
         <StatTile
           icon={Target}
-          value="62%"
+          value={stats.itmRate === null ? '—' : `${Math.round(stats.itmRate)}%`}
           label="ITM"
           center
           valueSize="19px"
@@ -198,15 +246,21 @@ export default function PerfilRoute() {
           <div className="grid grid-cols-2 gap-2.5">
             <StatTile
               icon={TrendingUp}
-              value={<MoneyValue value={1840} signed cents={false} size="19px" />}
+              value={
+                stats.profit === null ? (
+                  '—'
+                ) : (
+                  <MoneyValue value={stats.profit} signed cents={false} size="19px" />
+                )
+              }
               label="Lucro na temporada"
-              tone="positive"
+              tone={stats.profit !== null && stats.profit >= 0 ? 'positive' : undefined}
               center
               valueSize="19px"
             />
             <StatTile
               icon={Target}
-              value="62%"
+              value={stats.itmRate === null ? '—' : `${Math.round(stats.itmRate)}%`}
               label="ITM"
               center
               valueSize="19px"
@@ -275,6 +329,18 @@ export default function PerfilRoute() {
           />
 
           <ProfileRow
+            icon={<KeyRound />}
+            label="Alterar senha"
+            onClick={() => {
+              setCurPw('');
+              setNewPw('');
+              setConfirmPw('');
+              setPwError(null);
+              setSheet('senha');
+            }}
+          />
+
+          <ProfileRow
             icon={<Bell />}
             label="Notificações"
             trailing="Em breve"
@@ -327,6 +393,12 @@ export default function PerfilRoute() {
                 variant="ghost"
                 block
                 onClick={() => {
+                  const payload: MyContactDto = {
+                    pixKey: null,
+                    pixKeyType: myContact?.pixKeyType ?? null,
+                    phone: whatsapp || null,
+                  };
+                  updateContact.mutate(payload);
                   setPix('');
                   saveStorage(STORAGE_PIX, '');
                   setSheet(null);
@@ -376,6 +448,12 @@ export default function PerfilRoute() {
                 variant="ghost"
                 block
                 onClick={() => {
+                  const payload: MyContactDto = {
+                    pixKey: pix || null,
+                    pixKeyType: myContact?.pixKeyType ?? null,
+                    phone: null,
+                  };
+                  updateContact.mutate(payload);
                   setWhatsapp('');
                   saveStorage(STORAGE_WHATSAPP, '');
                   setSheet(null);
@@ -384,6 +462,62 @@ export default function PerfilRoute() {
                 Remover número
               </Button>
             ) : null}
+          </div>
+        </Sheet>
+      )}
+
+      {/* Change password sheet */}
+      {sheet === 'senha' && (
+        <Sheet
+          fixed
+          open
+          onClose={() => setSheet(null)}
+          title="Alterar senha"
+          subtitle="Use uma senha forte que você não usa em outro lugar"
+        >
+          <div className="flex flex-col gap-3.5">
+            <Input
+              type="password"
+              placeholder="Senha atual"
+              value={curPw}
+              onChange={(e) => setCurPw(e.target.value)}
+              autoFocus
+            />
+            <Input
+              type="password"
+              placeholder="Nova senha"
+              value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
+            />
+            <Input
+              type="password"
+              placeholder="Confirmar nova senha"
+              value={confirmPw}
+              onChange={(e) => setConfirmPw(e.target.value)}
+            />
+            {pwError ? <p className="text-[12px] text-negative">{pwError}</p> : null}
+            <Button
+              variant="primary"
+              block
+              disabled={changePassword.isPending || newPw.length < 6 || curPw.length < 1}
+              onClick={() => {
+                setPwError(null);
+                if (newPw !== confirmPw) {
+                  setPwError('A confirmação não confere.');
+                  return;
+                }
+                changePassword.mutate(
+                  { currentPassword: curPw, newPassword: newPw },
+                  {
+                    onSuccess: () => setSheet(null),
+                    onError: (err) =>
+                      setPwError(err instanceof Error ? err.message : 'Não foi possível alterar a senha.'),
+                  },
+                );
+              }}
+            >
+              {changePassword.isPending ? 'Salvando…' : 'Salvar nova senha'}
+            </Button>
           </div>
         </Sheet>
       )}
