@@ -4,7 +4,7 @@
  */
 import { useState, useCallback, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Settings2, Flag, Users, Trophy, Repeat, Undo2, Loader2, MonitorPlay, UserCheck } from 'lucide-react';
+import { ArrowLeft, Settings2, Flag, Users, Trophy, Repeat, Undo2, Loader2, MonitorPlay, UserCheck, Receipt, Plus, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -17,16 +17,33 @@ import { ActionSheet } from '@/features/live/action-sheet';
 import { EliminateSheet } from '@/features/live/eliminate-sheet';
 import { Sheet } from '@/components/ui/sheet';
 
-import { useTournaments, useTournament, TournamentStatus, usePauseTournament, useResumeTournament, useNextLevel, usePrevLevel, useCheckInPlayer, useEliminatePlayer, useAddRebuy, useSetAddon, useUndoElimination, useFinishTournament, type FinishPlayerPosition } from '@/lib/api/hooks/use-tournaments';
+import { useTournaments, useTournament, TournamentStatus, usePauseTournament, useResumeTournament, useNextLevel, usePrevLevel, useCheckInPlayer, useEliminatePlayer, useAddRebuy, useSetAddon, useUndoElimination, useFinishTournament, useDelegates, type FinishPlayerPosition } from '@/lib/api/hooks/use-tournaments';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { useTournamentClock } from '@/lib/api/hooks/use-tournament-clock';
+import { useLeague } from '@/lib/api/hooks/use-leagues';
+import { useAuth } from '@/lib/auth-context';
 import { ApiError } from '@/lib/api/client';
 import { type MockTablePlayer } from '@/mocks/data';
+import { canOperateTournament } from '@/features/tournaments/permissions';
+import {
+  useExpenses,
+  useEligiblePlayers,
+  useExpenseLeaguePlayers,
+  useCreateExpense,
+  useUpdateExpense,
+  useDeleteExpense,
+  type TournamentExpenseDto,
+  type CreateExpenseDto,
+} from '@/lib/api/hooks/use-expenses';
+import { ExpenseSheet } from '@/features/expenses/expense-sheet';
 
 type SheetStep = 'actions' | 'eliminate';
 
+type ExpenseSheetMode = { open: boolean; expense: TournamentExpenseDto | null };
+
 export default function DashboardRoute() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { activeLeagueId } = useActiveLeague();
 
   // Find active tournament
@@ -36,6 +53,18 @@ export default function DashboardRoute() {
 
   const { data: tDetail, isLoading: isLoadingDetail } = useTournament(activeTId);
   const { state: clock } = useTournamentClock(activeTId);
+
+  const { data: league } = useLeague(tDetail?.leagueId ?? '');
+  const { data: delegates } = useDelegates(activeTId);
+  const canOperate = canOperateTournament(activeTId, user, league, delegates ?? []);
+
+  const { data: expenses, isLoading: isLoadingExpenses } = useExpenses(activeTId);
+  const { data: eligiblePlayers } = useEligiblePlayers(activeTId);
+  const { data: leaguePlayers } = useExpenseLeaguePlayers(activeTId);
+
+  const createExpenseMut = useCreateExpense(activeTId);
+  const updateExpenseMut = useUpdateExpense(activeTId);
+  const deleteExpenseMut = useDeleteExpense(activeTId);
 
   // Mutations
   const pauseMut = usePauseTournament(activeTId);
@@ -52,6 +81,7 @@ export default function DashboardRoute() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [step, setStep] = useState<SheetStep>('actions');
   const [finishOpen, setFinishOpen] = useState(false);
+  const [expenseSheet, setExpenseSheet] = useState<ExpenseSheetMode>({ open: false, expense: null });
 
   // NB: nenhum `return` antecipado pode vir ANTES dos hooks abaixo (useCallback).
   // As derivações são null-safe (tDetail pode ser undefined durante o carregamento) e os
@@ -208,6 +238,27 @@ export default function DashboardRoute() {
     [undoEliminateMut],
   );
 
+  // ---- Expenses handlers ----
+  const openNewExpense = () => setExpenseSheet({ open: true, expense: null });
+  const openEditExpense = (expense: TournamentExpenseDto) => setExpenseSheet({ open: true, expense });
+  const closeExpenseSheet = () => setExpenseSheet({ open: false, expense: null });
+
+  const handleSaveExpense = async (dto: CreateExpenseDto) => {
+    if (expenseSheet.expense) {
+      await updateExpenseMut.mutateAsync({ expenseId: expenseSheet.expense.id, dto });
+      toast.success('Despesa atualizada');
+    } else {
+      await createExpenseMut.mutateAsync(dto);
+      toast.success('Despesa adicionada');
+    }
+  };
+
+  const handleDeleteExpense = async () => {
+    if (!expenseSheet.expense) return;
+    await deleteExpenseMut.mutateAsync(expenseSheet.expense.id);
+    toast.success('Despesa excluída');
+  };
+
   // ---- Render guards (DEPOIS de todos os hooks) ----
   if (isLoadingTournaments || (activeTId && isLoadingDetail)) {
     return (
@@ -353,6 +404,72 @@ export default function DashboardRoute() {
                 ))
               )}
             </div>
+
+            {/* ---- Despesas ---- */}
+            <div className="mt-[18px]">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-sans text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Despesas · {expenses?.length ?? 0}
+                </div>
+                {canOperate && (
+                  <Button variant="outline" size="sm" icon={Plus} onClick={openNewExpense}>
+                    Adicionar
+                  </Button>
+                )}
+              </div>
+
+              {isLoadingExpenses ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : (expenses ?? []).length === 0 ? (
+                <div className="text-[12.5px] text-muted-foreground px-[2px] py-1">
+                  Nenhuma despesa registrada.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {(expenses ?? []).map((e) => (
+                    <div
+                      key={e.id}
+                      className="flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)] border border-border bg-card"
+                    >
+                      <div className="size-8 rounded-[8px] bg-secondary flex items-center justify-center shrink-0">
+                        <Receipt className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis">
+                          {e.description}
+                        </div>
+                        <div className="text-[11.5px] text-muted-foreground">
+                          Pago por {e.paidByPlayerName.split(' ')[0]} · {e.shares.length} rateando
+                        </div>
+                      </div>
+                      <MoneyValue value={e.totalAmount} cents={false} color="none" size="14px" />
+                      {canOperate && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => openEditExpense(e)}
+                            aria-label="Editar despesa"
+                            className="inline-flex items-center justify-center size-8 rounded-[var(--radius-sm)] hover:bg-secondary text-muted-foreground"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openEditExpense(e)}
+                            aria-label="Excluir despesa"
+                            className="inline-flex items-center justify-center size-8 rounded-[var(--radius-sm)] hover:bg-destructive/10 text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -437,6 +554,20 @@ export default function DashboardRoute() {
             </Button>
           </div>
         </Sheet>
+      )}
+
+      {expenseSheet.open && (
+        <ExpenseSheet
+          open
+          onClose={closeExpenseSheet}
+          tournamentId={activeTId}
+          expense={expenseSheet.expense}
+          leaguePlayers={leaguePlayers ?? []}
+          eligiblePlayers={eligiblePlayers ?? []}
+          onSubmit={handleSaveExpense}
+          onDelete={expenseSheet.expense ? handleDeleteExpense : undefined}
+          isPending={createExpenseMut.isPending || updateExpenseMut.isPending || deleteExpenseMut.isPending}
+        />
       )}
     </>
   );

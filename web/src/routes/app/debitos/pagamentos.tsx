@@ -15,6 +15,7 @@ import {
   Megaphone,
   Copy,
   ChevronRight,
+  ChevronDown,
   Loader2,
   QrCode,
 } from 'lucide-react';
@@ -35,7 +36,6 @@ import {
   useTournamentPayments,
   useCalculatePayments,
   useAdminMarkAsPaid,
-  useAdminConfirmPayment,
   useBulkConfirmPayments,
   useJackpotContribution,
   PaymentStatus,
@@ -46,6 +46,7 @@ import { useTournament as useTournamentData, useDelegates } from '@/lib/api/hook
 import { useAuth } from '@/lib/auth-context';
 import { useLeague } from '@/lib/api/hooks/use-leagues';
 import { canOperateTournament } from '@/features/tournaments/permissions';
+import { aggregateDebts } from '@/features/payments/aggregate-debts';
 
 // ---------------------------------------------------------------------------
 // Status badge helper
@@ -77,6 +78,7 @@ export default function PagamentosRoute() {
   const [tab, setTab] = useState<'saldo' | 'pagamentos'>('saldo');
   const [copied, setCopied] = useState<string | null>(null);
   const [qrFor, setQrFor] = useState<{ key: string; name: string; amount: number } | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const { data: balances, isLoading: isLoadingB } = useTournamentBalances(tId ?? '');
   const { data: payments, isLoading: isLoadingP } = useTournamentPayments(tId ?? '');
@@ -85,7 +87,6 @@ export default function PagamentosRoute() {
   // ---- Mutations ----
   const calcMut = useCalculatePayments(tId ?? '');
   const markPaidMut = useAdminMarkAsPaid();
-  const confirmMut = useAdminConfirmPayment();
   const bulkMut = useBulkConfirmPayments();
 
   // Auto-calculate on load if no payments exist
@@ -117,6 +118,16 @@ export default function PagamentosRoute() {
   const transfers = payments ?? [];
   const saldo = balances ?? [];
 
+  const aggregated = aggregateDebts(transfers);
+  const toggleExpanded = (key: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   // ---- Actions ----
   const copyPix = (pixKey: string, id: string) => {
     try {
@@ -142,14 +153,8 @@ export default function PagamentosRoute() {
     });
   };
 
-  const adminConfirm = (id: string, name: string) => {
-    confirmMut.mutate(id, {
-      onSuccess: () => toast.success(`Recebimento de ${name} confirmado`)
-    });
-  };
-
   const bulkConfirm = () => {
-    const ids = transfers.filter((t) => t.status !== PaymentStatus.Confirmed).map((t) => t.id);
+    const ids = aggregated.filter((g) => !g.allConfirmed).flatMap((g) => g.paymentIds);
     if (ids.length === 0) return;
     bulkMut.mutate(ids, {
       onSuccess: (r) => toast.success(`${r?.confirmed ?? ids.length} pagamento(s) confirmado(s)`),
@@ -158,12 +163,12 @@ export default function PagamentosRoute() {
   };
 
   // ---- Derived ----
-  const pending = transfers.filter((t) => t.status === PaymentStatus.Pending).length;
-  const paid = transfers.filter((t) => t.status === PaymentStatus.Paid).length;
-  const confirmed = transfers.filter((t) => t.status === PaymentStatus.Confirmed).length;
-  const toConfirm = transfers.filter((t) => t.status !== PaymentStatus.Confirmed);
-  const totalReceber = transfers.reduce((s, t) => s + t.amount, 0);
-  const pct = transfers.length > 0 ? Math.round((confirmed / transfers.length) * 100) : 0;
+  const pending = aggregated.filter((g) => !g.allConfirmed && g.hasPending).length;
+  const paid = aggregated.filter((g) => !g.allConfirmed && !g.hasPending).length;
+  const confirmed = aggregated.filter((g) => g.allConfirmed).length;
+  const toConfirm = aggregated.filter((g) => !g.allConfirmed);
+  const totalReceber = aggregated.reduce((s, g) => s + g.totalAmount, 0);
+  const pct = aggregated.length > 0 ? Math.round((confirmed / aggregated.length) * 100) : 0;
 
   const sortedSaldo = [...saldo].sort((a, b) => b.balance - a.balance);
 
@@ -197,7 +202,7 @@ export default function PagamentosRoute() {
           <div className="flex items-baseline gap-2 my-[6px]">
             <span className="font-mono font-bold text-[28px]">{pct}%</span>
             <span className="text-[12.5px] text-muted-foreground">
-              {confirmed}/{transfers.length} confirmadas
+              {confirmed}/{aggregated.length} confirmadas
             </span>
           </div>
           <ProgressBar value={pct} tone="emerald" />
@@ -458,95 +463,130 @@ export default function PagamentosRoute() {
             </div>
           </div>
 
-          {transfers.length === 0 && (
+          {aggregated.length === 0 && (
              <div className="text-center py-6 text-muted-foreground">
                Nenhum pagamento gerado. Use a aba Saldo para Calcular.
              </div>
           )}
 
-          {transfers.map((x) => (
-            <Card key={x.id} pad="md">
-              {/* Transfer header: from → to + type badge */}
-              <div className="flex items-center gap-2 mb-[10px]">
-                <span className="font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis min-w-0">
-                  {x.fromPlayerName.split(' ')[0]}
-                </span>
-                <ChevronRight className="w-[14px] h-[14px] text-muted-foreground shrink-0" />
-                <span className="font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis min-w-0">
-                  {x.toPlayerName.split(' ')[0]}
-                </span>
-                <span className="ml-auto shrink-0">
-                  {x.isJackpotContribution ? (
-                    <Badge tone="gold">Caixinha</Badge>
-                  ) : (
-                    <Badge tone="neutral">{x.type === PaymentType.Poker ? 'Poker' : 'Despesa'}</Badge>
-                  )}
-                </span>
-              </div>
+          {aggregated.map((g) => {
+            const isExpanded = expanded.has(g.key);
+            const groupStatus = g.allConfirmed
+              ? PaymentStatus.Confirmed
+              : g.hasPending
+                ? PaymentStatus.Pending
+                : PaymentStatus.Paid;
+            const copyId = `group-${g.key}`;
 
-              {/* Amount + PIX copy + status */}
-              <div className="flex items-center gap-[10px]">
-                <MoneyValue value={x.amount} cents={false} color="none" size="18px" />
-                {!x.isJackpotContribution && x.toPlayerPixKey ? (
-                  <button
-                    type="button"
-                    onClick={() => copyPix(x.toPlayerPixKey!, x.id)}
-                    aria-label={`Copiar chave PIX de ${x.fromPlayerName}`}
+            return (
+              <Card key={g.key} pad="md">
+                {/* Transfer header: from → to + expand toggle */}
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(g.key)}
+                  className="w-full flex items-center gap-2 mb-[10px] cursor-pointer text-left"
+                >
+                  <span className="font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis min-w-0">
+                    {g.fromPlayerName.split(' ')[0]}
+                  </span>
+                  <ChevronRight className="w-[14px] h-[14px] text-muted-foreground shrink-0" />
+                  <span className="font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis min-w-0">
+                    {g.toPlayerName.split(' ')[0]}
+                  </span>
+                  <ChevronDown
                     className={[
-                      'inline-flex items-center justify-center gap-[5px] shrink-0 cursor-pointer',
-                      'min-h-[44px] px-3 rounded-[var(--radius-sm)] border border-border bg-transparent',
-                      'font-sans font-semibold text-[12px]',
-                      copied === x.id ? 'text-positive' : 'text-gold-400',
+                      'w-[16px] h-[16px] text-muted-foreground shrink-0 ml-auto transition-transform',
+                      isExpanded ? 'rotate-180' : '',
                     ].join(' ')}
-                  >
-                    {copied === x.id ? (
-                      <Check className="w-[13px] h-[13px]" />
-                    ) : (
-                      <Copy className="w-[13px] h-[13px]" />
-                    )}
-                    {copied === x.id ? 'Copiado' : 'Copiar'}
-                  </button>
-                ) : null}
-                {!x.isJackpotContribution && x.toPlayerPixKey ? (
-                  <button
-                    type="button"
-                    onClick={() => setQrFor({ key: x.toPlayerPixKey!, name: x.toPlayerName, amount: x.amount })}
-                    aria-label="Mostrar QR Code PIX"
-                    className="inline-flex items-center justify-center shrink-0 min-w-[44px] min-h-[44px] rounded-[var(--radius-sm)] border border-border bg-transparent text-foreground cursor-pointer"
-                  >
-                    <QrCode className="w-[18px] h-[18px]" />
-                  </button>
-                ) : null}
-                <span className="ml-auto shrink-0">
-                  <StatusBadge status={x.status} />
-                </span>
-              </div>
+                  />
+                </button>
 
-              {/* State machine buttons */}
-              {x.status !== PaymentStatus.Confirmed ? (
-                <div className="flex gap-2 mt-[10px]">
-                  {x.status === PaymentStatus.Pending ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      block
-                      onClick={() => adminMarkPaid(x.id, x.fromPlayerName)}
+                {/* Amount + PIX copy + status */}
+                <div className="flex items-center gap-[10px]">
+                  <MoneyValue value={g.totalAmount} cents={false} color="none" size="18px" />
+                  {g.toPlayerPixKey ? (
+                    <button
+                      type="button"
+                      onClick={() => copyPix(g.toPlayerPixKey!, copyId)}
+                      aria-label={`Copiar chave PIX de ${g.toPlayerName}`}
+                      className={[
+                        'inline-flex items-center justify-center gap-[5px] shrink-0 cursor-pointer',
+                        'min-h-[44px] px-3 rounded-[var(--radius-sm)] border border-border bg-transparent',
+                        'font-sans font-semibold text-[12px]',
+                        copied === copyId ? 'text-positive' : 'text-gold-400',
+                      ].join(' ')}
                     >
-                      Pago
-                    </Button>
+                      {copied === copyId ? (
+                        <Check className="w-[13px] h-[13px]" />
+                      ) : (
+                        <Copy className="w-[13px] h-[13px]" />
+                      )}
+                      {copied === copyId ? 'Copiado' : 'Copiar'}
+                    </button>
                   ) : null}
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    block
-                    onClick={() => adminConfirm(x.id, x.fromPlayerName)}
-                  >
-                    Confirmar
-                  </Button>
+                  {g.toPlayerPixKey ? (
+                    <button
+                      type="button"
+                      onClick={() => setQrFor({ key: g.toPlayerPixKey!, name: g.toPlayerName, amount: g.totalAmount })}
+                      aria-label="Mostrar QR Code PIX"
+                      className="inline-flex items-center justify-center shrink-0 min-w-[44px] min-h-[44px] rounded-[var(--radius-sm)] border border-border bg-transparent text-foreground cursor-pointer"
+                    >
+                      <QrCode className="w-[18px] h-[18px]" />
+                    </button>
+                  ) : null}
+                  <span className="ml-auto shrink-0">
+                    <StatusBadge status={groupStatus} />
+                  </span>
                 </div>
-              ) : null}
-            </Card>
-          ))}
+
+                {/* Expanded breakdown */}
+                {isExpanded && (
+                  <div className="mt-[10px] pt-[10px] border-t border-border">
+                    <div className="text-[12.5px] text-muted-foreground mb-2">
+                      {g.breakdown.map((b, i) => (
+                        <span key={b.type}>
+                          {i > 0 && ' · '}
+                          {b.type === PaymentType.Poker ? 'Poker' : 'Despesas'}{' '}
+                          <MoneyValue value={b.amount} cents={false} color="none" size="12.5px" />
+                        </span>
+                      ))}
+                    </div>
+
+                    {groupStatus !== PaymentStatus.Confirmed ? (
+                      <div className="flex gap-2">
+                        {groupStatus === PaymentStatus.Pending ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            block
+                            onClick={() =>
+                              g.pendingPaymentIds.forEach((id) =>
+                                adminMarkPaid(id, g.fromPlayerName)
+                              )
+                            }
+                          >
+                            Pago
+                          </Button>
+                        ) : null}
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          block
+                          onClick={() => bulkMut.mutate(g.paymentIds, {
+                            onSuccess: (r) => toast.success(`${r?.confirmed ?? g.paymentIds.length} pagamento(s) confirmado(s)`),
+                            onError: () => toast.error('Falha ao confirmar pagamentos'),
+                          })}
+                          disabled={bulkMut.isPending}
+                        >
+                          Confirmar todos
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
         </div>
       )}
 
