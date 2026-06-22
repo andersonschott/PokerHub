@@ -44,6 +44,7 @@ import { Sheet } from '@/components/ui/sheet';
 import { StatTile } from '@/components/ui/stat-tile';
 import { MoneyValue } from '@/components/ui/money-value';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 const STORAGE_PIX = 'ph.pix_key';
 const STORAGE_WHATSAPP = 'ph.whatsapp';
@@ -158,14 +159,10 @@ export default function PerfilRoute() {
 
   useEffect(() => {
     if (!myContact) return;
-    if (myContact.pixKey != null) {
-      setPix(myContact.pixKey);
-      saveStorage(STORAGE_PIX, myContact.pixKey);
-    }
-    if (myContact.phone != null) {
-      setWhatsapp(myContact.phone);
-      saveStorage(STORAGE_WHATSAPP, myContact.phone);
-    }
+    setPix(myContact.pixKey ?? '');
+    saveStorage(STORAGE_PIX, myContact.pixKey ?? '');
+    setWhatsapp(myContact.phone ?? '');
+    saveStorage(STORAGE_WHATSAPP, myContact.phone ?? '');
   }, [myContact]);
 
   const openSheet = (kind: SheetKind) => {
@@ -174,19 +171,34 @@ export default function PerfilRoute() {
     setSheet(kind);
   };
 
-  const saveSheet = () => {
-    const nextPix = sheet === 'pix' ? draft.trim() : pix;
-    const nextPhone = sheet === 'whatsapp' ? draft : whatsapp;
+  // Persiste contato (PIX+telefone) com update otimista e revert em caso de falha.
+  const persistContact = (nextPix: string, nextPhone: string) => {
+    const prevPix = pix;
+    const prevPhone = whatsapp;
+    setPix(nextPix);
+    saveStorage(STORAGE_PIX, nextPix);
+    setWhatsapp(nextPhone);
+    saveStorage(STORAGE_WHATSAPP, nextPhone);
     const payload: MyContactDto = {
       pixKey: nextPix || null,
       pixKeyType: myContact?.pixKeyType ?? null,
       phone: nextPhone || null,
     };
-    updateContact.mutate(payload);
-    setPix(nextPix);
-    saveStorage(STORAGE_PIX, nextPix);
-    setWhatsapp(nextPhone);
-    saveStorage(STORAGE_WHATSAPP, nextPhone);
+    updateContact.mutate(payload, {
+      onError: () => {
+        setPix(prevPix);
+        saveStorage(STORAGE_PIX, prevPix);
+        setWhatsapp(prevPhone);
+        saveStorage(STORAGE_WHATSAPP, prevPhone);
+        toast.error('Não foi possível salvar. Tente novamente.');
+      },
+    });
+  };
+
+  const saveSheet = () => {
+    const nextPix = sheet === 'pix' ? draft.trim() : pix;
+    const nextPhone = sheet === 'whatsapp' ? draft : whatsapp;
+    persistContact(nextPix, nextPhone);
     setSheet(null);
   };
 
@@ -393,14 +405,7 @@ export default function PerfilRoute() {
                 variant="ghost"
                 block
                 onClick={() => {
-                  const payload: MyContactDto = {
-                    pixKey: null,
-                    pixKeyType: myContact?.pixKeyType ?? null,
-                    phone: whatsapp || null,
-                  };
-                  updateContact.mutate(payload);
-                  setPix('');
-                  saveStorage(STORAGE_PIX, '');
+                  persistContact('', whatsapp);
                   setSheet(null);
                 }}
               >
@@ -448,14 +453,7 @@ export default function PerfilRoute() {
                 variant="ghost"
                 block
                 onClick={() => {
-                  const payload: MyContactDto = {
-                    pixKey: pix || null,
-                    pixKeyType: myContact?.pixKeyType ?? null,
-                    phone: null,
-                  };
-                  updateContact.mutate(payload);
-                  setWhatsapp('');
-                  saveStorage(STORAGE_WHATSAPP, '');
+                  persistContact(pix, '');
                   setSheet(null);
                 }}
               >
