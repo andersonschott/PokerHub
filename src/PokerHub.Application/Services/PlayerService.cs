@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PokerHub.Application.DTOs.Me;
 using PokerHub.Application.DTOs.Payment;
 using PokerHub.Application.DTOs.Player;
 using PokerHub.Application.Interfaces;
@@ -182,6 +183,23 @@ public class PlayerService : IPlayerService
         await _context.SaveChangesAsync();
 
         return MapToDto(player);
+    }
+
+    public async Task<int> UpdateContactForUserAsync(string userId, UpdateMyContactDto dto)
+    {
+        var players = await _context.Players
+            .Where(p => p.UserId == userId && p.IsActive)
+            .ToListAsync();
+
+        foreach (var player in players)
+        {
+            player.PixKey = dto.PixKey;
+            player.PixKeyType = dto.PixKeyType;
+            player.Phone = dto.Phone;
+        }
+
+        await _context.SaveChangesAsync();
+        return players.Count;
     }
 
     public async Task<(bool Success, string Message)> DeletePlayerAsync(Guid playerId, bool checkDebts = true)

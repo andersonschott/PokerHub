@@ -1,3 +1,4 @@
+using PokerHub.Application.DTOs.Me;
 using PokerHub.Application.DTOs.Payment;
 using PokerHub.Application.DTOs.Player;
 
@@ -30,4 +31,10 @@ public interface IPlayerService
     /// Used during registration to auto-link existing players.
     /// </summary>
     Task<int> LinkPlayersByEmailAsync(string email, string userId);
+
+    /// <summary>
+    /// Atualiza PIX/telefone em TODOS os players ativos vinculados ao usuário.
+    /// Retorna o número de players atualizados (0 se o usuário não tem player).
+    /// </summary>
+    Task<int> UpdateContactForUserAsync(string userId, UpdateMyContactDto dto);
 }
