@@ -30,12 +30,14 @@ import {
   Settings2,
   RefreshCw,
   Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Sheet } from '@/components/ui/sheet';
+import { SearchField } from '@/components/ui/search-field';
 import { SectionTitle } from '@/components/ui/section-title';
 import { Avatar } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
@@ -43,7 +45,13 @@ import { Switch } from '@/components/ui/switch';
 import { Chips } from '@/components/ui/chips';
 import { MoneyValue } from '@/components/ui/money-value';
 import { useActiveLeague } from '@/features/leagues/league-context';
-import { useLeague, useRegenerateInvite, leagueKeys, type PlayerDto } from '@/lib/api/hooks/use-leagues';
+import {
+  useLeague,
+  useRegenerateInvite,
+  useTransferOwnership,
+  leagueKeys,
+  type PlayerDto,
+} from '@/lib/api/hooks/use-leagues';
 import { useActiveSeason, useSeasonSummaries, useUpdateSeason } from '@/lib/api/hooks/use-seasons';
 import {
   useJackpotContributions,
@@ -75,7 +83,7 @@ type EditFormData = z.infer<typeof EditSchema>;
 // Types
 // ---------------------------------------------------------------------------
 
-type SheetKind = 'edit' | 'invite' | null;
+type SheetKind = 'edit' | 'invite' | 'transfer' | null;
 
 interface AdminRowProps {
   icon: React.ReactNode;
@@ -253,11 +261,14 @@ export default function AdminRoute() {
   const regenerateInvite = useRegenerateInvite(activeLeagueId ?? '');
   const updateSeason = useUpdateSeason(activeSeason?.id ?? '');
   const updateJackpot = useUpdateJackpotSettings(activeLeagueId);
+  const transferOwnership = useTransferOwnership(activeLeagueId ?? '');
 
   // Local UI state
   const [sheet, setSheet] = useState<SheetKind>(null);
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const displayName = league?.name ?? '';
   const inviteCode = league?.inviteCode ?? '';
@@ -507,6 +518,24 @@ export default function AdminRoute() {
         </Button>
       </div>
 
+      {/* --- Zona de risco --- */}
+      <SectionTitle icon={AlertTriangle} className="mt-6 text-negative">
+        Zona de risco
+      </SectionTitle>
+      <Card pad="none" className="mb-[18px] border-negative/30">
+        <AdminRow
+          icon={<AlertTriangle className="text-negative" />}
+          label="Transferir propriedade"
+          sub="Você deixará de ser o dono da liga"
+          onClick={() => {
+            setSelectedUserId(null);
+            setSearchQuery('');
+            setSheet('transfer');
+          }}
+          last
+        />
+      </Card>
+
       {/* --- Edit league sheet (RHF form) --- */}
       {sheet === 'edit' && (
         <Sheet
@@ -599,6 +628,113 @@ export default function AdminRoute() {
                 onClick={handleRegenerate}
               />
             )}
+          </div>
+        </Sheet>
+      )}
+
+      {/* --- Transfer ownership sheet --- */}
+      {sheet === 'transfer' && (
+        <Sheet
+          fixed
+          open
+          onClose={() => setSheet(null)}
+          title="Transferir propriedade"
+          subtitle="Escolha um membro ativo da liga para ser o novo dono"
+        >
+          <div className="flex flex-col gap-4">
+            <div className="rounded-[var(--radius-md)] border border-negative/30 bg-negative/10 px-[14px] py-3">
+              <p className="text-[13px] text-negative leading-relaxed">
+                Ao confirmar, <strong>você deixará de ser o dono</strong> da liga e passará a ser um membro comum. Essa ação não pode ser desfeita.
+              </p>
+            </div>
+
+            <SearchField
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder="Buscar membro…"
+              autoFocus
+            />
+
+            <div className="flex flex-col gap-1 max-h-[260px] overflow-y-auto">
+              {players
+                ?.filter(
+                  (p) =>
+                    p.userId != null &&
+                    p.userId !== user?.userId &&
+                    p.isActive &&
+                    p.membershipStatus === 0,
+                )
+                .filter((p) => {
+                  const q = searchQuery.trim().toLowerCase();
+                  if (!q) return true;
+                  return (
+                    p.name.toLowerCase().includes(q) ||
+                    (p.nickname?.toLowerCase().includes(q) ?? false)
+                  );
+                })
+                .map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setSelectedUserId(p.userId)}
+                    className={
+                      'flex items-center gap-3 w-full text-left px-3 py-2.5 rounded-[var(--radius-md)] border transition-colors ' +
+                      (selectedUserId === p.userId
+                        ? 'border-negative bg-negative/10'
+                        : 'border-border bg-transparent hover:bg-secondary/40')
+                    }
+                  >
+                    <Avatar name={p.name} size={34} />
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-sans font-medium text-[14px] truncate">
+                        {p.name}
+                      </span>
+                      {p.nickname ? (
+                        <span className="block text-[11.5px] text-muted-foreground truncate">
+                          @{p.nickname}
+                        </span>
+                      ) : null}
+                    </span>
+                    {selectedUserId === p.userId && (
+                      <Check className="w-4 h-4 text-negative shrink-0" />
+                    )}
+                  </button>
+                ))}
+              {players?.filter(
+                (p) =>
+                  p.userId != null &&
+                  p.userId !== user?.userId &&
+                  p.isActive &&
+                  p.membershipStatus === 0,
+              ).length === 0 ? (
+                <p className="text-[13px] text-muted-foreground text-center py-4">
+                  Nenhum membro elegível encontrado.
+                </p>
+              ) : null}
+            </div>
+
+            <Button
+              variant="destructive"
+              block
+              disabled={!selectedUserId || transferOwnership.isPending}
+              onClick={() => {
+                if (!selectedUserId) return;
+                transferOwnership.mutate(selectedUserId, {
+                  onSuccess: () => {
+                    setSheet(null);
+                    fire('Propriedade transferida');
+                  },
+                  onError: () => {
+                    fire('Erro ao transferir propriedade');
+                  },
+                });
+              }}
+            >
+              {transferOwnership.isPending ? 'Transferindo…' : 'Transferir propriedade'}
+            </Button>
+            <Button variant="ghost" block onClick={() => setSheet(null)}>
+              Cancelar
+            </Button>
           </div>
         </Sheet>
       )}

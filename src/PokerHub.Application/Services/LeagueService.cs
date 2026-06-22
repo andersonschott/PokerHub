@@ -402,4 +402,64 @@ public class LeagueService : ILeagueService
 
         return (true, "Você saiu da liga com sucesso. Seu histórico permanece nos rankings.");
     }
+
+    public async Task<(bool Success, string Message)> TransferOwnershipAsync(
+        Guid leagueId,
+        string currentUserId,
+        string newOrganizerUserId)
+    {
+        var league = await _context.Leagues
+            .Include(l => l.Players)
+            .FirstOrDefaultAsync(l => l.Id == leagueId && l.IsActive);
+
+        if (league == null)
+            return (false, "Liga não encontrada.");
+
+        if (league.OrganizerId != currentUserId)
+            return (false, "Somente o organizador da liga pode transferir a propriedade.");
+
+        if (string.IsNullOrWhiteSpace(newOrganizerUserId))
+            return (false, "Selecione um membro válido para receber a propriedade.");
+
+        if (newOrganizerUserId == currentUserId)
+            return (false, "O novo organizador deve ser diferente do organizador atual.");
+
+        var targetPlayer = league.Players.FirstOrDefault(p =>
+            p.UserId != null
+            && p.UserId == newOrganizerUserId
+            && p.IsActive
+            && p.MembershipStatus == PlayerMembershipStatus.Active);
+
+        if (targetPlayer == null)
+            return (false, "O novo dono precisa ser um membro ativo da liga.");
+
+        // Ensure the previous organizer remains as a regular member.
+        var previousOrganizerPlayer = league.Players.FirstOrDefault(p =>
+            p.UserId == currentUserId && p.IsActive);
+
+        if (previousOrganizerPlayer == null)
+        {
+            var previousOrganizerUser = await _context.Users.FindAsync(currentUserId);
+            if (previousOrganizerUser == null)
+                return (false, "Usuário atual não encontrado.");
+
+            var newPlayer = new Player
+            {
+                Id = Guid.NewGuid(),
+                LeagueId = leagueId,
+                Name = previousOrganizerUser.Name,
+                UserId = currentUserId,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true,
+                MembershipStatus = PlayerMembershipStatus.Active
+            };
+
+            _context.Players.Add(newPlayer);
+        }
+
+        league.OrganizerId = newOrganizerUserId;
+        await _context.SaveChangesAsync();
+
+        return (true, "Propriedade transferida.");
+    }
 }

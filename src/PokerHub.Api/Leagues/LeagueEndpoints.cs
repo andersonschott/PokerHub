@@ -94,6 +94,23 @@ public static class LeagueEndpoints
             return Results.Ok(new { InviteCode = code });
         });
 
+        group.MapPost("/{leagueId:guid}/transfer-ownership", async (
+            Guid leagueId,
+            TransferOwnershipRequest request,
+            ClaimsPrincipal user,
+            ILeagueService leagues) =>
+        {
+            if (!await leagues.IsUserOrganizerAsync(leagueId, user.GetUserId()))
+                return Results.Forbid();
+
+            var (success, message) = await leagues.TransferOwnershipAsync(
+                leagueId, user.GetUserId(), request.NewOrganizerUserId);
+
+            return success
+                ? Results.Ok(new { Message = message })
+                : Results.Conflict(new { Message = message });
+        });
+
         group.MapPost("/join/{inviteCode}", async (string inviteCode, ClaimsPrincipal user, ILeagueService leagues) =>
         {
             var league = await leagues.GetLeagueByInviteCodeAsync(inviteCode);
@@ -116,3 +133,5 @@ public static class LeagueEndpoints
         });
     }
 }
+
+public record TransferOwnershipRequest(string NewOrganizerUserId);

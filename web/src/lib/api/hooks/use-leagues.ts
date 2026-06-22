@@ -189,3 +189,19 @@ export function useRegenerateInvite(id: string) {
     },
   });
 }
+
+/** POST /api/leagues/{id}/transfer-ownership — transfer league ownership to an active member */
+export function useTransferOwnership(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (newOrganizerUserId: string) =>
+      api<{ message: string }>(`/leagues/${id}/transfer-ownership`, {
+        method: 'POST',
+        body: { newOrganizerUserId },
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: leagueKeys.detail(id) });
+      void qc.invalidateQueries({ queryKey: leagueKeys.list() });
+    },
+  });
+}
