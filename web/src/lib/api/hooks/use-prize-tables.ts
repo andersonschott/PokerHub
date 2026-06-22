@@ -1,38 +1,34 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client';
 
-export interface PrizeTableDto {
+export interface PrizeTableEntryDto {
+  position: number;
+  prizeAmount: number;
+}
+
+export interface LeaguePrizeTableDto {
   id: string;
   leagueId: string;
   name: string;
-  description: string | null;
-  tiers: PrizeTierDto[];
+  prizePoolTotal: number;
+  jackpotAmount: number;
+  entries: PrizeTableEntryDto[];
   createdAt: string;
 }
 
-export interface PrizeTierDto {
-  id: string;
-  prizeTableId: string;
+export interface CreatePrizeTableEntryDto {
   position: number;
-  percentage: number;
+  prizeAmount: number;
 }
 
 export interface CreatePrizeTableDto {
-  name: string;
-  description?: string | null;
-  tiers: CreatePrizeTierDto[];
-}
-
-export interface CreatePrizeTierDto {
-  position: number;
-  percentage: number;
-}
-
-export interface UpdatePrizeTableDto {
   name?: string;
-  description?: string | null;
-  tiers?: CreatePrizeTierDto[];
+  prizePoolTotal: number;
+  jackpotAmount: number;
+  entries: CreatePrizeTableEntryDto[];
 }
+
+export type UpdatePrizeTableDto = CreatePrizeTableDto;
 
 export const prizeTableKeys = {
   all: ['prizeTables'] as const,
@@ -43,7 +39,7 @@ export const prizeTableKeys = {
 export function usePrizeTables(leagueId: string) {
   return useQuery({
     queryKey: prizeTableKeys.byLeague(leagueId),
-    queryFn: () => api<PrizeTableDto[]>(`/leagues/${leagueId}/prize-tables`),
+    queryFn: () => api<LeaguePrizeTableDto[]>(`/leagues/${leagueId}/prize-tables`),
     enabled: !!leagueId,
   });
 }
@@ -52,7 +48,7 @@ export function useCreatePrizeTable(leagueId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (dto: CreatePrizeTableDto) =>
-      api<PrizeTableDto>(`/leagues/${leagueId}/prize-tables`, { method: 'POST', body: dto }),
+      api<LeaguePrizeTableDto>(`/leagues/${leagueId}/prize-tables`, { method: 'POST', body: dto }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: prizeTableKeys.byLeague(leagueId) });
     },
@@ -62,7 +58,7 @@ export function useCreatePrizeTable(leagueId: string) {
 export function usePrizeTable(prizeTableId: string) {
   return useQuery({
     queryKey: prizeTableKeys.detail(prizeTableId),
-    queryFn: () => api<PrizeTableDto>(`/prize-tables/${prizeTableId}`),
+    queryFn: () => api<LeaguePrizeTableDto>(`/prize-tables/${prizeTableId}`),
     enabled: !!prizeTableId,
   });
 }
@@ -71,7 +67,7 @@ export function useUpdatePrizeTable(prizeTableId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (dto: UpdatePrizeTableDto) =>
-      api<PrizeTableDto>(`/prize-tables/${prizeTableId}`, { method: 'PUT', body: dto }),
+      api<LeaguePrizeTableDto>(`/prize-tables/${prizeTableId}`, { method: 'PUT', body: dto }),
     onSuccess: (data) => {
       void qc.invalidateQueries({ queryKey: prizeTableKeys.detail(prizeTableId) });
       void qc.invalidateQueries({ queryKey: prizeTableKeys.byLeague(data.leagueId) });

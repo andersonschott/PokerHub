@@ -125,25 +125,6 @@ function AdminRow({ icon, label, sub, trailing, onClick, last }: AdminRowProps) 
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Label de posição para a tabela de premiação. */
-function posLabel(position: number): string {
-  return `${position}º lugar`;
-}
-
-/** Cor do "dot" por posição (1º ouro, 2º prata, 3º bronze, demais neutro). */
-function posColor(position: number): string {
-  switch (position) {
-    case 1:
-      return 'var(--podium-gold)';
-    case 2:
-      return 'var(--podium-silver)';
-    case 3:
-      return 'var(--podium-bronze)';
-    default:
-      return 'var(--muted-foreground)';
-  }
-}
-
 /** Range de datas da temporada formatado (dd/mm – dd/mm | em andamento). */
 function formatSeasonRange(startDate?: string, endDate?: string | null): string {
   if (!startDate) return '';
@@ -374,10 +355,6 @@ export default function AdminRoute() {
 
   const onEditSubmit = handleSubmit((data) => updateMutation.mutate(data));
 
-  // Tabela de premiação real (primeira tabela; fallback estático se não houver)
-  const tiers = prizeTables?.[0]?.tiers;
-  const hasTiers = !!tiers && tiers.length > 0;
-
   // --- Guards ---
   if (!activeLeagueId) {
     return (
@@ -481,59 +458,24 @@ export default function AdminRoute() {
       </Card>
 
       {/* --- Premiação --- */}
-      <SectionTitle icon={Trophy}>Tabela de premiação</SectionTitle>
+      <SectionTitle icon={Trophy}>Tabelas de premiação</SectionTitle>
       <Card pad="none" className="mb-[18px]">
-        {hasTiers ? (
-          tiers!
-            .slice()
-            .sort((a, b) => a.position - b.position)
-            .map((tier, i, arr) => (
-              <div
-                key={tier.id}
-                className={
-                  'flex items-center gap-3 px-[14px] py-3 ' +
-                  (i < arr.length - 1 ? 'border-b border-border' : '')
-                }
-              >
-                <span
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ background: posColor(tier.position) }}
-                />
-                <span className="flex-1 font-sans font-medium text-[14.5px]">
-                  {posLabel(tier.position)}
-                </span>
-                <span className="font-mono font-bold text-[15px]">{tier.percentage}%</span>
-              </div>
-            ))
-        ) : (
-          <>
-            {(
-              [
-                ['1º lugar', 50, 'var(--podium-gold)'],
-                ['2º lugar', 30, 'var(--podium-silver)'],
-                ['3º lugar', 20, 'var(--podium-bronze)'],
-              ] as const
-            ).map(([label, pctVal, color], i, arr) => (
-              <div
-                key={label}
-                className={
-                  'flex items-center gap-3 px-[14px] py-3 ' +
-                  (i < arr.length - 1 ? 'border-b border-border' : '')
-                }
-              >
-                <span
-                  className="w-2.5 h-2.5 rounded-full shrink-0"
-                  style={{ background: color }}
-                />
-                <span className="flex-1 font-sans font-medium text-[14.5px]">{label}</span>
-                <span className="font-mono font-bold text-[15px]">{pctVal}%</span>
-              </div>
-            ))}
-            <p className="px-[14px] pb-3 pt-1 text-[12px] text-muted-foreground">
-              Tabela padrão — nenhuma tabela de premiação configurada.
-            </p>
-          </>
-        )}
+        <button
+          type="button"
+          onClick={() => navigate(`/app/ligas/${activeLeagueId}/tabelas-premiacao`)}
+          className="flex items-center gap-3 w-full min-h-[52px] py-3 px-[14px] bg-transparent border-0 text-foreground text-left cursor-pointer hover:bg-secondary/40 transition-colors"
+        >
+          <Trophy className="w-[18px] h-[18px] text-muted-foreground shrink-0" />
+          <span className="flex-1 min-w-0">
+            <span className="block font-sans font-medium text-[14.5px]">Gerenciar tabelas</span>
+            <span className="block text-[12px] text-muted-foreground mt-0.5">
+              {(prizeTables?.length ?? 0) === 0
+                ? 'Nenhuma tabela configurada'
+                : `${prizeTables!.length} tabela${prizeTables!.length !== 1 ? 's' : ''} por prize pool`}
+            </span>
+          </span>
+          <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+        </button>
       </Card>
 
       {/* --- Jogadores --- */}
