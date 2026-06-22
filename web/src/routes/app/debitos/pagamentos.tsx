@@ -42,7 +42,10 @@ import {
   PaymentType
 } from '@/lib/api/hooks/use-payments';
 
-import { useTournament as useTournamentData } from '@/lib/api/hooks/use-tournaments';
+import { useTournament as useTournamentData, useDelegates } from '@/lib/api/hooks/use-tournaments';
+import { useAuth } from '@/lib/auth-context';
+import { useLeague } from '@/lib/api/hooks/use-leagues';
+import { canOperateTournament } from '@/features/tournaments/permissions';
 
 // ---------------------------------------------------------------------------
 // Status badge helper
@@ -61,15 +64,20 @@ function StatusBadge({ status }: { status: PaymentStatus }) {
 
 export default function PagamentosRoute() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const tId = searchParams.get('t');
+
+  // ---- Queries ----
+  const { data: tournament, isLoading: isLoadingT } = useTournamentData(tId ?? '');
+  const { data: league } = useLeague(tournament?.leagueId ?? '');
+  const { data: delegates } = useDelegates(tId ?? '');
+  const canOperate = canOperateTournament(tId, user, league, delegates ?? []);
 
   const [tab, setTab] = useState<'saldo' | 'pagamentos'>('saldo');
   const [copied, setCopied] = useState<string | null>(null);
   const [qrFor, setQrFor] = useState<{ key: string; name: string; amount: number } | null>(null);
 
-  // ---- Queries ----
-  const { data: tournament, isLoading: isLoadingT } = useTournamentData(tId ?? '');
   const { data: balances, isLoading: isLoadingB } = useTournamentBalances(tId ?? '');
   const { data: payments, isLoading: isLoadingP } = useTournamentPayments(tId ?? '');
   const { data: jackpot } = useJackpotContribution(tId ?? '');
@@ -91,7 +99,7 @@ export default function PagamentosRoute() {
 
   if (!tId || isLoadingT || isLoadingB || isLoadingP) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex min-h-[60vh] items-center justify-center px-4 pb-24">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </div>
     );
@@ -171,7 +179,7 @@ export default function PagamentosRoute() {
           icon={ArrowLeft}
           aria-label="Voltar"
           size="md"
-          onClick={() => navigate('/app/debitos')}
+          onClick={() => navigate('/app/torneio')}
           className="shrink-0"
         />
         <div className="flex-1 min-w-0">
@@ -379,12 +387,21 @@ export default function PagamentosRoute() {
           </Card>
 
           {/* Actions */}
-          <div className="flex gap-2 mt-1">
-            <Button variant="secondary" icon={RefreshCcw} block onClick={recalculate}>
-              Calcular Pagamentos
-            </Button>
-            <Button variant="secondary" icon={Megaphone} block disabled title="Em breve">
-              Cobrar todos · Em breve
+          <div className="flex flex-wrap gap-2 mt-1">
+            {canOperate && (
+              <Button variant="secondary" icon={RefreshCcw} block onClick={recalculate}>
+                Calcular Pagamentos
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              icon={Megaphone}
+              block
+              disabled
+              title="Em breve"
+              className="min-w-0"
+            >
+              <span className="block truncate">Cobrar todos · Em breve</span>
             </Button>
           </div>
         </div>
@@ -422,12 +439,21 @@ export default function PagamentosRoute() {
             <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
               Quem paga quem · {transfers.length}
             </span>
-            <div className="flex gap-2">
-              <Button variant="ghost" icon={RefreshCcw} size="sm" onClick={recalculate}>
-                Recalcular
-              </Button>
-              <Button variant="secondary" icon={Megaphone} size="sm" disabled title="Em breve">
-                Cobrar todos · Em breve
+            <div className="flex flex-wrap gap-2">
+              {canOperate && (
+                <Button variant="ghost" icon={RefreshCcw} size="sm" onClick={recalculate}>
+                  Recalcular
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                icon={Megaphone}
+                size="sm"
+                disabled
+                title="Em breve"
+                className="min-w-0"
+              >
+                <span className="block truncate">Cobrar todos · Em breve</span>
               </Button>
             </div>
           </div>

@@ -24,7 +24,10 @@ import { Avatar } from '@/components/ui/avatar';
 import { LevelControls } from '@/features/timer/level-controls';
 import { TimerDisplay } from '@/features/timer/timer-display';
 import { RealizadosList } from '@/features/timer/realizados-list';
+import { useAuth } from '@/lib/auth-context';
 import { useActiveLeague } from '@/features/leagues/league-context';
+import { useLeague } from '@/lib/api/hooks/use-leagues';
+import { isLeagueOrganizer } from '@/features/tournaments/permissions';
 import {
   useTournaments,
   useTournament,
@@ -266,9 +269,11 @@ function TimerView({ tournamentId }: { tournamentId: string }) {
 function TorneioVazio({
   tournaments,
   leagueName,
+  isOrganizer,
 }: {
   tournaments: readonly TournamentDto[] | undefined;
   leagueName: string;
+  isOrganizer: boolean;
 }) {
   const navigate = useNavigate();
   const upcoming = selectUpcoming(tournaments);
@@ -293,9 +298,11 @@ function TorneioVazio({
             Quando um torneio começar, o timer ao vivo aparece aqui.
           </div>
           <div className="h-0.5" />
-          <Button variant="primary" icon={Plus} onClick={() => navigate('/app/torneio/novo')}>
-            Criar torneio
-          </Button>
+          {isOrganizer && (
+            <Button variant="primary" icon={Plus} onClick={() => navigate('/app/torneio/novo')}>
+              Criar torneio
+            </Button>
+          )}
         </div>
       </Card>
 
@@ -322,17 +329,19 @@ function TorneioVazio({
                   </div>
                 </div>
                 <Badge tone="neutral"><MoneyValue value={u.buyIn} cents={false} color="none" /></Badge>
-                <IconButton
-                  icon={Pencil}
-                  aria-label="Editar torneio"
-                  size="sm"
-                  variant="solid"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(`/app/torneio/novo?edit=1&id=${u.id}`);
-                  }}
-                  className="shrink-0"
-                />
+                {isOrganizer && (
+                  <IconButton
+                    icon={Pencil}
+                    aria-label="Editar torneio"
+                    size="sm"
+                    variant="solid"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate(`/app/torneio/novo?edit=1&id=${u.id}`);
+                    }}
+                    className="shrink-0"
+                  />
+                )}
               </div>
             </Card>
           ))
@@ -362,8 +371,11 @@ function TorneioVazio({
 // ---------------------------------------------------------------------------
 
 export default function TorneioRoute() {
+  const { user } = useAuth();
   const { activeLeagueId } = useActiveLeague();
+  const { data: league } = useLeague(activeLeagueId ?? '');
   const { data: tournaments, isLoading } = useTournaments(activeLeagueId ?? '');
+  const isOrganizer = isLeagueOrganizer(league, user);
 
   if (isLoading) {
     return (
@@ -381,6 +393,6 @@ export default function TorneioRoute() {
   return activeT ? (
     <TimerView tournamentId={activeT.id} />
   ) : (
-    <TorneioVazio tournaments={tournaments} leagueName={leagueName} />
+    <TorneioVazio tournaments={tournaments} leagueName={leagueName} isOrganizer={isOrganizer} />
   );
 }

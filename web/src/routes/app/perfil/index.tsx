@@ -25,7 +25,9 @@ import {
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
 import { useActiveLeague } from '@/features/leagues/league-context';
+import { useLeague } from '@/lib/api/hooks/use-leagues';
 import { useJackpotContributions, useJackpotUsages } from '@/lib/api/hooks/use-jackpot';
+import { isLeagueOrganizer } from '@/features/tournaments/permissions';
 import { useActiveSeason } from '@/lib/api/hooks/use-seasons';
 import { useSeasonRanking } from '@/lib/api/hooks/use-rankings';
 import { useLeaguePlayers } from '@/lib/api/hooks/use-leagues';
@@ -144,6 +146,7 @@ export default function PerfilRoute() {
   const [pwError, setPwError] = useState<string | null>(null);
 
   const { activeLeagueId } = useActiveLeague();
+  const { data: league } = useLeague(activeLeagueId ?? '');
   const { data: contributions } = useJackpotContributions(activeLeagueId);
   const { data: usages } = useJackpotUsages(activeLeagueId);
   const caixinhaBalance = jackpotBalance(contributions, usages);
@@ -313,11 +316,13 @@ export default function PerfilRoute() {
             </span>
           </button>
 
-          <ProfileRow
-            icon={<Settings2 />}
-            label="Administração da liga"
-            to="/app/perfil/admin"
-          />
+          {isLeagueOrganizer(league, user) && (
+            <ProfileRow
+              icon={<Settings2 />}
+              label="Administração da liga"
+              to="/app/perfil/admin"
+            />
+          )}
 
           <ProfileRow
             icon={<PiggyBank />}

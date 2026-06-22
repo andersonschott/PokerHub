@@ -13,8 +13,10 @@ import { StatTile } from '@/components/ui/stat-tile';
 import { MoneyValue } from '@/components/ui/money-value';
 import { Input } from '@/components/ui/input';
 
+import { useAuth } from '@/lib/auth-context';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { useLeague } from '@/lib/api/hooks/use-leagues';
+import { isLeagueOrganizer } from '@/features/tournaments/permissions';
 import {
   useJackpotStatus,
   useJackpotContributions,
@@ -27,6 +29,7 @@ type SheetKind = 'expense' | 'tournament' | null;
 
 export default function CaixinhaRoute() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { activeLeagueId } = useActiveLeague();
 
   const [tab, setTab] = useState<'entradas' | 'saidas'>('entradas');
@@ -36,6 +39,8 @@ export default function CaixinhaRoute() {
 
   // Queries
   const { data: league, isLoading: isLoadingL } = useLeague(activeLeagueId ?? '');
+
+  const organizer = isLeagueOrganizer(league, user);
   const { data: status, isLoading: isLoadingS } = useJackpotStatus(activeLeagueId);
   const { data: contributions, isLoading: isLoadingC } = useJackpotContributions(activeLeagueId);
   const { data: usages, isLoading: isLoadingU } = useJackpotUsages(activeLeagueId);
@@ -222,25 +227,27 @@ export default function CaixinhaRoute() {
             ))
           )}
 
-          {/* Organizer action buttons (Check if user is organizer in the future) */}
-          <div className="flex gap-2 mt-1.5">
-            <Button
-              variant="primary"
-              icon={ShoppingCart}
-              block
-              onClick={() => openSheet('expense')}
-            >
-              Registrar gasto
-            </Button>
-            <Button
-              variant="secondary"
-              icon={Trophy}
-              block
-              onClick={() => openSheet('tournament')}
-            >
-              Usar em torneio
-            </Button>
-          </div>
+          {/* Organizer-only usage buttons */}
+          {organizer && (
+            <div className="flex gap-2 mt-1.5">
+              <Button
+                variant="primary"
+                icon={ShoppingCart}
+                block
+                onClick={() => openSheet('expense')}
+              >
+                Registrar gasto
+              </Button>
+              <Button
+                variant="secondary"
+                icon={Trophy}
+                block
+                onClick={() => openSheet('tournament')}
+              >
+                Usar em torneio
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

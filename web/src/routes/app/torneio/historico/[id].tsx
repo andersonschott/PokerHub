@@ -20,8 +20,11 @@ import { SectionTitle } from '@/components/ui/section-title';
 import { Avatar } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
-import { useTournament, useTournaments } from '@/lib/api/hooks/use-tournaments';
+import { useTournament, useTournaments, useDelegates } from '@/lib/api/hooks/use-tournaments';
 import { useJackpotContribution } from '@/lib/api/hooks/use-payments';
+import { useAuth } from '@/lib/auth-context';
+import { useLeague } from '@/lib/api/hooks/use-leagues';
+import { canOperateTournament } from '@/features/tournaments/permissions';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { selectRealizados } from '@/routes/app/torneio/torneio-lists';
 import { tournamentDetailToHistorico, formatPtBrDate, type HistoricoDetail } from '@/routes/app/torneio/historico-map';
@@ -32,11 +35,12 @@ import { tournamentDetailToHistorico, formatPtBrDate, type HistoricoDetail } fro
 
 interface DetailPanelProps {
   h: HistoricoDetail;
+  canOperate: boolean;
   onDuplicate: () => void;
   onViewPayments: () => void;
 }
 
-function DetailPanel({ h, onDuplicate, onViewPayments }: DetailPanelProps) {
+function DetailPanel({ h, canOperate, onDuplicate, onViewPayments }: DetailPanelProps) {
   return (
     <>
       {/* Numbers */}
@@ -84,9 +88,11 @@ function DetailPanel({ h, onDuplicate, onViewPayments }: DetailPanelProps) {
         <Button variant="secondary" icon={Wallet} block onClick={onViewPayments}>
           Ver pagamentos
         </Button>
-        <Button variant="outline" icon={Copy} block onClick={onDuplicate}>
-          Duplicar torneio
-        </Button>
+        {canOperate && (
+          <Button variant="outline" icon={Copy} block onClick={onDuplicate}>
+            Duplicar torneio
+          </Button>
+        )}
       </div>
     </>
   );
@@ -96,7 +102,12 @@ function DetailPanel({ h, onDuplicate, onViewPayments }: DetailPanelProps) {
 // Desktop layout — history table + detail side by side
 // ---------------------------------------------------------------------------
 
-function DesktopHistorico({ tournamentId }: { tournamentId: string }) {
+interface DesktopHistoricoProps {
+  tournamentId: string;
+  canOperate: boolean;
+}
+
+function DesktopHistorico({ tournamentId, canOperate }: DesktopHistoricoProps) {
   const navigate = useNavigate();
   const { activeLeagueId } = useActiveLeague();
 
@@ -262,14 +273,16 @@ function DesktopHistorico({ tournamentId }: { tournamentId: string }) {
                 >
                   Ver pagamentos
                 </Button>
-                <Button
-                  variant="secondary"
-                  icon={Copy}
-                  block
-                  onClick={() => navigate('/app/torneio/novo')}
-                >
-                  Duplicar
-                </Button>
+                {canOperate && (
+                  <Button
+                    variant="secondary"
+                    icon={Copy}
+                    block
+                    onClick={() => navigate('/app/torneio/novo')}
+                  >
+                    Duplicar
+                  </Button>
+                )}
               </div>
             </>
           )}
@@ -285,9 +298,14 @@ function DesktopHistorico({ tournamentId }: { tournamentId: string }) {
 
 export default function HistoricoDetalheRoute() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { tournamentId = '' } = useParams<{ tournamentId: string }>();
 
   const { data: detail, isLoading: isLoadingDetail } = useTournament(tournamentId);
+  const { data: league } = useLeague(detail?.leagueId ?? '');
+  const { data: delegates } = useDelegates(tournamentId);
+  const canOperate = canOperateTournament(tournamentId, user, league, delegates ?? []);
+
   const { data: jackpotContribution, isLoading: isLoadingJackpot } = useJackpotContribution(tournamentId);
 
   const h = detail ? tournamentDetailToHistorico(detail, jackpotContribution?.amount ?? 0) : null;
@@ -337,17 +355,18 @@ export default function HistoricoDetalheRoute() {
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
           </div>
         ) : !h ? (
-          <div className="flex items-center justify-center py-12 text-muted-foreground">
-            Torneio não encontrado
+          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-4">
+            <p>Torneio não encontrado</p>
+            <Button onClick={() => navigate('/app/torneio')}>Voltar</Button>
           </div>
         ) : (
-          <DetailPanel h={h} onDuplicate={handleDuplicate} onViewPayments={handleViewPayments} />
+          <DetailPanel h={h} canOperate={canOperate} onDuplicate={handleDuplicate} onViewPayments={handleViewPayments} />
         )}
       </div>
 
       {/* Desktop */}
       <div className="hidden lg:block px-8 py-6">
-        <DesktopHistorico tournamentId={tournamentId} />
+        <DesktopHistorico tournamentId={tournamentId} canOperate={canOperate} />
       </div>
     </>
   );

@@ -11,9 +11,14 @@
 
 import { NavLink } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { NAV_ITEMS } from './nav-items';
+import { useLeagues } from '@/lib/api/hooks/use-leagues';
+import { NAV_ITEMS, filterNavForNoLeagues } from './nav-items';
 
 export function BottomNav() {
+  const { data: leagues, isSuccess } = useLeagues();
+  const hideLeagueItems = isSuccess && (leagues?.length ?? 0) === 0;
+  const items = hideLeagueItems ? filterNavForNoLeagues(NAV_ITEMS) : NAV_ITEMS;
+
   return (
     <nav
       className="md:hidden fixed left-0 right-0 bottom-0 z-50 flex items-stretch border-t border-border backdrop-blur-[8px] backdrop-saturate-[1.2]"
@@ -26,7 +31,7 @@ export function BottomNav() {
         height: 'var(--bottom-nav-h)',
       }}
     >
-      {NAV_ITEMS.map((item) => {
+      {items.map((item) => {
         const Icon = item.icon;
         return (
           <NavLink

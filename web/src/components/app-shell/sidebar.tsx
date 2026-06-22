@@ -22,9 +22,10 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 import { useTheme } from '@/lib/theme-context';
+import { useLeagues } from '@/lib/api/hooks/use-leagues';
 import { Avatar } from '@/components/ui/avatar';
 import { Logo } from './logo';
-import { NAV_ITEMS } from './nav-items';
+import { NAV_ITEMS, filterNavForNoLeagues } from './nav-items';
 
 const W_EXPANDED = 240;   // 60 * 4 = 240px (w-60)
 const W_COLLAPSED = 68;   // narrow icon-only rail
@@ -36,6 +37,9 @@ function setSidebarCssVar(w: number) {
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const { user, clear } = useAuth();
+  const { data: leagues, isSuccess } = useLeagues();
+  const hideLeagueItems = isSuccess && (leagues?.length ?? 0) === 0;
+  const navItems = hideLeagueItems ? filterNavForNoLeagues(NAV_ITEMS) : NAV_ITEMS;
   const { theme, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
 
@@ -72,7 +76,7 @@ export function Sidebar() {
 
       {/* Primary nav */}
       <nav className="flex flex-col gap-[3px] flex-1">
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const Icon = item.icon;
           return (
             <NavLink

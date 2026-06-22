@@ -27,3 +27,11 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/app/ranking', label: 'Ranking', icon: TrendingUp },
   { to: '/app/perfil',  label: 'Perfil',  icon: User },
 ];
+
+/**
+ * Hide items that don't make sense when the user has no leagues.
+ * Torneio and Ranking are scoped to a league; Liga and Perfil remain.
+ */
+export function filterNavForNoLeagues(items: NavItem[]): NavItem[] {
+  return items.filter((item) => item.to !== '/app/torneio' && item.to !== '/app/ranking');
+}

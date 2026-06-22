@@ -11,7 +11,7 @@
  *  - Jogadores: usePlayers + useDeletePlayer (DELETE /api/players/{id}).
  */
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -373,6 +373,10 @@ export default function AdminRoute() {
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
       </div>
     );
+  }
+
+  if (league && !isOrganizer) {
+    return <Navigate to="/app" replace />;
   }
 
   return (
