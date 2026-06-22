@@ -115,6 +115,28 @@ async function readBody(response: Response): Promise<unknown> {
   }
 }
 
+/**
+ * Extrai a melhor mensagem de erro de um corpo de resposta. Suporta o
+ * ProblemDetails do ASP.NET Core: `detail` (Results.Problem) e a forma de
+ * validação `errors: { campo: [msg, ...] }` (Results.ValidationProblem),
+ * caindo para `title` e por fim para o `statusText`.
+ */
+function extractErrorMessage(body: unknown, fallback: string): string {
+  if (typeof body === 'string' && body) return body;
+  if (typeof body === 'object' && body !== null) {
+    const b = body as Record<string, unknown>;
+    if (typeof b.detail === 'string' && b.detail) return b.detail;
+    if (b.errors && typeof b.errors === 'object') {
+      const msgs = Object.values(b.errors as Record<string, unknown>)
+        .flatMap((v) => (Array.isArray(v) ? v : [v]))
+        .filter((v): v is string => typeof v === 'string' && v.length > 0);
+      if (msgs.length > 0) return msgs[0];
+    }
+    if (typeof b.title === 'string' && b.title) return b.title;
+  }
+  return fallback;
+}
+
 export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
   const token = localStorage.getItem(STORAGE_TOKEN);
   let response = await rawFetch(path, opts, token);
@@ -147,12 +169,7 @@ export async function api<T>(path: string, opts: ApiOptions = {}): Promise<T> {
   const body = await readBody(response);
 
   if (!response.ok) {
-    const message =
-      typeof body === 'object' && body !== null && 'detail' in body
-        ? String((body as { detail: unknown }).detail)
-        : typeof body === 'string'
-          ? body
-          : response.statusText;
+    const message = extractErrorMessage(body, response.statusText);
     throw new ApiError(response.status, message, body);
   }
 

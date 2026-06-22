@@ -135,4 +135,19 @@ describe('api()', () => {
     expect((err as ApiError).message).toBe('E-mail ou senha inválidos.');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('extrai mensagem de ValidationProblem (errors) quando não há detail', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(400, {
+        title: 'One or more validation errors occurred.',
+        status: 400,
+        errors: { changePassword: ['Senha atual incorreta.'] },
+      }),
+    );
+
+    const err = await api('/auth/change-password', { method: 'POST', body: {} }).catch((e) => e);
+
+    expect((err as ApiError).status).toBe(400);
+    expect((err as ApiError).message).toBe('Senha atual incorreta.');
+  });
 });
