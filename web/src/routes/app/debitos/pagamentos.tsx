@@ -2,7 +2,7 @@
  * /app/debitos/pagamentos — Pagamentos do torneio (pós-encerramento).
  * Refatorado na Fase 5 para consumir a API Real.
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Loader2,
   QrCode,
+  Share2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -30,6 +31,9 @@ import { MoneyValue } from '@/components/ui/money-value';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { StatTile } from '@/components/ui/stat-tile';
 import { PixQrSheet } from '@/features/payments/pix-qr-sheet';
+import { ShareCard } from '@/features/payments/share-card';
+import { buildShareCardModel } from '@/features/payments/share-card-model';
+import { toPng } from 'html-to-image';
 
 import {
   useTournamentBalances,
@@ -79,6 +83,8 @@ export default function PagamentosRoute() {
   const [copied, setCopied] = useState<string | null>(null);
   const [qrFor, setQrFor] = useState<{ key: string; name: string; amount: number } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [isSharing, setIsSharing] = useState(false);
+  const shareCardRef = useRef<HTMLDivElement>(null);
 
   const { data: balances, isLoading: isLoadingB } = useTournamentBalances(tId ?? '');
   const { data: payments, isLoading: isLoadingP } = useTournamentPayments(tId ?? '');
@@ -162,6 +168,54 @@ export default function PagamentosRoute() {
     });
   };
 
+  const tName = tournament.name;
+  const shareModel = buildShareCardModel(tName, tournament.scheduledDateTime, aggregated);
+
+  const downloadPng = useCallback((blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, []);
+
+  const handleShare = useCallback(async () => {
+    if (!shareCardRef.current) return;
+    setIsSharing(true);
+    try {
+      const dataUrl = await toPng(shareCardRef.current, {
+        pixelRatio: 2,
+        cacheBust: true,
+      });
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+      const file = new File([blob], 'pendencias.png', { type: 'image/png' });
+      const shareData: ShareData = {
+        title: `Pendências · ${shareModel.title}`,
+        text: `Confira os pagamentos pendentes do ${shareModel.title}.`,
+        files: [file],
+      };
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share(shareData);
+      } else {
+        downloadPng(blob, 'pendencias.png');
+        toast.info('Imagem baixada. Compartilhe manualmente no WhatsApp.');
+      }
+    } catch (err) {
+      // Usuário cancelou o share sheet ou erro de geração — não exibir toast em caso de cancelamento.
+      const isAbort = err instanceof Error && /abort|canceled|cancelled/i.test(err.message);
+      if (!isAbort) {
+        toast.error('Não foi possível compartilhar a imagem.');
+      }
+    } finally {
+      setIsSharing(false);
+    }
+  }, [shareModel.title, downloadPng]);
+
   // ---- Derived ----
   const pending = aggregated.filter((g) => !g.allConfirmed && g.hasPending).length;
   const paid = aggregated.filter((g) => !g.allConfirmed && !g.hasPending).length;
@@ -172,7 +226,6 @@ export default function PagamentosRoute() {
 
   const sortedSaldo = [...saldo].sort((a, b) => b.balance - a.balance);
 
-  const tName = tournament.name;
   const tPrizePool = tournament.prizePool;
   const tCaixinha = jackpot?.amount ?? 0;
 
@@ -408,6 +461,16 @@ export default function PagamentosRoute() {
             >
               <span className="block truncate">Cobrar todos · Em breve</span>
             </Button>
+            <Button
+              variant="secondary"
+              icon={Share2}
+              block
+              onClick={handleShare}
+              disabled={isSharing}
+              className="min-w-0"
+            >
+              <span className="block truncate">Compartilhar</span>
+            </Button>
           </div>
         </div>
       )}
@@ -459,6 +522,16 @@ export default function PagamentosRoute() {
                 className="min-w-0"
               >
                 <span className="block truncate">Cobrar todos · Em breve</span>
+              </Button>
+              <Button
+                variant="secondary"
+                icon={Share2}
+                size="sm"
+                onClick={handleShare}
+                disabled={isSharing}
+                className="min-w-0"
+              >
+                <span className="block truncate">Compartilhar</span>
               </Button>
             </div>
           </div>
@@ -599,6 +672,8 @@ export default function PagamentosRoute() {
           amount={qrFor.amount}
         />
       ) : null}
+
+      <ShareCard model={shareModel} ref={shareCardRef} />
     </div>
   );
 }
