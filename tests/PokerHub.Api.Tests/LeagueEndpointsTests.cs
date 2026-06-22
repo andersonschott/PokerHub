@@ -13,12 +13,18 @@ public class LeagueEndpointsTests : IClassFixture<ApiFactory>
     private sealed record AuthResponse(string AccessToken, string RefreshToken, string UserId, string Name, string Email);
     private sealed record LeagueResponse(Guid Id, string Name, string? Description, string InviteCode, string OrganizerId);
 
-    private async Task<HttpClient> AuthenticatedClientAsync(string email)
+    private async Task<AuthResponse> RegisterAsync(string email)
     {
         var client = _factory.CreateClient();
         var resp = await client.PostAsJsonAsync("/api/auth/register",
             new { Name = "User " + email, Email = email, Password = "Senha123!" });
-        var auth = (await resp.Content.ReadFromJsonAsync<AuthResponse>())!;
+        return (await resp.Content.ReadFromJsonAsync<AuthResponse>())!;
+    }
+
+    private async Task<HttpClient> AuthenticatedClientAsync(string email)
+    {
+        var auth = await RegisterAsync(email);
+        var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
         return client;
     }
@@ -101,5 +107,111 @@ public class LeagueEndpointsTests : IClassFixture<ApiFactory>
         var outsider = await AuthenticatedClientAsync("outsider@test.com");
         var resp = await outsider.GetAsync($"/api/leagues/{league!.Id}");
         Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    [Fact]
+    public async Task TransferOwnership_ToActiveMember_Returns200AndUpdatesOrganizer()
+    {
+        var organizerClient = await AuthenticatedClientAsync("owner-transfer@test.com");
+        var create = await organizerClient.PostAsJsonAsync("/api/leagues",
+            new { Name = "Liga Transferível", Description = (string?)null, BlockCheckInWithDebt = false });
+        var league = await create.Content.ReadFromJsonAsync<LeagueResponse>();
+
+        var joinerAuth = await RegisterAsync("joiner-transfer@test.com");
+        var joinerClient = _factory.CreateClient();
+        joinerClient.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", joinerAuth.AccessToken);
+        var joinResp = await joinerClient.PostAsync($"/api/leagues/join/{league!.InviteCode}", null);
+        Assert.Equal(HttpStatusCode.OK, joinResp.StatusCode);
+
+        var transfer = await organizerClient.PostAsJsonAsync(
+            $"/api/leagues/{league.Id}/transfer-ownership",
+            new { newOrganizerUserId = joinerAuth.UserId });
+        Assert.Equal(HttpStatusCode.OK, transfer.StatusCode);
+
+        var details = await joinerClient.GetFromJsonAsync<LeagueResponse>($"/api/leagues/{league.Id}");
+        Assert.Equal(joinerAuth.UserId, details!.OrganizerId);
+    }
+
+    [Fact]
+    public async Task TransferOwnership_AsNonOrganizer_Returns403()
+    {
+        var organizerClient = await AuthenticatedClientAsync("owner2-transfer@test.com");
+        var create = await organizerClient.PostAsJsonAsync("/api/leagues",
+            new { Name = "Liga Protegida", Description = (string?)null, BlockCheckInWithDebt = false });
+        var league = await create.Content.ReadFromJsonAsync<LeagueResponse>();
+
+        var intruderClient = await AuthenticatedClientAsync("intruder-transfer@test.com");
+        var transfer = await intruderClient.PostAsJsonAsync(
+            $"/api/leagues/{league!.Id}/transfer-ownership",
+            new { newOrganizerUserId = "some-user-id" });
+
+        Assert.Equal(HttpStatusCode.Forbidden, transfer.StatusCode);
+    }
+
+    [Fact]
+    public async Task TransferOwnership_ToNonMember_Returns409()
+    {
+        var organizerClient = await AuthenticatedClientAsync("owner3-transfer@test.com");
+        var create = await organizerClient.PostAsJsonAsync("/api/leagues",
+            new { Name = "Liga Fechada", Description = (string?)null, BlockCheckInWithDebt = false });
+        var league = await create.Content.ReadFromJsonAsync<LeagueResponse>();
+
+        var outsiderAuth = await RegisterAsync("outsider-transfer@test.com");
+
+        Assert.NotNull(league);
+        var transfer = await organizerClient.PostAsJsonAsync(
+            $"/api/leagues/{league.Id}/transfer-ownership",
+            new { newOrganizerUserId = outsiderAuth.UserId });
+
+        Assert.Equal(HttpStatusCode.Conflict, transfer.StatusCode);
+    }
+
+    [Fact]
+    public async Task TransferOwnership_WithNullNewOrganizerUserId_Returns409Not500()
+    {
+        var organizerClient = await AuthenticatedClientAsync("owner-null-transfer@test.com");
+        var create = await organizerClient.PostAsJsonAsync("/api/leagues",
+            new { Name = "Liga Null Target", Description = (string?)null, BlockCheckInWithDebt = false });
+        var league = await create.Content.ReadFromJsonAsync<LeagueResponse>();
+
+        Assert.NotNull(league);
+        var transfer = await organizerClient.PostAsJsonAsync(
+            $"/api/leagues/{league.Id}/transfer-ownership",
+            new { newOrganizerUserId = (string?)null });
+
+        Assert.Equal(HttpStatusCode.Conflict, transfer.StatusCode);
+    }
+
+    [Fact]
+    public async Task TransferOwnership_WithEmptyNewOrganizerUserId_Returns409Not500()
+    {
+        var organizerClient = await AuthenticatedClientAsync("owner-empty-transfer@test.com");
+        var create = await organizerClient.PostAsJsonAsync("/api/leagues",
+            new { Name = "Liga Empty Target", Description = (string?)null, BlockCheckInWithDebt = false });
+        var league = await create.Content.ReadFromJsonAsync<LeagueResponse>();
+
+        Assert.NotNull(league);
+        var transfer = await organizerClient.PostAsJsonAsync(
+            $"/api/leagues/{league.Id}/transfer-ownership",
+            new { newOrganizerUserId = "" });
+
+        Assert.Equal(HttpStatusCode.Conflict, transfer.StatusCode);
+    }
+
+    [Fact]
+    public async Task TransferOwnership_WithWhitespaceNewOrganizerUserId_Returns409Not500()
+    {
+        var organizerClient = await AuthenticatedClientAsync("owner-whitespace-transfer@test.com");
+        var create = await organizerClient.PostAsJsonAsync("/api/leagues",
+            new { Name = "Liga Whitespace Target", Description = (string?)null, BlockCheckInWithDebt = false });
+        var league = await create.Content.ReadFromJsonAsync<LeagueResponse>();
+
+        Assert.NotNull(league);
+        var transfer = await organizerClient.PostAsJsonAsync(
+            $"/api/leagues/{league.Id}/transfer-ownership",
+            new { newOrganizerUserId = "   " });
+
+        Assert.Equal(HttpStatusCode.Conflict, transfer.StatusCode);
     }
 }
