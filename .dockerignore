@@ -29,3 +29,5 @@ DEPLOY.md
 .claude/
 queries/
 **/*.DotSettings.user
+**/node_modules.bak
+web/dist
