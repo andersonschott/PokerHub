@@ -183,13 +183,24 @@ export default function PagamentosRoute() {
   };
 
   const handleShare = async () => {
-    if (!shareCardRef.current) return;
+    const node = shareCardRef.current;
+    if (!node) return;
     setIsSharing(true);
     try {
-      const dataUrl = await toPng(shareCardRef.current, {
+      // Garante fontes carregadas antes de rasterizar (evita texto faltando).
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+      const opts = {
         pixelRatio: 2,
-        cacheBust: true,
-      });
+        backgroundColor: '#191816',
+        width: node.offsetWidth,
+        height: node.offsetHeight,
+      };
+      // html-to-image costuma retornar imagem vazia/preta na 1ª chamada
+      // (corrida de carregamento de recursos) — renderiza 2x e usa a última.
+      await toPng(node, opts);
+      const dataUrl = await toPng(node, opts);
       const response = await fetch(dataUrl);
       const blob = await response.blob();
       const file = new File([blob], 'pendencias.png', { type: 'image/png' });
@@ -502,6 +513,17 @@ export default function PagamentosRoute() {
               </Button>
             </div>
           )}
+          {/* Mobile: compartilhar pendências (no desktop fica no header abaixo) */}
+          <Button
+            variant="secondary"
+            icon={Share2}
+            block
+            onClick={handleShare}
+            disabled={isSharing}
+            className="lg:hidden min-w-0"
+          >
+            <span className="block truncate">Compartilhar pendências</span>
+          </Button>
           {/* Desktop: header + actions */}
           <div className="hidden lg:flex items-center justify-between mb-2">
             <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
