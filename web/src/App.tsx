@@ -1,7 +1,7 @@
-import { lazy, Suspense, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AuthProvider, useAuth } from '@/lib/auth-context';
+import { AuthProvider } from '@/lib/auth-context';
 import { ThemeProvider } from '@/lib/theme-context';
 import { Toaster } from '@/components/ui/sonner';
 import { Splash } from '@/components/splash';
@@ -10,6 +10,7 @@ import LoginRoute from '@/routes/login';
 import CadastroRoute from '@/routes/cadastro';
 import { AppShell } from '@/components/app-shell/app-shell';
 
+import { Protected, PublicOnly } from '@/lib/route-guards';
 import { ActiveLeagueProvider } from '@/features/leagues/league-context';
 
 // Task 9: leagues screens (API real)
@@ -70,11 +71,6 @@ const qc = new QueryClient({
   },
 });
 
-function Protected({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth();
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
-}
-
 export default function App() {
   // Splash uma vez por load (padrão do kit), por cima de tudo.
   const [splash, setSplash] = useState(true);
@@ -87,8 +83,9 @@ export default function App() {
             <BrowserRouter>
               <Suspense fallback={<RouteFallback />}>
                 <Routes>
-                  <Route path="/login" element={<LoginRoute />} />
-                  <Route path="/cadastro" element={<CadastroRoute />} />
+                  <Route path="/" element={<Navigate to="/app" replace />} />
+                  <Route path="/login" element={<PublicOnly><LoginRoute /></PublicOnly>} />
+                  <Route path="/cadastro" element={<PublicOnly><CadastroRoute /></PublicOnly>} />
                   {/* TV mode: público via invite code */}
                   <Route path="/tv/:inviteCode" element={<TvRoute />} />
                   {/* Convite de liga: landing pública (sem menus) */}
@@ -126,7 +123,7 @@ export default function App() {
                     <Route path="perfil/admin" element={<AdminRoute />} />
                     <Route path="*" element={<Navigate to="/app" replace />} />
                   </Route>
-                  <Route path="*" element={<Navigate to="/login" replace />} />
+                  <Route path="*" element={<Navigate to="/app" replace />} />
                 </Routes>
               </Suspense>
             </BrowserRouter>
