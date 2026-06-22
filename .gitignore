@@ -10,3 +10,5 @@ src/PokerHub.Api/appsettings.Development.json
 web/node_modules/
 web/dist/
 web/*.tsbuildinfo
+.superpowers/
+web/node_modules.bak/
