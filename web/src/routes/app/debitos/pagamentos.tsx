@@ -33,6 +33,8 @@ import { StatTile } from '@/components/ui/stat-tile';
 import { PixQrSheet } from '@/features/payments/pix-qr-sheet';
 import { ShareCard } from '@/features/payments/share-card';
 import { buildShareCardModel } from '@/features/payments/share-card-model';
+import { BalanceShareCard } from '@/features/payments/balance-share-card';
+import { buildBalanceShareCardModel } from '@/features/payments/balance-share-card-model';
 import { toPng } from 'html-to-image';
 
 import {
@@ -85,6 +87,7 @@ export default function PagamentosRoute() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [isSharing, setIsSharing] = useState(false);
   const shareCardRef = useRef<HTMLDivElement>(null);
+  const balanceShareCardRef = useRef<HTMLDivElement>(null);
 
   const { data: balances, isLoading: isLoadingB } = useTournamentBalances(tId ?? '');
   const { data: payments, isLoading: isLoadingP } = useTournamentPayments(tId ?? '');
@@ -170,6 +173,13 @@ export default function PagamentosRoute() {
 
   const tName = tournament.name;
   const shareModel = buildShareCardModel(tName, tournament.scheduledDateTime, aggregated);
+  const balanceShareModel = buildBalanceShareCardModel(
+    tName,
+    tournament.scheduledDateTime,
+    saldo,
+    jackpot?.amount ?? 0,
+    tournament.prizePool,
+  );
 
   const downloadPng = (blob: Blob, filename: string) => {
     const url = URL.createObjectURL(blob);
@@ -182,12 +192,15 @@ export default function PagamentosRoute() {
     URL.revokeObjectURL(url);
   };
 
-  const handleShare = async () => {
-    const node = shareCardRef.current;
+  const captureAndShare = async (
+    node: HTMLDivElement | null,
+    filename: string,
+    title: string,
+    text: string,
+  ) => {
     if (!node) return;
     setIsSharing(true);
     try {
-      // Garante fontes carregadas antes de rasterizar (evita texto faltando).
       if (document.fonts?.ready) {
         await document.fonts.ready;
       }
@@ -196,32 +209,24 @@ export default function PagamentosRoute() {
         backgroundColor: '#191816',
         width: node.offsetWidth,
         height: node.offsetHeight,
-        // ShareCard fica off-screen (position:fixed; left:-9999px); o html-to-image copia
-        // esse deslocamento pro clone e o conteudo rasteriza fora do viewport (imagem so com
-        // o fundo). Sobrescreve a posicao do clone para 0,0 e o conteudo volta a aparecer.
+        // O card fica off-screen (position:fixed; left:-9999px); o html-to-image copia
+        // esse deslocamento pro clone e o conteudo rasteriza fora do viewport (imagem so
+        // com o fundo). Sobrescreve a posicao do clone para 0,0.
         style: { position: 'static', left: '0px', top: '0px', margin: '0' },
       };
-      // html-to-image costuma retornar imagem vazia/preta na 1ª chamada
-      // (corrida de carregamento de recursos) — renderiza 2x e usa a última.
       await toPng(node, opts);
       const dataUrl = await toPng(node, opts);
       const response = await fetch(dataUrl);
       const blob = await response.blob();
-      const file = new File([blob], 'pendencias.png', { type: 'image/png' });
-      const shareData: ShareData = {
-        title: `Pendências · ${shareModel.title}`,
-        text: `Confira os pagamentos pendentes do ${shareModel.title}.`,
-        files: [file],
-      };
-
+      const file = new File([blob], filename, { type: 'image/png' });
+      const shareData: ShareData = { title, text, files: [file] };
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share(shareData);
       } else {
-        downloadPng(blob, 'pendencias.png');
+        downloadPng(blob, filename);
         toast.info('Imagem baixada. Compartilhe manualmente no WhatsApp.');
       }
     } catch (err) {
-      // Usuário cancelou o share sheet ou erro de geração — não exibir toast em caso de cancelamento.
       const isAbort = err instanceof Error && /abort|canceled|cancelled/i.test(err.message);
       if (!isAbort) {
         toast.error('Não foi possível compartilhar a imagem.');
@@ -230,6 +235,22 @@ export default function PagamentosRoute() {
       setIsSharing(false);
     }
   };
+
+  const handleShare = () =>
+    captureAndShare(
+      shareCardRef.current,
+      'pendencias.png',
+      `Pendências · ${shareModel.title}`,
+      `Confira os pagamentos pendentes do ${shareModel.title}.`,
+    );
+
+  const handleShareBalance = () =>
+    captureAndShare(
+      balanceShareCardRef.current,
+      'saldo.png',
+      `Saldo · ${balanceShareModel.title}`,
+      `Confira o saldo do ${balanceShareModel.title}.`,
+    );
 
   // ---- Derived ----
   const pending = aggregated.filter((g) => !g.allConfirmed && g.hasPending).length;
@@ -480,11 +501,11 @@ export default function PagamentosRoute() {
               variant="secondary"
               icon={Share2}
               block
-              onClick={handleShare}
+              onClick={handleShareBalance}
               disabled={isSharing}
               className="min-w-0"
             >
-              <span className="block truncate">Compartilhar</span>
+              <span className="block truncate">Compartilhar saldo</span>
             </Button>
           </div>
         </div>
@@ -700,6 +721,7 @@ export default function PagamentosRoute() {
       ) : null}
 
       <ShareCard model={shareModel} ref={shareCardRef} />
+      <BalanceShareCard model={balanceShareModel} ref={balanceShareCardRef} />
     </div>
   );
 }
