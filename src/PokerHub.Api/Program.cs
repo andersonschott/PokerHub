@@ -27,6 +27,11 @@ var cultureInfo = new CultureInfo("pt-BR");
 CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
 CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
 
+// Sentry: monitoramento de erros/performance. Opções vêm da seção "Sentry" do config
+// (Dsn fica vazio por padrão → SDK desativado em dev/testes; em prod o DSN é injetado
+// via env Sentry__Dsn no Container App). Environment é inferido de ASPNETCORE_ENVIRONMENT.
+builder.WebHost.UseSentry();
+
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
@@ -163,6 +168,19 @@ ExpenseEndpoints.Map(app);
 app.MapHub<PokerHub.Api.Hubs.TournamentHub>("/hub/tournaments");
 
 app.MapHealthChecks("/health");
+
+// Endpoint de smoke do Sentry — lança uma exceção de propósito para validar a captura
+// em produção. Desativado por padrão; habilitar pontualmente via env
+// Sentry__EnableTestEndpoint=true, bater uma vez, e desabilitar.
+if (builder.Configuration.GetValue<bool>("Sentry:EnableTestEndpoint"))
+{
+    app.MapGet("/debug/sentry-test", () =>
+        {
+            throw new InvalidOperationException("PokerHub API — smoke test do Sentry (intencional).");
+        })
+        .AllowAnonymous()
+        .ExcludeFromDescription();
+}
 
 app.Run();
 
