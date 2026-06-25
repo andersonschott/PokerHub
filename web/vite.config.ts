@@ -2,9 +2,25 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { sentryVitePlugin } from '@sentry/vite-plugin';
 import path from 'node:path';
 
+// Upload de source maps só roda quando SENTRY_AUTH_TOKEN está presente (CI/deploy).
+// Sem o token (dev local), o plugin é omitido e o build segue normal.
+const sentryPlugins = process.env.SENTRY_AUTH_TOKEN
+  ? [
+      sentryVitePlugin({
+        org: process.env.SENTRY_ORG,
+        project: process.env.SENTRY_PROJECT,
+        authToken: process.env.SENTRY_AUTH_TOKEN,
+        release: { name: process.env.VITE_APP_VERSION },
+      }),
+    ]
+  : [];
+
 export default defineConfig({
+  // 'hidden' gera os .map para upload ao Sentry sem referenciá-los no bundle servido.
+  build: { sourcemap: 'hidden' },
   plugins: [
     react(),
     tailwindcss(),
@@ -41,6 +57,8 @@ export default defineConfig({
       },
       devOptions: { enabled: false },
     }),
+    // Sentry por último (precisa ver o output final p/ associar source maps).
+    ...sentryPlugins,
   ],
   resolve: {
     alias: {

@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import * as Sentry from '@sentry/react';
 import { apiUrl } from './api/base';
 
 export type AuthUser = {
@@ -60,6 +61,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
   const [user, setUser] = useState<AuthUser | null>(() => readStoredUser());
 
+  // Atribui ao Sentry o usuário já logado (sessão restaurada do localStorage)
+  // no carregamento, para que erros de runtime cheguem identificados.
+  useEffect(() => {
+    if (user) {
+      Sentry.setUser({ id: user.userId, email: user.email, username: user.name });
+    }
+    // só no mount — setSession/clear cuidam das mudanças subsequentes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const setSession = (accessToken: string, refresh: string, u: AuthUser) => {
     localStorage.setItem(STORAGE_TOKEN, accessToken);
     localStorage.setItem(STORAGE_REFRESH, refresh);
@@ -67,6 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(accessToken);
     setRefreshToken(refresh);
     setUser(u);
+    // Identifica o usuário no Sentry — erros/replays passam a ser atribuídos a ele.
+    Sentry.setUser({ id: u.userId, email: u.email, username: u.name });
   };
 
   const clear = () => {
@@ -81,6 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     setRefreshToken(null);
     setUser(null);
+    // Desassocia o usuário do Sentry no logout.
+    Sentry.setUser(null);
   };
 
   return (
