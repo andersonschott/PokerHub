@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -84,6 +85,43 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 
+// --- Rate limiting: brute-force protection no grupo anônimo /api/auth/* ---
+// Particiona por IP do cliente. ATENÇÃO: numa noite de poker presencial todos os
+// jogadores costumam estar na MESMA rede (mesmo IP público via NAT), então o limite
+// é generoso o bastante para uma mesa cheia logar/refrescar sem falso 429, mas ainda
+// inviabiliza brute force online (combinado à política forte de senha do Identity).
+// Tunável via config/env: RateLimit__Auth__PermitLimit / RateLimit__Auth__WindowSeconds.
+// O limite é lido em request-time (na criação da partição), não no startup — assim
+// honra overrides de config aplicados tardiamente (ex.: testes via WithWebHostBuilder)
+// e permite ajuste sem rebuild.
+builder.Services.AddRateLimiter(rateLimiter =>
+{
+    rateLimiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    rateLimiter.OnRejected = (context, _) =>
+    {
+        var windowSeconds = context.HttpContext.RequestServices
+            .GetRequiredService<IConfiguration>()
+            .GetValue<int?>("RateLimit:Auth:WindowSeconds") ?? 60;
+        context.HttpContext.Response.Headers.RetryAfter =
+            windowSeconds.ToString(CultureInfo.InvariantCulture);
+        return ValueTask.CompletedTask;
+    };
+    rateLimiter.AddPolicy(AuthEndpoints.RateLimitPolicy, httpContext =>
+    {
+        var config = httpContext.RequestServices.GetRequiredService<IConfiguration>();
+        var permitLimit = config.GetValue<int?>("RateLimit:Auth:PermitLimit") ?? 30;
+        var windowSeconds = config.GetValue<int?>("RateLimit:Auth:WindowSeconds") ?? 60;
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetClientPartitionKey(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = TimeSpan.FromSeconds(windowSeconds),
+                QueueLimit = 0
+            });
+    });
+});
+
 builder.Services.AddOpenApi();
 builder.Services.AddSignalR();
 
@@ -108,6 +146,7 @@ if (allowedOrigins.Length > 0)
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 AuthEndpoints.Map(app);
 LeagueEndpoints.Map(app);
@@ -126,6 +165,19 @@ app.MapHub<PokerHub.Api.Hubs.TournamentHub>("/hub/tournaments");
 app.MapHealthChecks("/health");
 
 app.Run();
+
+// Chave de partição do rate limiter: usa o IP real do cliente. Atrás do ingress do
+// Container App (Envoy) o IP do socket é o do proxy, e o IP do cliente chega em
+// X-Forwarded-For — por isso priorizamos o primeiro entry do header. Em dev/test
+// (sem proxy) cai no RemoteIpAddress. XFF é spoofável, mas isso só permitiria a um
+// atacante driblar o próprio limite (limitação inerente de rate limit por IP).
+static string GetClientPartitionKey(HttpContext context)
+{
+    var forwarded = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+    if (!string.IsNullOrWhiteSpace(forwarded))
+        return forwarded.Split(',')[0].Trim();
+    return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+}
 
 // Exposto para WebApplicationFactory nos testes de integração.
 public partial class Program { }

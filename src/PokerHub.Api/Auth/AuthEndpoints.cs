@@ -9,6 +9,9 @@ namespace PokerHub.Api.Auth;
 
 public static class AuthEndpoints
 {
+    /// <summary>Nome da política de rate limiting aplicada ao grupo anônimo /api/auth/*.</summary>
+    public const string RateLimitPolicy = "auth";
+
     // Pre-computed ASP.NET Identity v3 password hash of a fixed dummy string.
     // Used to keep login response time constant regardless of whether the email
     // exists, preventing timing-based email enumeration attacks.
@@ -18,7 +21,8 @@ public static class AuthEndpoints
 
     public static void Map(WebApplication app)
     {
-        var group = app.MapGroup("/api/auth").WithTags("Auth").AllowAnonymous();
+        var group = app.MapGroup("/api/auth").WithTags("Auth").AllowAnonymous()
+            .RequireRateLimiting(RateLimitPolicy);
 
         group.MapPost("/register", async (
             RegisterRequest req,

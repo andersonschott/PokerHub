@@ -55,7 +55,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 ["Jwt:Audience"] = "pokerhub-api-test",
                 ["Jwt:SigningKey"] = "test-signing-key-with-32-plus-characters!",
                 ["Jwt:AccessTokenLifetimeMinutes"] = "15",
-                ["Jwt:RefreshTokenLifetimeDays"] = "30"
+                ["Jwt:RefreshTokenLifetimeDays"] = "30",
+                // Limite alto por padrão para não throttlar a bateria de testes de auth
+                // (todos partem do mesmo IP/partição). Testes de rate limit sobrescrevem
+                // este valor via WithWebHostBuilder.
+                ["RateLimit:Auth:PermitLimit"] = "100000"
             });
         });
 
