@@ -56,6 +56,10 @@ builder.Services.AddIdentityCore<User>(options =>
     .AddEntityFrameworkStores<PokerHubDbContext>()
     .AddDefaultTokenProviders();
 
+// Token de reset de senha (DataProtection) expira em 1 hora.
+builder.Services.Configure<DataProtectionTokenProviderOptions>(o =>
+    o.TokenLifespan = TimeSpan.FromHours(1));
+
 builder.Services.AddApplicationServices();
 builder.Services.AddSingleton<PokerHub.Api.Services.TournamentTimerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<PokerHub.Api.Services.TournamentTimerService>());
@@ -69,6 +73,12 @@ if (string.IsNullOrWhiteSpace(jwtOpts.SigningKey) || jwtOpts.SigningKey.Length <
 
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddSingleton<RefreshTokenService>();
+
+// --- Email (SMTP Fastmail) para reset de senha ---
+builder.Services.Configure<PokerHub.Api.Email.EmailOptions>(
+    builder.Configuration.GetSection("Email"));
+builder.Services.AddSingleton<PokerHub.Api.Email.IPasswordResetEmailSender,
+    PokerHub.Api.Email.SmtpEmailSender>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opts =>
