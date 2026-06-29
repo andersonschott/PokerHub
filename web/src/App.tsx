@@ -8,6 +8,7 @@ import { Splash } from '@/components/splash';
 import { InstallPrompt } from '@/components/install-prompt';
 import LoginRoute from '@/routes/login';
 import CadastroRoute from '@/routes/cadastro';
+import RecuperarSenhaRoute from '@/routes/recuperar-senha';
 import { AppShell } from '@/components/app-shell/app-shell';
 
 import { Protected, PublicOnly } from '@/lib/route-guards';
@@ -86,6 +87,7 @@ export default function App() {
                   <Route path="/" element={<Navigate to="/app" replace />} />
                   <Route path="/login" element={<PublicOnly><LoginRoute /></PublicOnly>} />
                   <Route path="/cadastro" element={<PublicOnly><CadastroRoute /></PublicOnly>} />
+                  <Route path="/recuperar-senha" element={<PublicOnly><RecuperarSenhaRoute /></PublicOnly>} />
                   {/* TV mode: público via invite code */}
                   <Route path="/tv/:inviteCode" element={<TvRoute />} />
                   {/* Convite de liga: landing pública (sem menus) */}

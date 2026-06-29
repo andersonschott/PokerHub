@@ -81,6 +81,15 @@ export function LoginForm() {
         )}
       </div>
 
+      <div className="text-right">
+        <Link
+          to="/recuperar-senha"
+          className="text-sm text-muted-foreground hover:text-primary hover:underline"
+        >
+          Esqueci minha senha
+        </Link>
+      </div>
+
       {mutation.error instanceof ApiError && (
         <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
           {mutation.error.status === 401
