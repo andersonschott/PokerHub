@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace PokerHub.Api.Tests;
@@ -94,5 +96,34 @@ public class ResetPasswordEndpointTests : IClassFixture<ApiFactory>
             new { Email = "ninguem@test.com", Code = "qualquer", NewPassword = "NovaSenha456!" });
 
         Assert.Equal(HttpStatusCode.BadRequest, reset.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResetPassword_UnknownEmail_AndExistingEmail_ReturnIdenticalBody_AntiEnumeration()
+    {
+        // Registra um usuário real.
+        var realEmail = $"anti-enum-{Guid.NewGuid():N}@test.com";
+        await RegisterAsync(realEmail);
+
+        // Código bem-formado em base64url, mas semanticamente inválido como token do Identity.
+        var bogusCode = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes("bogus"));
+        var password = "NovaSenha456!";
+
+        var anon = _factory.CreateClient();
+
+        // Tentativa com e-mail DESCONHECIDO + código inválido.
+        var respUnknown = await anon.PostAsJsonAsync("/api/auth/reset-password",
+            new { Email = "nobody-unknown@test.com", Code = bogusCode, NewPassword = password });
+        var bodyUnknown = await respUnknown.Content.ReadAsStringAsync();
+
+        // Tentativa com e-mail REGISTRADO + mesmo código inválido.
+        var respExisting = await anon.PostAsJsonAsync("/api/auth/reset-password",
+            new { Email = realEmail, Code = bogusCode, NewPassword = password });
+        var bodyExisting = await respExisting.Content.ReadAsStringAsync();
+
+        // Ambas devem ser HTTP 400 com corpo byte-idêntico (sem vazar existência de conta).
+        Assert.Equal(HttpStatusCode.BadRequest, respUnknown.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, respExisting.StatusCode);
+        Assert.Equal(bodyUnknown, bodyExisting);
     }
 }

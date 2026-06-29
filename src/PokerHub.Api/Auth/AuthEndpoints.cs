@@ -214,6 +214,7 @@ public static class AuthEndpoints
             CancellationToken ct) =>
         {
             const string generic = "Não foi possível redefinir a senha. Solicite um novo link.";
+            const string invalidLink = "Link inválido ou expirado. Solicite um novo.";
             Dictionary<string, string[]> Fail(params string[] msgs) => new() { ["resetPassword"] = msgs };
 
             if (string.IsNullOrWhiteSpace(req.Email)
@@ -223,7 +224,7 @@ public static class AuthEndpoints
 
             var user = await userManager.FindByEmailAsync(req.Email.Trim().ToLowerInvariant());
             if (user is null)
-                return Results.ValidationProblem(Fail(generic)); // não vaza existência
+                return Results.ValidationProblem(Fail(invalidLink)); // não vaza existência
 
             string token;
             try
@@ -232,7 +233,7 @@ public static class AuthEndpoints
             }
             catch (FormatException)
             {
-                return Results.ValidationProblem(Fail(generic));
+                return Results.ValidationProblem(Fail(invalidLink));
             }
 
             var result = await userManager.ResetPasswordAsync(user, token, req.NewPassword);
@@ -241,7 +242,7 @@ public static class AuthEndpoints
                 var errors = result.Errors
                     .Select(e => e.Code switch
                     {
-                        "InvalidToken" => "Link inválido ou expirado. Solicite um novo.",
+                        "InvalidToken" => invalidLink,
                         "PasswordTooShort" => "Senha muito curta.",
                         "PasswordRequiresNonAlphanumeric" => "Senha deve conter ao menos um caractere especial.",
                         "PasswordRequiresDigit" => "Senha deve conter ao menos um número.",
