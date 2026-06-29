@@ -1,7 +1,11 @@
 using System.Security.Claims;
+using System.Text;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using PokerHub.Api.Common;
+using PokerHub.Api.Email;
 using PokerHub.Domain.Entities;
 using PokerHub.Infrastructure.Data;
 
@@ -166,6 +170,41 @@ public static class AuthEndpoints
                 }
             }
             return Results.NoContent();
+        });
+
+        group.MapPost("/forgot-password", async (
+            ForgotPasswordRequest req,
+            UserManager<User> userManager,
+            IPasswordResetEmailSender emailSender,
+            IOptions<EmailOptions> emailOpts,
+            ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            // Resposta uniforme 200 (anti-enumeração). Só dispara email se a conta
+            // existir E estiver ativa. Falha de SMTP é logada, nunca propagada.
+            if (!string.IsNullOrWhiteSpace(req.Email))
+            {
+                var email = req.Email.Trim().ToLowerInvariant();
+                var user = await userManager.FindByEmailAsync(email);
+                if (user is not null && user.IsActive)
+                {
+                    var token = await userManager.GeneratePasswordResetTokenAsync(user);
+                    var code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+                    var baseUrl = emailOpts.Value.AppBaseUrl.TrimEnd('/');
+                    var link = $"{baseUrl}/redefinir-senha?email={Uri.EscapeDataString(user.Email!)}&code={code}";
+                    try
+                    {
+                        await emailSender.SendPasswordResetAsync(user.Email!, user.Name, link, ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        loggerFactory.CreateLogger("Auth.ForgotPassword")
+                            .LogError(ex, "Falha ao enviar email de redefinição de senha.");
+                    }
+                }
+            }
+
+            return Results.Ok();
         });
 
         app.MapPost("/api/auth/change-password", async (

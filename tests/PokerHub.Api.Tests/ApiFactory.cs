@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Configuration;
+using PokerHub.Api.Email;
 using PokerHub.Infrastructure.Data;
 using Testcontainers.MsSql;
 
@@ -59,7 +61,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 // Limite alto por padrão para não throttlar a bateria de testes de auth
                 // (todos partem do mesmo IP/partição). Testes de rate limit sobrescrevem
                 // este valor via WithWebHostBuilder.
-                ["RateLimit:Auth:PermitLimit"] = "100000"
+                ["RateLimit:Auth:PermitLimit"] = "100000",
+                ["Email:AppBaseUrl"] = "http://localhost:5173",
             });
         });
 
@@ -81,6 +84,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                        .EnableServiceProviderCaching(false)
                        .ConfigureWarnings(w =>
                            w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
+
+            // Garante que NENHUM teste dispara email real: troca o SMTP por um fake capturador.
+            services.RemoveAll<IPasswordResetEmailSender>();
+            services.AddSingleton<CapturingEmailSender>();
+            services.AddSingleton<IPasswordResetEmailSender>(
+                sp => sp.GetRequiredService<CapturingEmailSender>());
 
             var sp = services.BuildServiceProvider();
             using var scope = sp.CreateScope();
