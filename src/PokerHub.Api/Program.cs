@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -43,6 +44,8 @@ builder.Services.AddDbContext<PokerHubDbContext>(options =>
             maxRetryDelay: TimeSpan.FromSeconds(30),
             errorNumbersToAdd: null);
         sqlOptions.CommandTimeout(60);
+        // Evita explosão cartesiana em queries com múltiplos Include de coleção (warning EF + perf).
+        sqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
     }));
 
 // Identity core sem cookies — a API é JWT-only. AddSignInManager fica de fora;
@@ -59,6 +62,13 @@ builder.Services.AddIdentityCore<User>(options =>
 // Token de reset de senha (DataProtection) expira em 1 hora.
 builder.Services.Configure<DataProtectionTokenProviderOptions>(o =>
     o.TokenLifespan = TimeSpan.FromHours(1));
+
+// Persiste as chaves do DataProtection no banco. Sem isto ficam no filesystem efêmero do
+// container (/root/.aspnet/DataProtection-Keys) → cada restart/scale-to-zero rotaciona as
+// chaves e invalida tokens de reset de senha em aberto. SetApplicationName mantém o ring estável.
+builder.Services.AddDataProtection()
+    .PersistKeysToDbContext<PokerHubDbContext>()
+    .SetApplicationName("PokerHub");
 
 builder.Services.AddApplicationServices();
 builder.Services.AddSingleton<PokerHub.Api.Services.TournamentTimerService>();
