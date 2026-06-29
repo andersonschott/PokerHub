@@ -207,6 +207,64 @@ public static class AuthEndpoints
             return Results.Ok();
         });
 
+        group.MapPost("/reset-password", async (
+            ResetPasswordRequest req,
+            UserManager<User> userManager,
+            PokerHubDbContext db,
+            CancellationToken ct) =>
+        {
+            const string generic = "Não foi possível redefinir a senha. Solicite um novo link.";
+            Dictionary<string, string[]> Fail(params string[] msgs) => new() { ["resetPassword"] = msgs };
+
+            if (string.IsNullOrWhiteSpace(req.Email)
+                || string.IsNullOrWhiteSpace(req.Code)
+                || string.IsNullOrWhiteSpace(req.NewPassword))
+                return Results.ValidationProblem(Fail(generic));
+
+            var user = await userManager.FindByEmailAsync(req.Email.Trim().ToLowerInvariant());
+            if (user is null)
+                return Results.ValidationProblem(Fail(generic)); // não vaza existência
+
+            string token;
+            try
+            {
+                token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(req.Code));
+            }
+            catch (FormatException)
+            {
+                return Results.ValidationProblem(Fail(generic));
+            }
+
+            var result = await userManager.ResetPasswordAsync(user, token, req.NewPassword);
+            if (!result.Succeeded)
+            {
+                var errors = result.Errors
+                    .Select(e => e.Code switch
+                    {
+                        "InvalidToken" => "Link inválido ou expirado. Solicite um novo.",
+                        "PasswordTooShort" => "Senha muito curta.",
+                        "PasswordRequiresNonAlphanumeric" => "Senha deve conter ao menos um caractere especial.",
+                        "PasswordRequiresDigit" => "Senha deve conter ao menos um número.",
+                        "PasswordRequiresLower" => "Senha deve conter ao menos uma letra minúscula.",
+                        "PasswordRequiresUpper" => "Senha deve conter ao menos uma letra maiúscula.",
+                        "PasswordRequiresUniqueChars" => "Senha deve conter mais caracteres distintos.",
+                        _ => generic
+                    })
+                    .ToArray();
+                return Results.ValidationProblem(Fail(errors));
+            }
+
+            // Reset bem-sucedido: revoga todas as sessões ativas do usuário.
+            var now = DateTime.UtcNow;
+            var activeTokens = await db.RefreshTokens
+                .Where(t => t.UserId == user.Id && t.RevokedAt == null)
+                .ToListAsync(ct);
+            foreach (var t in activeTokens) t.Revoke(null, now);
+            await db.SaveChangesAsync(ct);
+
+            return Results.NoContent();
+        });
+
         app.MapPost("/api/auth/change-password", async (
             ChangePasswordRequest req,
             ClaimsPrincipal principal,
