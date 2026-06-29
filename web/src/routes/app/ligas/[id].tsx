@@ -9,9 +9,8 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ChevronsUpDown, Settings2, CalendarPlus, Plus, CalendarClock, PiggyBank, ChevronRight, Users, Sun, Moon, Bell, Trophy } from 'lucide-react';
+import { ChevronsUpDown, Settings2, CalendarPlus, Plus, CalendarClock, PiggyBank, ChevronRight, Users, Trophy } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { useTheme } from '@/lib/theme-context';
 import { useLeague, useLeaguePlayers } from '@/lib/api/hooks/use-leagues';
 import { useActiveSeason } from '@/lib/api/hooks/use-seasons';
 import { useSeasonRanking } from '@/lib/api/hooks/use-rankings';
@@ -112,7 +111,6 @@ export default function LeagueHomeRoute() {
   const { leagueId } = useParams<{ leagueId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { toggle: toggleTheme, theme } = useTheme();
   const { setActiveLeagueId } = useActiveLeague();
   const [tab, setTab] = useState<TabKey>('torneios');
   const [shownRealizados, setShownRealizados] = useState(6);
@@ -200,26 +198,6 @@ export default function LeagueHomeRoute() {
               </div>
             </div>
           </Link>
-
-          {/* Theme toggle */}
-          <button
-            type="button"
-            title="Tema claro/escuro"
-            onClick={toggleTheme}
-            className="w-10 h-10 rounded-full shrink-0 bg-secondary border border-border flex items-center justify-center text-muted-foreground cursor-pointer hover:bg-[var(--felt-700)] transition-colors"
-            aria-label={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
-          >
-            {theme === 'dark' ? (
-              <Sun className="w-[18px] h-[18px]" />
-            ) : (
-              <Moon className="w-[18px] h-[18px]" />
-            )}
-          </button>
-
-          {/* Notifications placeholder */}
-          <div className="w-10 h-10 rounded-full shrink-0 bg-secondary border border-border flex items-center justify-center text-muted-foreground">
-            <Bell className="w-[18px] h-[18px]" />
-          </div>
         </div>
       )}
 

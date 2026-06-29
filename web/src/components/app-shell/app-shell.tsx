@@ -2,7 +2,7 @@
  * AppShell — top-level layout for all /app/* routes (Protected).
  *
  * Mobile (< md):
- *   - Sticky header bar with Logo + theme toggle + sign-out button.
+ *   - Sticky header bar with Logo + notifications + sign-out button.
  *   - BottomNav fixed at the bottom.
  *   - Main content padded to clear the bottom nav.
  *
@@ -16,9 +16,8 @@
 
 import { Outlet } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Sun, MoonStar } from 'lucide-react';
+import { LogOut, Bell } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { useTheme } from '@/lib/theme-context';
 import { cn } from '@/lib/utils';
 import { Sidebar } from './sidebar';
 import { BottomNav } from './bottom-nav';
@@ -26,7 +25,6 @@ import { Logo } from './logo';
 
 export function AppShell() {
   const { clear } = useAuth();
-  const { theme, toggle: toggleTheme } = useTheme();
   const navigate = useNavigate();
 
   function handleSignOut() {
@@ -55,10 +53,11 @@ export function AppShell() {
         <Logo />
 
         <div className="flex items-center gap-1">
-          {/* Theme toggle */}
+          {/* Notifications (placeholder) */}
           <button
-            onClick={toggleTheme}
-            aria-label={theme === 'dark' ? 'Mudar para tema claro' : 'Mudar para tema escuro'}
+            type="button"
+            aria-label="Notificações"
+            title="Notificações"
             className={cn(
               'flex items-center justify-center w-10 h-10 rounded-full border-0',
               'bg-transparent text-muted-foreground cursor-pointer',
@@ -67,7 +66,7 @@ export function AppShell() {
               'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--ring)] focus-visible:outline-offset-[-2px]',
             )}
           >
-            {theme === 'dark' ? <Sun className="w-5 h-5" aria-hidden="true" /> : <MoonStar className="w-5 h-5" aria-hidden="true" />}
+            <Bell className="w-5 h-5" aria-hidden="true" />
           </button>
 
           {/* Sign out */}
