@@ -1,7 +1,11 @@
 using System.Security.Claims;
+using System.Text;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using PokerHub.Api.Common;
+using PokerHub.Api.Email;
 using PokerHub.Domain.Entities;
 using PokerHub.Infrastructure.Data;
 
@@ -165,6 +169,100 @@ public static class AuthEndpoints
                     await db.SaveChangesAsync();
                 }
             }
+            return Results.NoContent();
+        });
+
+        group.MapPost("/forgot-password", async (
+            ForgotPasswordRequest req,
+            UserManager<User> userManager,
+            IPasswordResetEmailSender emailSender,
+            IOptions<EmailOptions> emailOpts,
+            ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            // Resposta uniforme 200 (anti-enumeração). Só dispara email se a conta
+            // existir E estiver ativa. Falha de SMTP é logada, nunca propagada.
+            if (!string.IsNullOrWhiteSpace(req.Email))
+            {
+                var email = req.Email.Trim().ToLowerInvariant();
+                var user = await userManager.FindByEmailAsync(email);
+                if (user is not null && user.IsActive)
+                {
+                    var token = await userManager.GeneratePasswordResetTokenAsync(user);
+                    var code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(token));
+                    var baseUrl = emailOpts.Value.AppBaseUrl.TrimEnd('/');
+                    var link = $"{baseUrl}/redefinir-senha?email={Uri.EscapeDataString(user.Email!)}&code={code}";
+                    try
+                    {
+                        await emailSender.SendPasswordResetAsync(user.Email!, user.Name, link, ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        loggerFactory.CreateLogger("Auth.ForgotPassword")
+                            .LogError(ex, "Falha ao enviar email de redefinição de senha.");
+                    }
+                }
+            }
+
+            return Results.Ok();
+        });
+
+        group.MapPost("/reset-password", async (
+            ResetPasswordRequest req,
+            UserManager<User> userManager,
+            PokerHubDbContext db,
+            CancellationToken ct) =>
+        {
+            const string generic = "Não foi possível redefinir a senha. Solicite um novo link.";
+            const string invalidLink = "Link inválido ou expirado. Solicite um novo.";
+            Dictionary<string, string[]> Fail(params string[] msgs) => new() { ["resetPassword"] = msgs };
+
+            if (string.IsNullOrWhiteSpace(req.Email)
+                || string.IsNullOrWhiteSpace(req.Code)
+                || string.IsNullOrWhiteSpace(req.NewPassword))
+                return Results.ValidationProblem(Fail(generic));
+
+            var user = await userManager.FindByEmailAsync(req.Email.Trim().ToLowerInvariant());
+            if (user is null)
+                return Results.ValidationProblem(Fail(invalidLink)); // não vaza existência
+
+            string token;
+            try
+            {
+                token = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(req.Code));
+            }
+            catch (FormatException)
+            {
+                return Results.ValidationProblem(Fail(invalidLink));
+            }
+
+            var result = await userManager.ResetPasswordAsync(user, token, req.NewPassword);
+            if (!result.Succeeded)
+            {
+                var errors = result.Errors
+                    .Select(e => e.Code switch
+                    {
+                        "InvalidToken" => invalidLink,
+                        "PasswordTooShort" => "Senha muito curta.",
+                        "PasswordRequiresNonAlphanumeric" => "Senha deve conter ao menos um caractere especial.",
+                        "PasswordRequiresDigit" => "Senha deve conter ao menos um número.",
+                        "PasswordRequiresLower" => "Senha deve conter ao menos uma letra minúscula.",
+                        "PasswordRequiresUpper" => "Senha deve conter ao menos uma letra maiúscula.",
+                        "PasswordRequiresUniqueChars" => "Senha deve conter mais caracteres distintos.",
+                        _ => generic
+                    })
+                    .ToArray();
+                return Results.ValidationProblem(Fail(errors));
+            }
+
+            // Reset bem-sucedido: revoga todas as sessões ativas do usuário.
+            var now = DateTime.UtcNow;
+            var activeTokens = await db.RefreshTokens
+                .Where(t => t.UserId == user.Id && t.RevokedAt == null)
+                .ToListAsync(ct);
+            foreach (var t in activeTokens) t.Revoke(null, now);
+            await db.SaveChangesAsync(ct);
+
             return Results.NoContent();
         });
 
