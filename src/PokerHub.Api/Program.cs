@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text;
 using System.Threading.RateLimiting;
+using Azure.Core;
+using Azure.Identity;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
@@ -66,9 +68,23 @@ builder.Services.Configure<DataProtectionTokenProviderOptions>(o =>
 // Persiste as chaves do DataProtection no banco. Sem isto ficam no filesystem efêmero do
 // container (/root/.aspnet/DataProtection-Keys) → cada restart/scale-to-zero rotaciona as
 // chaves e invalida tokens de reset de senha em aberto. SetApplicationName mantém o ring estável.
-builder.Services.AddDataProtection()
+var dataProtection = builder.Services.AddDataProtection()
     .PersistKeysToDbContext<PokerHubDbContext>()
     .SetApplicationName("PokerHub");
+
+// Em prod, cifra as chaves em repouso com uma chave RSA do Azure Key Vault (wrap/unwrap via
+// Managed Identity) — assim um vazamento do banco não entrega chaves utilizáveis. Config-gated:
+// sem DataProtection:KeyVaultKeyId (dev/test) as chaves só são persistidas no banco. O URI da
+// chave e o clientId da UAMI não são segredos.
+var kvKeyId = builder.Configuration["DataProtection:KeyVaultKeyId"];
+if (!string.IsNullOrWhiteSpace(kvKeyId))
+{
+    var miClientId = builder.Configuration["DataProtection:ManagedIdentityClientId"];
+    TokenCredential credential = !string.IsNullOrWhiteSpace(miClientId)
+        ? new ManagedIdentityCredential(miClientId)
+        : new DefaultAzureCredential();
+    dataProtection.ProtectKeysWithAzureKeyVault(new Uri(kvKeyId), credential);
+}
 
 builder.Services.AddApplicationServices();
 builder.Services.AddSingleton<PokerHub.Api.Services.TournamentTimerService>();
