@@ -70,6 +70,7 @@ export default function DashboardRoute() {
           currentLevel: tDetail.currentLevel,
           timeRemainingSeconds: tDetail.timeRemainingSeconds,
           blindLevels: tDetail.blindLevels,
+          currentLevelStartedAt: tDetail.currentLevelStartedAt,
         }
       : null,
   );

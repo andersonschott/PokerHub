@@ -104,6 +104,8 @@ export interface RestClockInput {
   currentLevel: number;
   timeRemainingSeconds: number | null;
   blindLevels: readonly BlindLevelDto[];
+  /** Âncora absoluta do nível (UTC). Usada pelo useTickingRestClock — ver anchorRestClock. */
+  currentLevelStartedAt?: string | null;
 }
 
 /**

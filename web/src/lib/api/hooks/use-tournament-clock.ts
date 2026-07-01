@@ -61,10 +61,18 @@ export function useTournamentClock(tournamentId: string) {
 
     // Rejunta o grupo e puxa o estado atual. O JoinTorneio do hub adiciona ao grupo E reenvia
     // um TimerStateSync com seq novo (NextSeq) → o reduceSync aceita e RE-ANCORA o relógio.
-    const join = () =>
-      connection.invoke('JoinTorneio', tournamentId).catch((err) =>
-        console.error('Error joining tournament group:', err),
-      );
+    // RETRY: se o invoke falhar (transiente pós-connect), sem retentar o cliente ficaria
+    // conectado porém NUNCA sincronizado (preso no fallback REST — drift dashboard×TV).
+    const join = async (attempt = 0): Promise<void> => {
+      try {
+        await connection.invoke('JoinTorneio', tournamentId);
+      } catch (err) {
+        console.error('Error joining tournament group:', err);
+        if (attempt < 5 && connection.state === signalR.HubConnectionState.Connected) {
+          setTimeout(() => void join(attempt + 1), 2000 * (attempt + 1));
+        }
+      }
+    };
 
     // ZERO-DRIFT: ao reconectar o connectionId é novo e saiu do grupo no servidor → sem rejuntar,
     // o cliente nunca mais recebe sync e fica preso na âncora velha (o bug do drift de 5s que só

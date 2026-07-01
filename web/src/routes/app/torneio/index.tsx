@@ -71,6 +71,7 @@ function TimerView({ tournamentId }: { tournamentId: string }) {
           currentLevel: tDetail.currentLevel,
           timeRemainingSeconds: tDetail.timeRemainingSeconds,
           blindLevels: tDetail.blindLevels,
+          currentLevelStartedAt: tDetail.currentLevelStartedAt,
         }
       : null,
   );

@@ -78,6 +78,7 @@ export default function TvRoute() {
           currentLevel: tReal.currentLevel,
           timeRemainingSeconds: tReal.timeRemainingSeconds,
           blindLevels: tReal.blindLevels,
+          currentLevelStartedAt: tReal.currentLevelStartedAt,
         }
       : null,
   );
