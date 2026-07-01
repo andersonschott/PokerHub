@@ -50,6 +50,11 @@ import { formatPtBrDate } from '@/routes/app/torneio/historico-map';
 // Ordena/filtra seletores de jogador por nome (pt-BR).
 const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, 'pt-BR');
 const matchesQuery = (name: string, q: string) => name.toLowerCase().includes(q.trim().toLowerCase());
+// Selecionável = não soft-deletado E ativo na liga (membershipStatus 0). Defesa em
+// profundidade: o endpoint /leagues/{id}/players já filtra, mas o seletor nunca
+// deve oferecer inativos mesmo que a lista venha sem filtro (API antiga/cache).
+const isSelectablePlayer = (p: { isActive: boolean; membershipStatus: number }) =>
+  p.isActive && p.membershipStatus === 0;
 
 // ---------------------------------------------------------------------------
 // Status → rótulo + tom do badge
@@ -92,7 +97,9 @@ function AddPlayerSheet({
   const { data: members } = useLeaguePlayers(leagueId);
   const addMut = useAddPlayerToTournament(tournamentId);
   const [q, setQ] = useState('');
-  const all = (members ?? []).filter((m) => !registeredPlayerIds.has(m.id)).sort(byName);
+  const all = (members ?? [])
+    .filter((m) => isSelectablePlayer(m) && !registeredPlayerIds.has(m.id))
+    .sort(byName);
   const candidates = q.trim() ? all.filter((m) => matchesQuery(m.name, q)) : all;
 
   const add = (playerId: string, name: string) =>
@@ -158,7 +165,10 @@ function DelegatesSheet({
     .slice()
     .sort((a, b) => a.userName.localeCompare(b.userName, 'pt-BR'));
   const allCandidates = (members ?? [])
-    .filter((m) => m.userId && m.userId !== organizerId && !delegateUserIds.has(m.userId))
+    .filter(
+      (m) =>
+        isSelectablePlayer(m) && m.userId && m.userId !== organizerId && !delegateUserIds.has(m.userId),
+    )
     .sort(byName);
   const candidates = q.trim() ? allCandidates.filter((m) => matchesQuery(m.name, q)) : allCandidates;
 

@@ -153,11 +153,12 @@ export function useTournaments(leagueId: string) {
   });
 }
 
-export function useTournament(id: string) {
+export function useTournament(id: string, options?: { refetchInterval?: number | false }) {
   return useQuery({
     queryKey: ['tournament', id],
     queryFn: () => api<TournamentDetailDto>(`/tournaments/${id}`),
     enabled: !!id,
+    refetchInterval: options?.refetchInterval,
   });
 }
 

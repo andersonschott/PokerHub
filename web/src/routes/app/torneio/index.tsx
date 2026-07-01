@@ -44,8 +44,10 @@ import {
   aggregateStats,
   eliminatedFromTable,
   isLiveClock,
-  restFallbackClock,
 } from '../tv-projection';
+import { useTickingRestClock } from '../use-ticking-rest-clock';
+import { levelChangeSound } from '@/features/timer/level-change-sound';
+import { playLevelChange, playBreakStart, primeAudioOnGesture } from '@/lib/timer-sounds';
 import { selectUpcoming, selectRealizados } from './torneio-lists';
 
 // ---------------------------------------------------------------------------
@@ -54,8 +56,40 @@ import { selectUpcoming, selectRealizados } from './torneio-lists';
 
 function TimerView({ tournamentId }: { tournamentId: string }) {
   const navigate = useNavigate();
-  const { data: tDetail, isLoading } = useTournament(tournamentId);
+  // Poll de segurança (5s, igual /tv): jogadores/prêmios não vêm pelo SignalR e, se o hub
+  // estiver inacessível, é o poll que traz a virada de nível para o fallback abaixo.
+  const { data: tDetail, isLoading } = useTournament(tournamentId, { refetchInterval: 5000 });
   const { state: liveClock } = useTournamentClock(tournamentId);
+
+  // Clock fiel via SignalR; sem 1º sync (level 0) → fallback REST que TICA localmente
+  // (segundo a segundo mesmo com o hub fora). Nunca 00:00 mock.
+  const hasLive = isLiveClock(liveClock);
+  const restClock = useTickingRestClock(
+    tDetail
+      ? {
+          status: tDetail.status,
+          currentLevel: tDetail.currentLevel,
+          timeRemainingSeconds: tDetail.timeRemainingSeconds,
+          blindLevels: tDetail.blindLevels,
+        }
+      : null,
+  );
+  const clock = hasLive ? liveClock : (restClock ?? liveClock);
+
+  // Som na virada de nível — mesmo handler do /tv (espelha LevelChanged do Blazor). Observa o
+  // clock EFETIVO (SignalR ou fallback REST): toca mesmo quando a virada chega só pelo poll.
+  const prevLevelRef = useRef<number | null>(null);
+  useEffect(() => {
+    const sound = levelChangeSound(prevLevelRef.current, clock.level, clock.isBreak);
+    prevLevelRef.current = clock.level;
+    if (sound === 'break-start') playBreakStart();
+    else if (sound === 'level-change') playLevelChange();
+  }, [clock.level, clock.isBreak]);
+
+  // Libera o áudio no 1º gesto do usuário (autoplay policy mobile/PWA instalado).
+  useEffect(() => {
+    primeAudioOnGesture();
+  }, []);
 
   // Controles do timer = mutations REST (espelha dashboard.tsx; não reinventa pause/resume).
   // Esta tela só monta com InProgress|Paused → retomar é /resume, nunca /start.
@@ -98,16 +132,6 @@ function TimerView({ tournamentId }: { tournamentId: string }) {
     );
   }
 
-  // Clock fiel via SignalR; sem 1º sync (level 0) → fallback derivado do DTO REST. Nunca 00:00 mock.
-  const hasLive = isLiveClock(liveClock);
-  const clock = hasLive
-    ? liveClock
-    : restFallbackClock({
-        status: tDetail.status,
-        currentLevel: tDetail.currentLevel,
-        timeRemainingSeconds: tDetail.timeRemainingSeconds,
-        blindLevels: tDetail.blindLevels,
-      });
   const { displayLevel, isBreak, remainingSeconds, levelSeconds, paused, blinds, nextBlinds, elapsedPct } = clock;
 
   // players → shape de UI (mesmo transform de dashboard.tsx, já extraído/testado em tv-projection).

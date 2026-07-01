@@ -2,9 +2,9 @@
  * /app/torneio/dashboard — Painel ao vivo do organizador.
  * Refatorado na Fase 4 para consumir SignalR e a API Real.
  */
-import { useState, useCallback, type CSSProperties } from 'react';
+import { useState, useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Settings2, Flag, Users, Trophy, Repeat, Undo2, Loader2, MonitorPlay, UserCheck, Receipt, Plus, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Settings2, Flag, Users, Trophy, Repeat, Undo2, Loader2, MonitorPlay, UserCheck, UserPlus, Receipt, Plus, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -17,14 +17,18 @@ import { ActionSheet } from '@/features/live/action-sheet';
 import { EliminateSheet } from '@/features/live/eliminate-sheet';
 import { Sheet } from '@/components/ui/sheet';
 
-import { useTournaments, useTournament, TournamentStatus, usePauseTournament, useResumeTournament, useNextLevel, usePrevLevel, useCheckInPlayer, useEliminatePlayer, useAddRebuy, useSetAddon, useUndoElimination, useFinishTournament, useDelegates, type FinishPlayerPosition } from '@/lib/api/hooks/use-tournaments';
+import { useTournaments, useTournament, TournamentStatus, usePauseTournament, useResumeTournament, useNextLevel, usePrevLevel, useCheckInPlayer, useEliminatePlayer, useAddRebuy, useSetAddon, useUndoElimination, useFinishTournament, useDelegates, useAddPlayerToTournament, type FinishPlayerPosition } from '@/lib/api/hooks/use-tournaments';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { useTournamentClock } from '@/lib/api/hooks/use-tournament-clock';
-import { useLeague } from '@/lib/api/hooks/use-leagues';
+import { useLeague, useLeaguePlayers, type PlayerDto } from '@/lib/api/hooks/use-leagues';
 import { useAuth } from '@/lib/auth-context';
 import { ApiError } from '@/lib/api/client';
 import { type MockTablePlayer } from '@/mocks/data';
-import { canOperateTournament } from '@/features/tournaments/permissions';
+import { canOperateTournament, isLeagueOrganizer } from '@/features/tournaments/permissions';
+import { useTickingRestClock } from '../use-ticking-rest-clock';
+import { isLiveClock } from '../tv-projection';
+import { levelChangeSound } from '@/features/timer/level-change-sound';
+import { playLevelChange, playBreakStart, primeAudioOnGesture } from '@/lib/timer-sounds';
 import {
   useExpenses,
   useEligiblePlayers,
@@ -51,8 +55,39 @@ export default function DashboardRoute() {
   const activeT = tournaments?.find(t => t.status === TournamentStatus.InProgress || t.status === TournamentStatus.Paused);
   const activeTId = activeT?.id ?? '';
 
-  const { data: tDetail, isLoading: isLoadingDetail } = useTournament(activeTId);
-  const { state: clock } = useTournamentClock(activeTId);
+  // Poll de segurança (5s, igual /tv): mantém jogadores/prize pool frescos e, se o SignalR
+  // estiver inacessível, é o poll que alimenta o fallback de clock abaixo.
+  const { data: tDetail, isLoading: isLoadingDetail } = useTournament(activeTId, { refetchInterval: 5000 });
+  const { state: liveClock } = useTournamentClock(activeTId);
+
+  // Clock fiel via SignalR; sem 1º sync (level 0) → fallback REST que TICA localmente.
+  // Antes o dashboard não tinha fallback nenhum e ficava ZERADO até o 1º sync do hub.
+  const hasLive = isLiveClock(liveClock);
+  const restClock = useTickingRestClock(
+    tDetail
+      ? {
+          status: tDetail.status,
+          currentLevel: tDetail.currentLevel,
+          timeRemainingSeconds: tDetail.timeRemainingSeconds,
+          blindLevels: tDetail.blindLevels,
+        }
+      : null,
+  );
+  const clock = hasLive ? liveClock : (restClock ?? liveClock);
+
+  // Som na virada de nível (espelha LevelChanged do Blazor) sobre o clock EFETIVO.
+  const prevLevelRef = useRef<number | null>(null);
+  useEffect(() => {
+    const sound = levelChangeSound(prevLevelRef.current, clock.level, clock.isBreak);
+    prevLevelRef.current = clock.level;
+    if (sound === 'break-start') playBreakStart();
+    else if (sound === 'level-change') playLevelChange();
+  }, [clock.level, clock.isBreak]);
+
+  // Libera o áudio no 1º gesto do usuário (autoplay policy mobile/PWA instalado).
+  useEffect(() => {
+    primeAudioOnGesture();
+  }, []);
 
   const { data: league } = useLeague(tDetail?.leagueId ?? '');
   const { data: delegates } = useDelegates(activeTId);
@@ -82,6 +117,12 @@ export default function DashboardRoute() {
   const [step, setStep] = useState<SheetStep>('actions');
   const [finishOpen, setFinishOpen] = useState(false);
   const [expenseSheet, setExpenseSheet] = useState<ExpenseSheetMode>({ open: false, expense: null });
+  const [addPlayerOpen, setAddPlayerOpen] = useState(false);
+
+  // Inscrição tardia (porta do AddTournamentPlayerDialog do Blazor): jogadores ATIVOS da liga
+  // que ainda não estão no torneio. Mutation reaproveita o POST /tournaments/{id}/players.
+  const { data: leagueRoster } = useLeaguePlayers(tDetail?.leagueId ?? '');
+  const addPlayerMut = useAddPlayerToTournament(activeTId);
 
   // NB: nenhum `return` antecipado pode vir ANTES dos hooks abaixo (useCallback).
   // As derivações são null-safe (tDetail pode ser undefined durante o carregamento) e os
@@ -113,6 +154,22 @@ export default function DashboardRoute() {
   // Inscritos que ainda não fizeram check-in (RAW: não passam pelo filtro de `table`).
   const awaitingCheckIn = (tDetail?.players ?? []).filter(
     (p) => !p.isCheckedIn && p.position === null,
+  );
+
+  // ---- Inscrição tardia (mesma regra do Blazor Dashboard.razor) ----
+  // Botão visível: Scheduled sempre; em jogo (InProgress|Paused) só para o organizador ou
+  // enquanto o check-in é permitido (allowCheckInUntilLevel ≥ nível atual → isCheckInAllowed).
+  const isOrganizer = isLeagueOrganizer(league, user);
+  const tStatus = tDetail?.status;
+  const canAddPlayer = canOperate && (
+    tStatus === TournamentStatus.Scheduled ||
+    ((tStatus === TournamentStatus.InProgress || tStatus === TournamentStatus.Paused) &&
+      (isOrganizer || tDetail?.isCheckInAllowed === true)));
+
+  // Só jogadores ATIVOS da liga (membershipStatus 0 e sem soft-delete) fora do torneio.
+  const playersInTournament = new Set((tDetail?.players ?? []).map((p) => p.playerId));
+  const availablePlayers = (leagueRoster ?? []).filter(
+    (p) => p.isActive && p.membershipStatus === 0 && !playersInTournament.has(p.id),
   );
 
   const totalRebuys = table.reduce((s, p) => s + (p.rebuys || 0), 0);
@@ -211,6 +268,23 @@ export default function DashboardRoute() {
       });
     },
     [checkInMut],
+  );
+
+  // Inscrição tardia: adiciona e, com o jogo já rolando, faz o check-in na sequência para o
+  // jogador entrar direto na mesa (mesmo fluxo do dialog do Blazor durante o torneio).
+  const handleAddPlayer = useCallback(
+    async (p: PlayerDto) => {
+      try {
+        await addPlayerMut.mutateAsync(p.id);
+        if (tStatus !== TournamentStatus.Scheduled) {
+          await checkInMut.mutateAsync(p.id);
+        }
+        toast.success(`${p.name} adicionado ao torneio`);
+      } catch (err) {
+        toast.error(err instanceof ApiError ? err.message : 'Falha ao adicionar jogador.');
+      }
+    },
+    [addPlayerMut, checkInMut, tStatus],
   );
 
   const handleEliminate = useCallback(
@@ -367,8 +441,15 @@ export default function DashboardRoute() {
               </>
             )}
 
-            <div className="font-sans text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-2">
-              Na mesa · {inPlay.length}
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-sans text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                Na mesa · {inPlay.length}
+              </div>
+              {canAddPlayer && (
+                <Button variant="outline" size="sm" icon={UserPlus} onClick={() => setAddPlayerOpen(true)}>
+                  Adicionar
+                </Button>
+              )}
             </div>
             <div className="flex flex-col gap-2">
               {inPlay.map((p) => (
@@ -493,6 +574,60 @@ export default function DashboardRoute() {
           onBack={() => setStep('actions')}
           onClose={closeSheet}
         />
+      )}
+
+      {addPlayerOpen && (
+        <Sheet
+          open
+          onClose={() => setAddPlayerOpen(false)}
+          title="Adicionar jogador"
+          subtitle={
+            tStatus !== TournamentStatus.Scheduled
+              ? 'Inscrição tardia: o jogador entra direto na mesa'
+              : 'Jogadores ativos da liga fora do torneio'
+          }
+          fixed
+        >
+          <div className="flex flex-col gap-2">
+            {availablePlayers.length === 0 ? (
+              <div className="text-[12.5px] text-muted-foreground px-[2px] py-1">
+                Todos os jogadores ativos da liga já estão no torneio.
+              </div>
+            ) : (
+              availablePlayers.map((p) => {
+                const pending =
+                  (addPlayerMut.isPending && addPlayerMut.variables === p.id) ||
+                  (checkInMut.isPending && checkInMut.variables === p.id);
+                return (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-3 px-3 py-2 rounded-[var(--radius-md)] border border-border bg-card"
+                  >
+                    <Avatar name={p.name} />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis">
+                        {p.name}
+                      </div>
+                      <div className="text-[12px] text-muted-foreground">
+                        @{p.nickname ?? p.name.split(' ')[0]}
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={pending ? Loader2 : UserPlus}
+                      disabled={addPlayerMut.isPending || checkInMut.isPending}
+                      onClick={() => void handleAddPlayer(p)}
+                      className={pending ? '[&_svg]:animate-spin' : undefined}
+                    >
+                      Adicionar
+                    </Button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </Sheet>
       )}
 
       {finishOpen && (

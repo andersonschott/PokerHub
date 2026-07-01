@@ -29,10 +29,10 @@ import {
   mapPlayersToTable,
   aggregateStats,
   normalizePrizes,
-  restFallbackClock,
   isLiveClock,
   tvPhase,
 } from './tv-projection';
+import { useTickingRestClock } from './use-ticking-rest-clock';
 
 // ---------------------------------------------------------------------------
 // Panel helper
@@ -70,15 +70,29 @@ export default function TvRoute() {
   // Clock fiel via SignalR. Id vazio enquanto carrega → hook não conecta (no-op).
   const { state: liveClock } = useTournamentClock(tReal?.id ?? '');
 
+  // Fallback REST que tica localmente (SignalR indisponível → timer continua andando entre polls).
+  const restClock = useTickingRestClock(
+    tReal
+      ? {
+          status: tReal.status,
+          currentLevel: tReal.currentLevel,
+          timeRemainingSeconds: tReal.timeRemainingSeconds,
+          blindLevels: tReal.blindLevels,
+        }
+      : null,
+  );
+  const hasLive = isLiveClock(liveClock);
+  const clock = hasLive ? liveClock : (restClock ?? liveClock);
+
   // Som na virada de nível — espelha o handler LevelChanged do Blazor (Public.razor).
-  // Observa o clock AO VIVO (SignalR); nível 0 = loading → não dispara.
+  // Observa o clock EFETIVO (SignalR ou fallback REST); nível 0 = loading → não dispara.
   const prevLevelRef = useRef<number | null>(null);
   useEffect(() => {
-    const sound = levelChangeSound(prevLevelRef.current, liveClock.level, liveClock.isBreak);
-    prevLevelRef.current = liveClock.level;
+    const sound = levelChangeSound(prevLevelRef.current, clock.level, clock.isBreak);
+    prevLevelRef.current = clock.level;
     if (sound === 'break-start') playBreakStart();
     else if (sound === 'level-change') playLevelChange();
-  }, [liveClock.level, liveClock.isBreak]);
+  }, [clock.level, clock.isBreak]);
 
   // Responsive — wide (≥900px, grid 3-col) · landscape-compact (mini-TV) · portrait (empilhado).
   const [layout, setLayout] = useState<TvLayout>(() =>
@@ -152,15 +166,6 @@ export default function TvRoute() {
   }
 
   // ---- Derived state from real data ----------------------------------------
-  const hasLive = isLiveClock(liveClock);
-  const clock = hasLive
-    ? liveClock
-    : restFallbackClock({
-        status: tReal.status,
-        currentLevel: tReal.currentLevel,
-        timeRemainingSeconds: tReal.timeRemainingSeconds,
-        blindLevels: tReal.blindLevels,
-      });
   const { displayLevel, isBreak, remainingSeconds, paused, blinds, nextBlinds, nextIsBreak, elapsedPct } = clock;
   const phase = tvPhase(tReal.status, hasLive);
 
