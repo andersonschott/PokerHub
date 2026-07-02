@@ -495,4 +495,90 @@ public class PaymentEndpointsTests : IClassFixture<ApiFactory>
 
         Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
     }
+
+    // -------------------------------------------------------------------------
+    // Fluxo completo: caixinha com chave PIX — o Payment Jackpot gerado deve
+    // expor a chave PIX da liga em ToPlayerPixKey (bug: botão copiar/QR não
+    // aparecia na tela de pagamentos).
+    // -------------------------------------------------------------------------
+
+    private sealed record JackpotPaymentDto(
+        Guid Id, Guid TournamentId, Guid FromPlayerId, Guid? ToPlayerId,
+        string ToPlayerName, string? ToPlayerPixKey, decimal Amount, int Type,
+        bool IsJackpotContribution);
+
+    [Fact]
+    public async Task TournamentPayments_JackpotRow_CarriesLeaguePixKey()
+    {
+        var (organizer, _) = await RegisteredClientAsync("pay-jackpot-pix@test.com");
+        var league = await CreateLeagueAsync(organizer, "Liga Jackpot Pix");
+
+        // Caixinha: 10% do prize pool + chave PIX da liga
+        var settingsResp = await organizer.PutAsJsonAsync(
+            $"/api/leagues/{league.Id}/jackpot/settings",
+            new { JackpotPercentage = 10m, JackpotPixKey = "caixinha@liga.com" });
+        Assert.Equal(HttpStatusCode.OK, settingsResp.StatusCode);
+
+        var createResp = await organizer.PostAsJsonAsync(
+            $"/api/leagues/{league.Id}/tournaments", DefaultTournamentPayload("Jackpot Pix"));
+        var tournament = (await createResp.Content.ReadFromJsonAsync<TournamentResponse>())!;
+
+        // Dois jogadores adicionados, com check-in
+        var playerIds = new List<Guid>();
+        foreach (var name in new[] { "Jogador Pix A", "Jogador Pix B" })
+        {
+            var pResp = await organizer.PostAsJsonAsync(
+                $"/api/leagues/{league.Id}/players-list",
+                new { Name = name, Nickname = (string?)null, Email = (string?)null, Phone = (string?)null, PixKey = (string?)null, PixKeyType = (int?)null });
+            Assert.Equal(HttpStatusCode.Created, pResp.StatusCode);
+            var player = (await pResp.Content.ReadFromJsonAsync<PlayerResponse>())!;
+            playerIds.Add(player.Id);
+
+            Assert.Equal(HttpStatusCode.OK,
+                (await organizer.PostAsJsonAsync($"/api/tournaments/{tournament.Id}/players", new { PlayerId = player.Id })).StatusCode);
+            Assert.Equal(HttpStatusCode.OK,
+                (await organizer.PostAsync($"/api/tournaments/{tournament.Id}/players/{player.Id}/checkin", null)).StatusCode);
+        }
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await organizer.PostAsync($"/api/tournaments/{tournament.Id}/start", null)).StatusCode);
+
+        // Prize pool 100 (2×50), estrutura default 100% p/ 1º, caixinha 10% → prêmio 90, sobra 10
+        var finishResp = await organizer.PostAsJsonAsync($"/api/tournaments/{tournament.Id}/finish",
+            new { Positions = new[]
+            {
+                new { PlayerId = playerIds[0], Position = 1 },
+                new { PlayerId = playerIds[1], Position = 2 },
+            } });
+        Assert.Equal(HttpStatusCode.OK, finishResp.StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await organizer.PostAsync($"/api/tournaments/{tournament.Id}/payments/calculate", null)).StatusCode);
+
+        var paymentsResp = await organizer.GetAsync($"/api/tournaments/{tournament.Id}/payments");
+        Assert.Equal(HttpStatusCode.OK, paymentsResp.StatusCode);
+        var payments = (await paymentsResp.Content.ReadFromJsonAsync<List<JackpotPaymentDto>>())!;
+
+        var jackpotRow = Assert.Single(payments, p => p.ToPlayerId is null);
+        Assert.True(jackpotRow.IsJackpotContribution);
+        Assert.Equal(10m, jackpotRow.Amount);
+        Assert.Equal("caixinha@liga.com", jackpotRow.ToPlayerPixKey);
+
+        // Regressão: PUT de settings SEM o campo da chave (cliente antigo / status ainda não
+        // carregado no form) não pode apagar a chave salva — null = "não alterar".
+        var pctOnlyResp = await organizer.PutAsJsonAsync(
+            $"/api/leagues/{league.Id}/jackpot/settings", new { JackpotPercentage = 12m });
+        Assert.Equal(HttpStatusCode.OK, pctOnlyResp.StatusCode);
+
+        var statusResp = await organizer.GetAsync($"/api/leagues/{league.Id}/jackpot");
+        var statusJson = await statusResp.Content.ReadAsStringAsync();
+        Assert.Contains("caixinha@liga.com", statusJson);
+
+        // String vazia limpa explicitamente.
+        var clearResp = await organizer.PutAsJsonAsync(
+            $"/api/leagues/{league.Id}/jackpot/settings", new { JackpotPercentage = 12m, JackpotPixKey = "" });
+        Assert.Equal(HttpStatusCode.OK, clearResp.StatusCode);
+        var clearedJson = await (await organizer.GetAsync($"/api/leagues/{league.Id}/jackpot")).Content.ReadAsStringAsync();
+        Assert.DoesNotContain("caixinha@liga.com", clearedJson);
+    }
 }

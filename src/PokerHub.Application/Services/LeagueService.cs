@@ -292,7 +292,17 @@ public class LeagueService : ILeagueService
             return true;
 
         // Linked player can access
-        return league.Players.Any(p => p.UserId == userId && p.IsActive);
+        if (league.Players.Any(p => p.UserId == userId && p.IsActive))
+            return true;
+
+        // Tournament delegates can access the league of the tournaments they operate —
+        // only while the tournament is operable (agendado/rodando). Delegação de torneio
+        // encerrado/cancelado não vira porta permanente para dados da liga (PIX, débitos).
+        return await _context.TournamentDelegates
+            .AnyAsync(td => td.UserId == userId
+                         && td.Tournament.LeagueId == leagueId
+                         && td.Tournament.Status != TournamentStatus.Finished
+                         && td.Tournament.Status != TournamentStatus.Cancelled);
     }
 
     public async Task<(bool Success, string Message)> JoinLeagueAsync(

@@ -14,7 +14,8 @@ import { useAuth } from '@/lib/auth-context';
 import { useLeague, useLeaguePlayers } from '@/lib/api/hooks/use-leagues';
 import { useActiveSeason } from '@/lib/api/hooks/use-seasons';
 import { useSeasonRanking } from '@/lib/api/hooks/use-rankings';
-import { useTournaments, TournamentStatus } from '@/lib/api/hooks/use-tournaments';
+import { useTournaments, useDelegates, TournamentStatus } from '@/lib/api/hooks/use-tournaments';
+import { canOperateTournament, isLeagueOrganizer } from '@/features/tournaments/permissions';
 import {
   useJackpotContributions,
   useJackpotUsages,
@@ -157,7 +158,10 @@ export default function LeagueHomeRoute() {
     return () => io.disconnect();
   }, [tab, history.length, shownRealizados]);
 
-  const isOrganizer = league?.organizerId === user?.userId;
+  const isOrganizer = isLeagueOrganizer(league, user);
+  // "Operar" no hero ao vivo: organizador OU delegado do torneio em andamento.
+  const { data: liveDelegates } = useDelegates(liveT?.id ?? '');
+  const canOperateLive = canOperateTournament(liveT?.id, user, league, liveDelegates ?? []);
 
   return (
     <div className="px-4 pt-[14px] pb-24">
@@ -225,7 +229,7 @@ export default function LeagueHomeRoute() {
                 Nível {liveT?.currentLevel} · {liveT?.checkedInCount}/{liveT?.playerCount} na mesa
               </div>
             </div>
-            {isOrganizer ? (
+            {canOperateLive ? (
               <Button
                 variant="primary"
                 size="sm"

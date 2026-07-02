@@ -18,6 +18,8 @@ export interface JackpotStatusDto {
   jackpotPercentage: number;
   totalContributions: number;
   recentContributions: JackpotContributionDto[];
+  jackpotPixKey: string | null;
+  jackpotPixKeyType: number | null;
 }
 
 export interface JackpotUsageDto {
@@ -31,6 +33,8 @@ export interface JackpotUsageDto {
 
 export interface UpdateJackpotSettingsDto {
   jackpotPercentage: number;
+  jackpotPixKey?: string | null;
+  jackpotPixKeyType?: number | null;
 }
 
 export interface UseJackpotDto {
@@ -76,6 +80,8 @@ export function useUpdateJackpotSettings(leagueId: string | null) {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jackpot', 'status', leagueId] });
+      // Pagamentos de caixinha exibem a chave PIX da liga — refetch para refletir a nova chave.
+      queryClient.invalidateQueries({ queryKey: ['payments'] });
     },
   });
 }

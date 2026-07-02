@@ -45,7 +45,6 @@ import {
   useBulkConfirmPayments,
   useJackpotContribution,
   PaymentStatus,
-  PaymentType
 } from '@/lib/api/hooks/use-payments';
 
 import { useTournament as useTournamentData, useDelegates } from '@/lib/api/hooks/use-tournaments';
@@ -53,6 +52,7 @@ import { useAuth } from '@/lib/auth-context';
 import { useLeague } from '@/lib/api/hooks/use-leagues';
 import { canOperateTournament } from '@/features/tournaments/permissions';
 import { aggregateDebts } from '@/features/payments/aggregate-debts';
+import { paymentTypeLabel } from '@/features/payments/payment-type-label';
 
 // ---------------------------------------------------------------------------
 // Status badge helper
@@ -610,7 +610,13 @@ export default function PagamentosRoute() {
                     {g.fromPlayerName.split(' ')[0]}
                   </span>
                   <ChevronRight className="w-[14px] h-[14px] text-muted-foreground shrink-0" />
-                  <span className="font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis min-w-0">
+                  {g.isJackpot && <PiggyBank className="w-[15px] h-[15px] text-gold-400 shrink-0" />}
+                  <span
+                    className={[
+                      'font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis min-w-0',
+                      g.isJackpot ? 'text-gold-400' : '',
+                    ].join(' ')}
+                  >
                     {g.toPlayerName.split(' ')[0]}
                   </span>
                   <ChevronDown
@@ -666,7 +672,7 @@ export default function PagamentosRoute() {
                       {g.breakdown.map((b, i) => (
                         <span key={b.type}>
                           {i > 0 && ' · '}
-                          {b.type === PaymentType.Poker ? 'Poker' : 'Despesas'}{' '}
+                          {paymentTypeLabel(b.type)}{' '}
                           <MoneyValue value={b.amount} cents={false} color="none" size="12.5px" />
                         </span>
                       ))}

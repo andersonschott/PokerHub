@@ -20,6 +20,9 @@ export interface DebtBreakdown {
   amount: number;
 }
 
+/** Id sintético usado como "credor" nos grupos de contribuição para a caixinha. */
+export const CAIXINHA_ID = 'caixinha';
+
 /** Débito agregado por par devedor → credor. */
 export interface AggregatedDebt {
   key: string;
@@ -28,6 +31,8 @@ export interface AggregatedDebt {
   toPlayerId: string;
   toPlayerName: string;
   toPlayerPixKey: string | null;
+  /** Grupo de contribuição para a caixinha (credor virtual, sem jogador destino). */
+  isJackpot: boolean;
   totalAmount: number;
   breakdown: DebtBreakdown[];
   /** IDs dos pagamentos componentes para quitação em lote. */
@@ -46,25 +51,28 @@ function makeKey(fromPlayerId: string, toPlayerId: string): string {
 
 /**
  * Agrupa débitos do mesmo devedor → credor somando Poker + Despesas num total único.
- * Ignora contribuições para caixinha (`isJackpotContribution`), pois têm tratamento próprio.
+ * Contribuições para a caixinha (`isJackpotContribution`) viram grupos próprios com o
+ * credor virtual "Caixinha" (CAIXINHA_ID), para que apareçam nas pendências e possam
+ * ser cobradas/confirmadas como qualquer outro pagamento.
  */
 export function aggregateDebts(debts: readonly AggregatableDebt[]): AggregatedDebt[] {
   const groups = new Map<string, AggregatedDebt>();
 
   for (const d of debts) {
-    if (d.isJackpotContribution) continue;
-    if (!d.toPlayerId) continue;
+    const isJackpot = d.isJackpotContribution || !d.toPlayerId;
+    const toPlayerId = isJackpot ? CAIXINHA_ID : d.toPlayerId!;
 
-    const key = makeKey(d.fromPlayerId, d.toPlayerId);
+    const key = makeKey(d.fromPlayerId, toPlayerId);
     let group = groups.get(key);
     if (!group) {
       group = {
         key,
         fromPlayerId: d.fromPlayerId,
         fromPlayerName: d.fromPlayerName,
-        toPlayerId: d.toPlayerId,
-        toPlayerName: d.toPlayerName,
+        toPlayerId,
+        toPlayerName: isJackpot ? 'Caixinha' : d.toPlayerName,
         toPlayerPixKey: d.toPlayerPixKey,
+        isJackpot,
         totalAmount: 0,
         breakdown: [],
         paymentIds: [],

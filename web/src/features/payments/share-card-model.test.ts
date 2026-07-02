@@ -7,6 +7,7 @@ function makeAggregatedDebt(overrides: Partial<AggregatedDebt> & Pick<Aggregated
     fromPlayerId: 'f1',
     toPlayerId: 't1',
     toPlayerPixKey: null,
+    isJackpot: false,
     breakdown: [],
     paymentIds: [],
     pendingPaymentIds: [],

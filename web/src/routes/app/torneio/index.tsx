@@ -10,7 +10,7 @@
  */
 import { useEffect, useRef, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CalendarClock, Plus, TimerOff, Users, Trophy, Repeat, Loader2, Pencil } from 'lucide-react';
+import { ArrowLeft, CalendarClock, Plus, Settings2, TimerOff, Tv, Users, Trophy, Repeat, Loader2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
@@ -27,7 +27,7 @@ import { RealizadosList } from '@/features/timer/realizados-list';
 import { useAuth } from '@/lib/auth-context';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { useLeague } from '@/lib/api/hooks/use-leagues';
-import { isLeagueOrganizer } from '@/features/tournaments/permissions';
+import { isLeagueOrganizer, canOperateTournament } from '@/features/tournaments/permissions';
 import {
   useTournaments,
   useTournament,
@@ -35,6 +35,7 @@ import {
   usePauseTournament,
   useNextLevel,
   usePrevLevel,
+  useDelegates,
   TournamentStatus,
   type TournamentDto,
 } from '@/lib/api/hooks/use-tournaments';
@@ -92,6 +93,13 @@ function TimerView({ tournamentId }: { tournamentId: string }) {
     primeAudioOnGesture();
   }, []);
 
+  // Controles só para quem pode operar (organizador + delegado) — membro comum via
+  // os botões e levava 403 do backend; agora vê apenas o atalho de TV.
+  const { user } = useAuth();
+  const { data: league } = useLeague(tDetail?.leagueId ?? '');
+  const { data: delegates } = useDelegates(tournamentId);
+  const canOperate = canOperateTournament(tournamentId, user, league, delegates ?? []);
+
   // Controles do timer = mutations REST (espelha dashboard.tsx; não reinventa pause/resume).
   // Esta tela só monta com InProgress|Paused → retomar é /resume, nunca /start.
   const resumeMut = useResumeTournament(tournamentId);
@@ -144,6 +152,8 @@ function TimerView({ tournamentId }: { tournamentId: string }) {
   // Toggle de pausa: pausado → resume (/resume); rodando → pause (/pause).
   const handleTogglePause = () =>
     paused ? resumeMut.mutate(undefined, onTimerError) : pauseMut.mutate(undefined, onTimerError);
+
+  const openTv = () => window.open(`/tv/${tDetail.inviteCode}`, '_blank');
 
   return (
     <div
@@ -222,14 +232,31 @@ function TimerView({ tournamentId }: { tournamentId: string }) {
         />
       </div>
 
-      {/* Controls */}
-      <LevelControls
-        paused={paused}
-        onPrev={() => prevMut.mutate(undefined, onTimerError)}
-        onTogglePause={handleTogglePause}
-        onNext={() => nextMut.mutate(undefined, onTimerError)}
-        onTv={() => window.open(`/tv/${tDetail.inviteCode}`, '_blank')}
-      />
+      {/* Controls — timer para quem opera; demais têm o atalho de TV */}
+      {canOperate ? (
+        <>
+          <LevelControls
+            paused={paused}
+            onPrev={() => prevMut.mutate(undefined, onTimerError)}
+            onTogglePause={handleTogglePause}
+            onNext={() => nextMut.mutate(undefined, onTimerError)}
+            onTv={openTv}
+          />
+          <Button
+            variant="primary"
+            icon={Settings2}
+            block
+            className="mt-2"
+            onClick={() => navigate('/app/torneio/dashboard')}
+          >
+            Operar mesa
+          </Button>
+        </>
+      ) : (
+        <Button variant="secondary" icon={Tv} block onClick={openTv}>
+          Abrir modo TV
+        </Button>
+      )}
 
       {/* Participantes — somente leitura */}
       <div className="mt-4">

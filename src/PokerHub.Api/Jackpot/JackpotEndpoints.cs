@@ -66,6 +66,10 @@ public static class JackpotEndpoints
             if (!await leagues.IsUserOrganizerAsync(leagueId, user.GetUserId()))
                 return Results.Forbid();
 
+            // Coluna é nvarchar(140) — valida aqui para responder 400 em vez de 500 do SQL.
+            if (dto.JackpotPixKey is { Length: > 140 })
+                return Results.BadRequest(new { Message = "A chave PIX deve ter no máximo 140 caracteres." });
+
             var ok = await jackpot.UpdateJackpotSettingsAsync(leagueId, dto);
             return ok ? Results.Ok() : Results.NotFound();
         });

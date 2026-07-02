@@ -56,6 +56,7 @@ import { useActiveSeason, useSeasonSummaries, useUpdateSeason } from '@/lib/api/
 import {
   useJackpotContributions,
   useJackpotUsages,
+  useJackpotStatus,
   useUpdateJackpotSettings,
 } from '@/lib/api/hooks/use-jackpot';
 import { jackpotBalance } from '@/features/jackpot/jackpot-balance';
@@ -75,6 +76,7 @@ const EditSchema = z.object({
     .max(200, 'O nome deve ter no máximo 200 caracteres.'),
   blockCheckInWithDebt: z.boolean(),
   jackpotPercentage: z.number().min(0).max(100),
+  jackpotPixKey: z.string().max(140, 'A chave deve ter no máximo 140 caracteres.'),
 });
 
 type EditFormData = z.infer<typeof EditSchema>;
@@ -251,6 +253,7 @@ export default function AdminRoute() {
   const { data: prizeTables } = usePrizeTables(activeLeagueId ?? '');
   const { data: contributions } = useJackpotContributions(activeLeagueId);
   const { data: usages } = useJackpotUsages(activeLeagueId);
+  const { data: jackpotStatus } = useJackpotStatus(activeLeagueId);
 
   const balance = jackpotBalance(contributions, usages);
   const seasonSummary =
@@ -286,6 +289,7 @@ export default function AdminRoute() {
       name: league?.name ?? '',
       blockCheckInWithDebt: league?.blockCheckInWithDebt ?? true,
       jackpotPercentage: league?.jackpotPercentage ?? 0,
+      jackpotPixKey: jackpotStatus?.jackpotPixKey ?? '',
     },
   });
 
@@ -299,6 +303,7 @@ export default function AdminRoute() {
       name: league?.name ?? '',
       blockCheckInWithDebt: league?.blockCheckInWithDebt ?? true,
       jackpotPercentage: league?.jackpotPercentage ?? 0,
+      jackpotPixKey: jackpotStatus?.jackpotPixKey ?? '',
     });
     setSheet('edit');
   };
@@ -350,7 +355,14 @@ export default function AdminRoute() {
           blockCheckInWithDebt: data.blockCheckInWithDebt,
         },
       });
-      await updateJackpot.mutateAsync({ jackpotPercentage: data.jackpotPercentage });
+      // null/omitido = "não alterar" no backend; '' = limpar explicitamente. Enquanto o
+      // status da caixinha não carregou, o form foi semeado vazio — não enviar a chave
+      // nesse caso evita apagar a chave salva num save que só mexeu em outros campos.
+      const pixKey = data.jackpotPixKey.trim();
+      await updateJackpot.mutateAsync({
+        jackpotPercentage: data.jackpotPercentage,
+        jackpotPixKey: jackpotStatus === undefined && !pixKey ? null : pixKey,
+      });
       void qc.invalidateQueries({ queryKey: leagueKeys.detail(activeLeagueId) });
       void qc.invalidateQueries({ queryKey: leagueKeys.list() });
     },
@@ -583,6 +595,21 @@ export default function AdminRoute() {
                 />
               )}
             />
+            <div className="flex flex-col gap-1.5">
+              <label className="block font-sans text-[11px] font-semibold uppercase tracking-[0.07em] text-muted-foreground">
+                Chave PIX da caixinha
+              </label>
+              <Input
+                {...register('jackpotPixKey')}
+                placeholder="CPF, e-mail, telefone ou chave aleatória"
+              />
+              <p className="text-[11.5px] text-muted-foreground">
+                Exibida para quem tem contribuição pendente com a caixinha.
+              </p>
+              {errors.jackpotPixKey ? (
+                <p className="text-[12px] text-negative">{errors.jackpotPixKey.message}</p>
+              ) : null}
+            </div>
             <Button
               type="submit"
               variant="primary"

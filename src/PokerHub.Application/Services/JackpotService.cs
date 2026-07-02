@@ -48,7 +48,9 @@ public class JackpotService : IJackpotService
             derivedBalance,
             league.JackpotPercentage,
             totalContributions,
-            contributions
+            contributions,
+            league.JackpotPixKey,
+            league.JackpotPixKeyType
         );
     }
 
@@ -90,6 +92,15 @@ public class JackpotService : IJackpotService
         if (league == null) return false;
 
         league.JackpotPercentage = dto.JackpotPercentage;
+
+        // null = "não alterar" (clientes antigos mandam só o percentual e não podem apagar a
+        // chave); string vazia/whitespace = limpar explicitamente.
+        if (dto.JackpotPixKey != null)
+        {
+            league.JackpotPixKey = string.IsNullOrWhiteSpace(dto.JackpotPixKey) ? null : dto.JackpotPixKey.Trim();
+            league.JackpotPixKeyType = league.JackpotPixKey == null ? null : dto.JackpotPixKeyType;
+        }
+
         await _context.SaveChangesAsync();
         return true;
     }

@@ -45,6 +45,7 @@ import {
   useRemoveDelegate,
   TournamentStatus,
 } from '@/lib/api/hooks/use-tournaments';
+import { canOperateTournament, isLeagueOrganizer } from '@/features/tournaments/permissions';
 import { formatPtBrDate } from '@/routes/app/torneio/historico-map';
 
 // Ordena/filtra seletores de jogador por nome (pt-BR).
@@ -249,7 +250,11 @@ export default function TorneioDetalheRoute() {
   const { data: detail, isLoading } = useTournament(tournamentId);
   const leagueId = detail?.leagueId ?? '';
   const { data: league } = useLeague(leagueId);
-  const isOrganizer = !!user && !!league && league.organizerId === user.userId;
+  const { data: delegates } = useDelegates(tournamentId);
+  const isOrganizer = isLeagueOrganizer(league, user);
+  // Organizador OU delegado podem operar (iniciar, adicionar jogador, check-in).
+  // Gerir delegados e cancelar seguem exclusivos do organizador.
+  const canOperate = canOperateTournament(tournamentId, user, league, delegates ?? []);
 
   const [copied, setCopied] = useState(false);
   const [delegatesOpen, setDelegatesOpen] = useState(false);
@@ -390,8 +395,8 @@ export default function TorneioDetalheRoute() {
               </Card>
             ) : null}
 
-            {/* Ações de administração (organizador) */}
-            {isOrganizer ? (
+            {/* Ações de administração (organizador + delegado) */}
+            {canOperate ? (
               <div className="flex flex-col gap-2 mb-4">
                 {isScheduled ? (
                   <Button variant="primary" icon={Play} block onClick={startTournament} disabled={startMut.isPending}>
@@ -402,11 +407,13 @@ export default function TorneioDetalheRoute() {
                   <Button variant="secondary" icon={UserPlus} block onClick={() => setAddPlayerOpen(true)}>
                     Adicionar jogador
                   </Button>
-                  <Button variant="secondary" icon={ShieldCheck} block onClick={() => setDelegatesOpen(true)}>
-                    Delegados
-                  </Button>
+                  {isOrganizer ? (
+                    <Button variant="secondary" icon={ShieldCheck} block onClick={() => setDelegatesOpen(true)}>
+                      Delegados
+                    </Button>
+                  ) : null}
                 </div>
-                {canCancel ? (
+                {isOrganizer && canCancel ? (
                   <Button variant="destructive" icon={Ban} block onClick={cancelTournament} disabled={cancelMut.isPending}>
                     Cancelar torneio
                   </Button>
@@ -444,7 +451,7 @@ export default function TorneioDetalheRoute() {
                       </div>
                     </div>
 
-                    {isOrganizer ? (
+                    {canOperate ? (
                       <>
                         {/* Check-in toggle */}
                         <button

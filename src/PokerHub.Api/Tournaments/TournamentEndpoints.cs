@@ -167,13 +167,12 @@ public static class TournamentEndpoints
         t.MapPost("/{id:guid}/start", async (
             Guid id,
             ClaimsPrincipal user,
-            ILeagueService leagues,
             ITournamentService tournaments) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
 
-            if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
+            if (!await tournaments.IsUserOrganizerOrDelegateAsync(id, user.GetUserId()))
                 return Results.Forbid();
 
             var ok = await tournaments.StartTournamentAsync(id);
@@ -184,14 +183,13 @@ public static class TournamentEndpoints
         t.MapPost("/{id:guid}/pause", async (
             Guid id,
             ClaimsPrincipal user,
-            ILeagueService leagues,
             ITournamentService tournaments,
             TournamentTimerService timer) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
 
-            if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
+            if (!await tournaments.IsUserOrganizerOrDelegateAsync(id, user.GetUserId()))
                 return Results.Forbid();
 
             // Live tournament: the timer service is the single source of truth (freezes the exact
@@ -206,14 +204,13 @@ public static class TournamentEndpoints
         t.MapPost("/{id:guid}/resume", async (
             Guid id,
             ClaimsPrincipal user,
-            ILeagueService leagues,
             ITournamentService tournaments,
             TournamentTimerService timer) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
 
-            if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
+            if (!await tournaments.IsUserOrganizerOrDelegateAsync(id, user.GetUserId()))
                 return Results.Forbid();
 
             var ok = existing.Status == TournamentStatus.Paused
@@ -244,13 +241,12 @@ public static class TournamentEndpoints
             Guid id,
             FinishTournamentRequest req,
             ClaimsPrincipal user,
-            ILeagueService leagues,
             ITournamentService tournaments) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
 
-            if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
+            if (!await tournaments.HasDelegatePermissionAsync(id, user.GetUserId(), DelegatePermissions.Finish))
                 return Results.Forbid();
 
             var positions = req.Positions
@@ -266,13 +262,12 @@ public static class TournamentEndpoints
             Guid id,
             ConfirmedPrizeDistributionDto distribution,
             ClaimsPrincipal user,
-            ILeagueService leagues,
             ITournamentService tournaments) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
 
-            if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
+            if (!await tournaments.HasDelegatePermissionAsync(id, user.GetUserId(), DelegatePermissions.Finish))
                 return Results.Forbid();
 
             var (success, message) = await tournaments.FinishTournamentWithCustomPrizesAsync(
@@ -289,13 +284,12 @@ public static class TournamentEndpoints
             Guid id,
             AddPlayerRequest req,
             ClaimsPrincipal user,
-            ILeagueService leagues,
             ITournamentService tournaments) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
 
-            if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
+            if (!await tournaments.HasDelegatePermissionAsync(id, user.GetUserId(), DelegatePermissions.CheckIn))
                 return Results.Forbid();
 
             var ok = await tournaments.AddPlayerToTournamentAsync(id, req.PlayerId);
@@ -307,13 +301,12 @@ public static class TournamentEndpoints
             Guid id,
             Guid playerId,
             ClaimsPrincipal user,
-            ILeagueService leagues,
             ITournamentService tournaments) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
 
-            if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
+            if (!await tournaments.HasDelegatePermissionAsync(id, user.GetUserId(), DelegatePermissions.CheckIn))
                 return Results.Forbid();
 
             var ok = await tournaments.RemovePlayerFromTournamentAsync(id, playerId);
@@ -325,7 +318,6 @@ public static class TournamentEndpoints
             Guid id,
             Guid playerId,
             ClaimsPrincipal user,
-            ILeagueService leagues,
             ITournamentService tournaments) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
@@ -343,7 +335,6 @@ public static class TournamentEndpoints
             Guid id,
             Guid playerId,
             ClaimsPrincipal user,
-            ILeagueService leagues,
             ITournamentService tournaments) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
@@ -361,7 +352,6 @@ public static class TournamentEndpoints
             Guid id,
             BulkCheckInRequest req,
             ClaimsPrincipal user,
-            ILeagueService leagues,
             ITournamentService tournaments) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
@@ -448,13 +438,12 @@ public static class TournamentEndpoints
             Guid id,
             Guid playerId,
             ClaimsPrincipal user,
-            ILeagueService leagues,
             ITournamentService tournaments) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
 
-            if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
+            if (!await tournaments.HasDelegatePermissionAsync(id, user.GetUserId(), DelegatePermissions.Eliminate))
                 return Results.Forbid();
 
             var ok = await tournaments.RestoreEliminatedPlayerAsync(id, playerId);
@@ -522,14 +511,13 @@ public static class TournamentEndpoints
         t.MapPost("/{id:guid}/timer/next-level", async (
             Guid id,
             ClaimsPrincipal user,
-            ILeagueService leagues,
             ITournamentService tournaments,
             TournamentTimerService timer) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
 
-            if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
+            if (!await tournaments.IsUserOrganizerOrDelegateAsync(id, user.GetUserId()))
                 return Results.Forbid();
 
             // For a live tournament the in-memory timer is authoritative — route through it so the
@@ -544,14 +532,13 @@ public static class TournamentEndpoints
         t.MapPost("/{id:guid}/timer/prev-level", async (
             Guid id,
             ClaimsPrincipal user,
-            ILeagueService leagues,
             ITournamentService tournaments,
             TournamentTimerService timer) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
 
-            if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
+            if (!await tournaments.IsUserOrganizerOrDelegateAsync(id, user.GetUserId()))
                 return Results.Forbid();
 
             var ok = existing.Status == TournamentStatus.InProgress
@@ -565,14 +552,13 @@ public static class TournamentEndpoints
             Guid id,
             UpdateTimeRequest req,
             ClaimsPrincipal user,
-            ILeagueService leagues,
             ITournamentService tournaments,
             TournamentTimerService timer) =>
         {
             var existing = await tournaments.GetTournamentByIdAsync(id);
             if (existing is null) return Results.NotFound();
 
-            if (!await leagues.IsUserOrganizerAsync(existing.LeagueId, user.GetUserId()))
+            if (!await tournaments.IsUserOrganizerOrDelegateAsync(id, user.GetUserId()))
                 return Results.Forbid();
 
             var ok = existing.Status == TournamentStatus.InProgress

@@ -42,6 +42,9 @@ public class LeagueConfiguration : IEntityTypeConfiguration<League>
             .HasPrecision(18, 2)
             .HasDefaultValue(0);
 
+        builder.Property(l => l.JackpotPixKey)
+            .HasMaxLength(140);
+
         builder.HasMany(l => l.Players)
             .WithOne(p => p.League)
             .HasForeignKey(p => p.LeagueId)

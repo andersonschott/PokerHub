@@ -23,8 +23,8 @@ import {
   useAdminMarkAsPaid,
   useAdminConfirmPayment,
   PaymentStatus,
-  PaymentType,
 } from '@/lib/api/hooks/use-payments';
+import { paymentTypeLabel } from '@/features/payments/payment-type-label';
 
 // ---------------------------------------------------------------------------
 // Status badge helper
@@ -201,7 +201,7 @@ export default function SettlementRoute() {
                 <div className="flex-1 min-w-0">
                   <div className="font-sans font-semibold text-[15px]">{d.creditorPlayerName}</div>
                   <div className="text-[12px] text-muted-foreground">
-                    {d.tournamentName} · {d.type === PaymentType.Poker ? 'Poker' : 'Outros'}
+                    {d.tournamentName} · {paymentTypeLabel(d.type)}
                   </div>
                 </div>
                 <div className="text-right">
@@ -275,7 +275,7 @@ export default function SettlementRoute() {
                 <div className="flex-1 min-w-0">
                   <div className="font-sans font-semibold text-[15px]">{c.fromPlayerName}</div>
                   <div className="text-[12px] text-muted-foreground">
-                    {c.tournamentName} · {c.type === PaymentType.Poker ? 'Poker' : 'Outros'}
+                    {c.tournamentName} · {paymentTypeLabel(c.type)}
                   </div>
                 </div>
                 <div className="text-right">

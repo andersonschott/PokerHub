@@ -1,3 +1,5 @@
+using PokerHub.Domain.Enums;
+
 namespace PokerHub.Domain.Entities;
 
 public class League
@@ -15,6 +17,8 @@ public class League
     // Jackpot configuration
     public decimal JackpotPercentage { get; set; } = 0;
     public decimal AccumulatedPrizePool { get; set; } = 0;
+    public string? JackpotPixKey { get; set; }
+    public PixKeyType? JackpotPixKeyType { get; set; }
 
     // Navigation properties
     public User Organizer { get; set; } = null!;

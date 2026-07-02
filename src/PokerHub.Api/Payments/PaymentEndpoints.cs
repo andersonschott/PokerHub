@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using PokerHub.Api.Common;
 using PokerHub.Application.Interfaces;
+using PokerHub.Domain.Enums;
 
 namespace PokerHub.Api.Payments;
 
@@ -37,14 +38,14 @@ public static class PaymentEndpoints
         t.MapPost("/{id:guid}/payments/calculate", async (
             Guid id,
             ClaimsPrincipal user,
-            ILeagueService leagues,
             ITournamentService tournaments,
             IPaymentService payments) =>
         {
             var tournament = await tournaments.GetTournamentByIdAsync(id);
             if (tournament is null) return Results.NotFound();
 
-            if (!await leagues.IsUserOrganizerAsync(tournament.LeagueId, user.GetUserId()))
+            // Mesmo flag do finish: quem pode encerrar o torneio pode gerar o acerto.
+            if (!await tournaments.HasDelegatePermissionAsync(id, user.GetUserId(), DelegatePermissions.Finish))
                 return Results.Forbid();
 
             var list = await payments.CalculateAndCreatePaymentsAsync(id);
@@ -152,7 +153,8 @@ public static class PaymentEndpoints
         p.MapPost("/bulk-confirm", async (
             BulkConfirmRequest req,
             ClaimsPrincipal user,
-            IPaymentService payments) =>
+            IPaymentService payments,
+            ITournamentService tournaments) =>
         {
             var userId = user.GetUserId();
 
@@ -160,10 +162,23 @@ public static class PaymentEndpoints
             var authorizedPayments = await payments.GetPaymentsForOrganizerAsync(userId);
             var authorizedIds = authorizedPayments.Select(p => p.Id).ToHashSet();
 
-            // If any requested ID is outside the authorized set, the caller is not
-            // an organizer for that payment's league — deny the whole request.
-            if (req.PaymentIds.Any(id => !authorizedIds.Contains(id)))
-                return Results.Forbid();
+            // IDs fora do conjunto de organizador ainda podem pertencer a torneios em que o
+            // caller é delegado — mesmo contrato do admin-confirm. Qualquer ID que não passe
+            // em nenhum dos dois nega a requisição inteira.
+            var delegateOkTournaments = new Dictionary<Guid, bool>();
+            foreach (var paymentId in req.PaymentIds.Where(id => !authorizedIds.Contains(id)))
+            {
+                var payment = await payments.GetPaymentByIdAsync(paymentId);
+                if (payment is null) return Results.Forbid();
+
+                if (!delegateOkTournaments.TryGetValue(payment.TournamentId, out var allowed))
+                {
+                    allowed = await tournaments.IsUserOrganizerOrDelegateAsync(payment.TournamentId, userId);
+                    delegateOkTournaments[payment.TournamentId] = allowed;
+                }
+
+                if (!allowed) return Results.Forbid();
+            }
 
             var confirmed = await payments.BulkConfirmPaymentsAsync(req.PaymentIds, userId);
             return Results.Ok(new { Confirmed = confirmed });
@@ -220,8 +235,7 @@ public static class PaymentEndpoints
             Guid paymentId,
             ClaimsPrincipal user,
             IPaymentService payments,
-            ITournamentService tournaments,
-            ILeagueService leagues) =>
+            ITournamentService tournaments) =>
         {
             var userId = user.GetUserId();
 
@@ -231,7 +245,9 @@ public static class PaymentEndpoints
             var tournament = await tournaments.GetTournamentByIdAsync(payment.TournamentId);
             if (tournament is null) return Results.NotFound();
 
-            if (!await leagues.IsUserOrganizerAsync(tournament.LeagueId, userId))
+            // O service (HasPaymentManagementPermissionAsync) já aceita organizador OU delegado —
+            // o guard do endpoint segue o mesmo contrato para não bloquear delegado com 403 antes.
+            if (!await tournaments.IsUserOrganizerOrDelegateAsync(payment.TournamentId, userId))
                 return Results.Forbid();
 
             var (success, message) = await payments.AdminMarkAsPaidAsync(paymentId, userId);
@@ -247,8 +263,7 @@ public static class PaymentEndpoints
             Guid paymentId,
             ClaimsPrincipal user,
             IPaymentService payments,
-            ITournamentService tournaments,
-            ILeagueService leagues) =>
+            ITournamentService tournaments) =>
         {
             var userId = user.GetUserId();
 
@@ -258,7 +273,7 @@ public static class PaymentEndpoints
             var tournament = await tournaments.GetTournamentByIdAsync(payment.TournamentId);
             if (tournament is null) return Results.NotFound();
 
-            if (!await leagues.IsUserOrganizerAsync(tournament.LeagueId, userId))
+            if (!await tournaments.IsUserOrganizerOrDelegateAsync(payment.TournamentId, userId))
                 return Results.Forbid();
 
             var (success, message) = await payments.AdminConfirmPaymentAsync(paymentId, userId);

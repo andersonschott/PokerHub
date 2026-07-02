@@ -22,6 +22,7 @@ public class PaymentService : IPaymentService
         return await _context.Payments
             .Where(p => p.TournamentId == tournamentId)
             .Include(p => p.Tournament)
+                .ThenInclude(t => t.League)
             .Include(p => p.FromPlayer)
             .Include(p => p.ToPlayer)
             .Select(p => MapToDto(p))
@@ -33,6 +34,7 @@ public class PaymentService : IPaymentService
         return await _context.Payments
             .Where(p => p.FromPlayerId == playerId || p.ToPlayerId == playerId)
             .Include(p => p.Tournament)
+                .ThenInclude(t => t.League)
             .Include(p => p.FromPlayer)
             .Include(p => p.ToPlayer)
             .OrderByDescending(p => p.CreatedAt)
@@ -58,7 +60,7 @@ public class PaymentService : IPaymentService
                 p.FromPlayerId,
                 p.ToPlayerId ?? Guid.Empty,
                 p.ToPlayer != null ? p.ToPlayer.Name : "Caixinha",
-                p.ToPlayer != null ? p.ToPlayer.PixKey : null,
+                p.ToPlayer != null ? p.ToPlayer.PixKey : p.Tournament.League.JackpotPixKey,
                 p.Amount,
                 (DateTime.UtcNow - p.CreatedAt).Days,
                 p.Type,
@@ -74,6 +76,7 @@ public class PaymentService : IPaymentService
             .Where(p => p.ToPlayerId == playerId
                      && (p.Status == PaymentStatus.Pending || p.Status == PaymentStatus.Paid))
             .Include(p => p.Tournament)
+                .ThenInclude(t => t.League)
             .Include(p => p.FromPlayer)
             .Include(p => p.ToPlayer)
             .OrderByDescending(p => p.CreatedAt)
@@ -128,6 +131,8 @@ public class PaymentService : IPaymentService
 
         await AddExpensePaymentsAsync(payments, tournamentId);
 
+        NetOpposingPayments(payments);
+
         _context.Payments.AddRange(payments);
 
         await UpsertJackpotContributionAsync(tournament, jackpotAmount);
@@ -137,6 +142,7 @@ public class PaymentService : IPaymentService
         var createdPayments = await _context.Payments
             .Where(p => p.TournamentId == tournamentId)
             .Include(p => p.Tournament)
+                .ThenInclude(t => t.League)
             .Include(p => p.FromPlayer)
             .Include(p => p.ToPlayer)
             .ToListAsync();
@@ -233,6 +239,49 @@ public class PaymentService : IPaymentService
                             expense.Description, expense.Id));
                     }
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Nets opposing payments between the same pair of players (A→B and B→A), so only a
+    /// single net direction remains. The smaller direction is cancelled entirely and its
+    /// total is subtracted from the larger direction's payments (smallest first), removing
+    /// any payment that reaches zero. Types are preserved on the surviving payments.
+    /// Jackpot payments (ToPlayerId == null) never participate — the caixinha never owes back.
+    /// </summary>
+    internal static void NetOpposingPayments(List<Payment> payments)
+    {
+        var pairGroups = payments
+            .Where(p => p.ToPlayerId != null)
+            .GroupBy(p => p.FromPlayerId.CompareTo(p.ToPlayerId!.Value) < 0
+                ? (Low: p.FromPlayerId, High: p.ToPlayerId!.Value)
+                : (Low: p.ToPlayerId!.Value, High: p.FromPlayerId))
+            .ToList();
+
+        foreach (var group in pairGroups)
+        {
+            var forward = group.Where(p => p.FromPlayerId == group.Key.Low).ToList();
+            var reverse = group.Where(p => p.FromPlayerId == group.Key.High).ToList();
+            if (forward.Count == 0 || reverse.Count == 0) continue;
+
+            var forwardTotal = forward.Sum(p => p.Amount);
+            var reverseTotal = reverse.Sum(p => p.Amount);
+
+            var (smaller, larger) = forwardTotal <= reverseTotal ? (forward, reverse) : (reverse, forward);
+            var offset = Math.Min(forwardTotal, reverseTotal);
+
+            foreach (var cancelled in smaller)
+                payments.Remove(cancelled);
+
+            foreach (var payment in larger.OrderBy(p => p.Amount))
+            {
+                if (offset <= 0) break;
+                var cut = Math.Min(payment.Amount, offset);
+                payment.Amount -= cut;
+                offset -= cut;
+                if (payment.Amount == 0)
+                    payments.Remove(payment);
             }
         }
     }
@@ -411,6 +460,7 @@ public class PaymentService : IPaymentService
     {
         var payment = await _context.Payments
             .Include(p => p.Tournament)
+                .ThenInclude(t => t.League)
             .Include(p => p.FromPlayer)
             .Include(p => p.ToPlayer)
             .FirstOrDefaultAsync(p => p.Id == paymentId);
@@ -431,8 +481,8 @@ public class PaymentService : IPaymentService
             p.FromPlayer.Name,
             p.ToPlayerId,
             isJackpot ? (p.Description ?? "Caixinha") : p.ToPlayer!.Name,
-            isJackpot ? null : p.ToPlayer!.PixKey,
-            isJackpot ? null : p.ToPlayer!.PixKeyType,
+            isJackpot ? p.Tournament.League?.JackpotPixKey : p.ToPlayer!.PixKey,
+            isJackpot ? p.Tournament.League?.JackpotPixKeyType : p.ToPlayer!.PixKeyType,
             p.Amount,
             p.Status,
             p.Type,

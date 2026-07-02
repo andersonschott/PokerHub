@@ -1,3 +1,5 @@
+using PokerHub.Domain.Enums;
+
 namespace PokerHub.Application.DTOs.Jackpot;
 
 public record JackpotStatusDto(
@@ -5,7 +7,9 @@ public record JackpotStatusDto(
     decimal AccumulatedPrizePool,
     decimal JackpotPercentage,
     int TotalContributions,
-    IReadOnlyList<JackpotContributionDto> RecentContributions
+    IReadOnlyList<JackpotContributionDto> RecentContributions,
+    string? JackpotPixKey = null,
+    PixKeyType? JackpotPixKeyType = null
 );
 
 public record JackpotContributionDto(
@@ -20,7 +24,9 @@ public record JackpotContributionDto(
 );
 
 public record UpdateJackpotSettingsDto(
-    decimal JackpotPercentage
+    decimal JackpotPercentage,
+    string? JackpotPixKey = null,
+    PixKeyType? JackpotPixKeyType = null
 );
 
 public record UseJackpotDto(

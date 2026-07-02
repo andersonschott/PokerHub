@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { PaymentType } from '@/lib/api/hooks/use-payments';
-import { aggregateDebts } from './aggregate-debts';
+import { aggregateDebts, CAIXINHA_ID } from './aggregate-debts';
 import type { AggregatableDebt } from './aggregate-debts';
 
 function makeDebt(overrides: Partial<AggregatableDebt> & Pick<AggregatableDebt, 'id' | 'fromPlayerId' | 'toPlayerId' | 'amount' | 'type'>): AggregatableDebt {
@@ -46,13 +46,14 @@ describe('aggregateDebts', () => {
     expect(result.map((r) => r.totalAmount)).toEqual([30, 20, 10]);
   });
 
-  it('ignora contribuições de caixinha', () => {
+  it('agrupa contribuições de caixinha em grupo próprio com credor virtual', () => {
     const debts: AggregatableDebt[] = [
       makeDebt({ id: 'p1', fromPlayerId: 'a', toPlayerId: 'b', amount: 50, type: PaymentType.Poker }),
       makeDebt({
         id: 'j1',
         fromPlayerId: 'a',
-        toPlayerId: 'b',
+        toPlayerId: null,
+        toPlayerName: 'Caixinha',
         amount: 10,
         type: PaymentType.Jackpot,
         isJackpotContribution: true,
@@ -60,18 +61,47 @@ describe('aggregateDebts', () => {
     ];
 
     const result = aggregateDebts(debts);
-    expect(result).toHaveLength(1);
-    expect(result[0].totalAmount).toBe(50);
-    expect(result[0].breakdown.every((b) => b.type !== PaymentType.Jackpot)).toBe(true);
+    expect(result).toHaveLength(2);
+    const jackpotGroup = result.find((g) => g.isJackpot)!;
+    expect(jackpotGroup).toMatchObject({
+      fromPlayerId: 'a',
+      toPlayerId: CAIXINHA_ID,
+      toPlayerName: 'Caixinha',
+      totalAmount: 10,
+      paymentIds: ['j1'],
+    });
+    const normalGroup = result.find((g) => !g.isJackpot)!;
+    expect(normalGroup.totalAmount).toBe(50);
   });
 
-  it('descarta itens sem credor identificado', () => {
+  it('trata itens sem credor identificado como caixinha (legado sem flag)', () => {
     const debts: AggregatableDebt[] = [
-      makeDebt({ id: 'p1', fromPlayerId: 'a', toPlayerId: null, amount: 50, type: PaymentType.Poker }),
+      makeDebt({ id: 'p1', fromPlayerId: 'a', toPlayerId: null, amount: 50, type: PaymentType.Jackpot }),
     ];
 
     const result = aggregateDebts(debts);
-    expect(result).toHaveLength(0);
+    expect(result).toHaveLength(1);
+    expect(result[0].isJackpot).toBe(true);
+    expect(result[0].toPlayerId).toBe(CAIXINHA_ID);
+    expect(result[0].toPlayerName).toBe('Caixinha');
+  });
+
+  it('propaga a chave PIX da caixinha para o grupo', () => {
+    const debts: AggregatableDebt[] = [
+      makeDebt({
+        id: 'j1',
+        fromPlayerId: 'a',
+        toPlayerId: null,
+        toPlayerName: 'Caixinha',
+        toPlayerPixKey: 'caixinha@liga.com',
+        amount: 10,
+        type: PaymentType.Jackpot,
+        isJackpotContribution: true,
+      }),
+    ];
+
+    const result = aggregateDebts(debts);
+    expect(result[0].toPlayerPixKey).toBe('caixinha@liga.com');
   });
 
   it('preserva flags de status do grupo corretamente', () => {
