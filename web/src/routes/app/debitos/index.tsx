@@ -72,9 +72,11 @@ export default function SettlementRoute() {
   }
 
   const activeDebts = debts?.filter(d => d.status !== PaymentStatus.Confirmed) ?? [];
+  const pendingConfirmationDebts = debts?.filter(d => d.status === PaymentStatus.Paid) ?? [];
   const activeCredits = credits?.filter(c => c.status !== PaymentStatus.Confirmed && !c.isJackpotContribution) ?? [];
 
   const totalDebts = activeDebts.reduce((s, d) => s + d.amount, 0);
+  const totalPendingConfirmation = pendingConfirmationDebts.reduce((s, d) => s + d.amount, 0);
   const totalCredits = activeCredits.reduce((s, c) => s + c.amount, 0);
   const netBalance = totalCredits - totalDebts;
 
@@ -153,6 +155,16 @@ export default function SettlementRoute() {
         </div>
       </Card>
 
+      {totalPendingConfirmation > 0 && (
+        <Card pad="md" className="mb-[10px]">
+          <div className="flex items-center justify-between">
+            <div className="text-[13px] text-muted-foreground">Aguardando confirmação</div>
+            <MoneyValue value={-totalPendingConfirmation} size="15px" />
+          </div>
+        </Card>
+      )}
+
+
       {/* ---- Link para Pagamentos do torneio (If user is organizer? Keep generic for now or hide if we don't have tournament context. In the mock it was linked to the 'current' tournament) ---- */}
       {/* 
         NOTE: "Pagamentos do Torneio" was accessed from here in the mock, but in the real app, 
@@ -193,7 +205,7 @@ export default function SettlementRoute() {
           {activeDebts.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">Você não tem débitos pendentes.</div>
           )}
-          {activeDebts.map((d) => (
+          {activeDebts.filter(d => d.status === PaymentStatus.Pending).map((d) => (
             <Card key={d.paymentId} pad="md">
               {/* Player row */}
               <div className="flex items-center gap-3 mb-3">
@@ -257,6 +269,26 @@ export default function SettlementRoute() {
                   Marcar como pago
                 </Button>
               ) : null}
+            </Card>
+          ))}
+          {pendingConfirmationDebts.map((d) => (
+            <Card key={d.paymentId} pad="md">
+              {/* Player row */}
+              <div className="flex items-center gap-3">
+                <Avatar name={d.creditorPlayerName} size={40} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-sans font-semibold text-[15px]">{d.creditorPlayerName}</div>
+                  <div className="text-[12px] text-muted-foreground">
+                    {d.tournamentName} · {paymentTypeLabel(d.type)}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <MoneyValue value={-d.amount} size="18px" />
+                  <div className="mt-1">
+                    <StatusBadge status={d.status} />
+                  </div>
+                </div>
+              </div>
             </Card>
           ))}
         </div>
