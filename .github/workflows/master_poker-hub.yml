@@ -75,13 +75,11 @@ jobs:
           --output migrations.sql
 
       - name: Apply migration
-        run: >
-          sqlcmd -S ${{ secrets.AZURE_SQL_SERVER }}
-          -d ${{ secrets.AZURE_SQL_DATABASE }}
-          -U ${{ secrets.AZURE_SQL_USER }}
-          -P ${{ secrets.AZURE_SQL_PASSWORD }}
-          -C
-          -i migrations.sql
+        if: ${{ secrets.AZURE_SQL_SERVER != '' && secrets.AZURE_SQL_DATABASE != '' }}
+        uses: azure/sql-action@v2
+        with:
+          connection-string: "Server=tcp:${{ secrets.AZURE_SQL_SERVER }},1433;Initial Catalog=${{ secrets.AZURE_SQL_DATABASE }};Persist Security Info=False;User ID=${{ secrets.AZURE_SQL_USER }};Password=${{ secrets.AZURE_SQL_PASSWORD }};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
+          path: './migrations.sql'
 
   deploy:
     runs-on: ubuntu-latest
