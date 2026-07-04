@@ -75,12 +75,12 @@ jobs:
           --output migrations.sql
 
       - name: Apply migration
-        if: secrets.AZURE_SQL_SERVER != '' && secrets.AZURE_SQL_DATABASE != ''
-        run: >
-          dotnet ef database update
-          --project src/PokerHub.Infrastructure
-          --startup-project src/PokerHub.Api
-          --connection "Server=tcp:${{ secrets.AZURE_SQL_SERVER }},1433;Initial Catalog=${{ secrets.AZURE_SQL_DATABASE }};Persist Security Info=False;User ID=${{ secrets.AZURE_SQL_USER }};Password=${{ secrets.AZURE_SQL_PASSWORD }};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
+        run: |
+          if [ -z "${{ secrets.AZURE_SQL_SERVER }}" ] || [ -z "${{ secrets.AZURE_SQL_DATABASE }}" ]; then
+            echo "Secrets do Azure SQL não configurados. Pulando execução da migration."
+            exit 0
+          fi
+          dotnet ef database update --project src/PokerHub.Infrastructure --startup-project src/PokerHub.Api --connection "Server=tcp:${{ secrets.AZURE_SQL_SERVER }},1433;Initial Catalog=${{ secrets.AZURE_SQL_DATABASE }};Persist Security Info=False;User ID=${{ secrets.AZURE_SQL_USER }};Password=${{ secrets.AZURE_SQL_PASSWORD }};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
 
   deploy:
     runs-on: ubuntu-latest
