@@ -1,3 +1,5 @@
+using PokerHub.Domain.Enums;
+
 namespace PokerHub.Domain.Entities;
 
 public class League
@@ -8,12 +10,15 @@ public class League
     public string InviteCode { get; set; } = string.Empty;
     public string OrganizerId { get; set; } = string.Empty;
     public bool BlockCheckInWithDebt { get; set; }
+    public int? InactivityThresholdMonths { get; set; }  // null = não inativar jogadores automaticamente
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public bool IsActive { get; set; } = true;
 
     // Jackpot configuration
     public decimal JackpotPercentage { get; set; } = 0;
     public decimal AccumulatedPrizePool { get; set; } = 0;
+    public string? JackpotPixKey { get; set; }
+    public PixKeyType? JackpotPixKeyType { get; set; }
 
     // Navigation properties
     public User Organizer { get; set; } = null!;
@@ -26,7 +31,15 @@ public class League
 
     public static string GenerateInviteCode()
     {
-        return Convert.ToBase64String(Guid.NewGuid().ToByteArray())[..8].ToUpperInvariant();
+        // Use base64url alphabet (no '+', '/', '=') so the code is safe as a URL
+        // path segment. Standard base64 has ~11.6% chance of containing '/', which
+        // breaks route matching on POST /api/leagues/join/{inviteCode}.
+        var bytes = Guid.NewGuid().ToByteArray();
+        return Convert.ToBase64String(bytes)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_')[..8]
+            .ToUpperInvariant();
     }
 
     public void RegenerateInviteCode()

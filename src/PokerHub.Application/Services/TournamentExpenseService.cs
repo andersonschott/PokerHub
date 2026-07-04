@@ -300,7 +300,7 @@ public class TournamentExpenseService : ITournamentExpenseService
         if (tournament == null) return new List<PlayerDto>();
 
         var players = await _context.Players
-            .Where(p => p.LeagueId == tournament.LeagueId && p.IsActive)
+            .Where(p => p.LeagueId == tournament.LeagueId && p.IsActive && p.MembershipStatus == PlayerMembershipStatus.Active)
             .Include(p => p.Participations)
                 .ThenInclude(part => part.Tournament)
             .ToListAsync();
@@ -341,6 +341,7 @@ public class TournamentExpenseService : ITournamentExpenseService
             player.UserId,
             player.CreatedAt,
             player.IsActive,
+            player.MembershipStatus,
             totalPrizes - totalBuyIns,
             finishedParticipations.Count,
             finishedParticipations.Count(tp => tp.Position == 1),

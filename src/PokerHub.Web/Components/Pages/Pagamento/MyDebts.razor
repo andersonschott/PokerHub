@@ -65,12 +65,12 @@
         <div class="tabs">
             <div class="tab @(_activeTab == 0 ? "active debt" : "")" @onclick="@(() => _activeTab = 0)">
                 <div class="tab-icon">💸</div>
-                <div class="tab-count">@_totalDebt.ToString("C0")</div>
+                <div class="tab-count">@_totalDebt.ToBrl()</div>
                 <div class="tab-label">A Pagar</div>
             </div>
             <div class="tab @(_activeTab == 1 ? "active credit" : "")" @onclick="@(() => _activeTab = 1)">
                 <div class="tab-icon">💰</div>
-                <div class="tab-count">@_totalCredit.ToString("C0")</div>
+                <div class="tab-count">@_totalCredit.ToBrl()</div>
                 <div class="tab-label">A Receber</div>
             </div>
             @if (_organizerPayments?.Any() == true)
@@ -144,7 +144,10 @@
                                 <div class="debt-pix">
                                     <span class="debt-pix-label">PIX:</span>
                                     <span class="debt-pix-value">@debt.CreditorPixKey</span>
-                                    <span class="debt-pix-copy" @onclick="@(() => CopyToClipboard(debt.CreditorPixKey))">📋</span>
+                                    <button class="debt-pix-copy-btn" @onclick="@(() => CopyToClipboard(debt.CreditorPixKey))" aria-label="Copiar chave PIX">
+                                        <MudIcon Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" />
+                                        Copiar
+                                    </button>
                                 </div>
                             }
                             else if (debt.Type != PaymentType.Jackpot)
@@ -509,7 +512,7 @@
     {
         var confirm = await DialogService.ShowMessageBox(
             "Confirmar Pagamento",
-            $"Voce confirma que pagou {debt.Amount:C} para {debt.CreditorPlayerName}?",
+            $"Voce confirma que pagou {debt.Amount.ToBrl()} para {debt.CreditorPlayerName}?",
             "Sim, Paguei", "Cancelar");
 
         if (confirm == true)
@@ -549,7 +552,7 @@
 
         var confirm = await DialogService.ShowMessageBox(
             "Confirmar Recebimento",
-            $"Voce confirma que recebeu {payment.Amount:C} de {payment.FromPlayerName}?",
+            $"Voce confirma que recebeu {payment.Amount.ToBrl()} de {payment.FromPlayerName}?",
             "Sim, Recebi", "Cancelar");
 
         if (confirm == true)
@@ -582,13 +585,6 @@
     private async Task AdminMarkPaid(Guid paymentId)
     {
         if (string.IsNullOrEmpty(_currentUserId)) return;
-
-        var confirmed = await DialogService.ShowMessageBox(
-            "Confirmar Pagamento",
-            "Deseja marcar este pagamento como pago?",
-            yesText: "Sim", cancelText: "Cancelar");
-
-        if (confirmed != true) return;
 
         _processingPaymentId = paymentId;
         try

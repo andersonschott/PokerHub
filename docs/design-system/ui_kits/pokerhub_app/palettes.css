@@ -1,0 +1,206 @@
+/* PokerHub UI kit — Experimento de paletas (Tweaks).
+   Três re-skins do TEMA CLARO ativados por <html data-palette="…">.
+   O tema escuro canônico ("clube à meia-noite") permanece intocado —
+   a queixa em teste é o claro lavado / sem contraste.
+
+   meia-noite (sem atributo) = tokens atuais (tokens/colors.css).
+   tinta  — "Tinta firme":  papel quente, tinta bem mais escura, bordas firmes.
+   feltro — "Feltro de dia": neutros levemente esverdeados, emerald presente.
+   clube  — "Clube diurno":  creme quente, dourado mais saturado e presente. */
+
+/* ===== 1 · Tinta firme — contraste acima de tudo, hue atual ===== */
+html[data-palette="tinta"][data-theme="light"] {
+  --felt-950: oklch(0.880 0.006 85);
+  --felt-900: oklch(0.922 0.006 85);
+  --felt-850: oklch(1 0 0);
+  --felt-800: oklch(1 0 0);
+  --felt-750: oklch(0.905 0.007 85);
+  --felt-700: oklch(0.822 0.009 85);
+  --felt-600: oklch(0.750 0.011 85);
+
+  --ink-100: oklch(0.160 0.012 80);
+  --ink-300: oklch(0.265 0.012 80);
+  --ink-500: oklch(0.400 0.012 80);
+  --ink-600: oklch(0.470 0.012 80);
+
+  --gold-400: oklch(0.560 0.115 78);
+  --gold-500: oklch(0.595 0.118 76);
+  --gold-600: oklch(0.505 0.118 72);
+  --emerald-400: oklch(0.450 0.090 160);
+  --emerald-500: oklch(0.505 0.095 160);
+  --positive: oklch(0.500 0.105 158);
+  --negative: oklch(0.500 0.175 25);
+  --warning:  oklch(0.560 0.115 72);
+  --suit-red:  oklch(0.500 0.175 25);
+  --suit-dark: oklch(0.190 0.012 85);
+  --podium-gold:   oklch(0.610 0.115 82);
+  --podium-silver: oklch(0.540 0.012 240);
+  --podium-bronze: oklch(0.505 0.085 56);
+
+  --background: oklch(0.938 0.006 85);
+  --foreground: var(--ink-100);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--ink-100);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--ink-100);
+  --primary: var(--gold-600);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.905 0.007 85);
+  --secondary-foreground: oklch(0.210 0.012 80);
+  --muted: oklch(0.920 0.006 85);
+  --muted-foreground: var(--ink-500);
+  --accent: oklch(0.905 0.007 85);
+  --accent-foreground: oklch(0.210 0.012 80);
+  --border: oklch(0.822 0.009 85);
+  --input: oklch(0.795 0.010 85);
+  --ring: var(--gold-600);
+
+  --tv-bg: radial-gradient(120% 90% at 50% 0%, oklch(0.975 0.005 85) 0%, oklch(0.930 0.006 85) 60%, oklch(0.898 0.007 85) 100%);
+  --tv-paused-bg: radial-gradient(120% 90% at 50% 0%, oklch(0.975 0.016 85) 0%, oklch(0.930 0.020 85) 55%, oklch(0.898 0.018 92) 100%);
+}
+
+/* ===== 2 · Feltro de dia — neutros esverdeados, o verde volta como clima ===== */
+html[data-palette="feltro"][data-theme="light"] {
+  --felt-950: oklch(0.882 0.024 165);
+  --felt-900: oklch(0.925 0.020 165);
+  --felt-850: oklch(0.988 0.007 165);
+  --felt-800: oklch(0.988 0.007 165);
+  --felt-750: oklch(0.905 0.026 165);
+  --felt-700: oklch(0.838 0.032 165);
+  --felt-600: oklch(0.770 0.036 165);
+
+  --ink-100: oklch(0.215 0.022 175);
+  --ink-300: oklch(0.315 0.024 175);
+  --ink-500: oklch(0.450 0.030 172);
+  --ink-600: oklch(0.515 0.030 172);
+
+  --gold-400: oklch(0.575 0.110 80);
+  --gold-500: oklch(0.610 0.112 78);
+  --gold-600: oklch(0.525 0.112 74);
+  --emerald-400: oklch(0.470 0.095 162);
+  --emerald-500: oklch(0.520 0.100 162);
+  --positive: oklch(0.515 0.105 160);
+  --negative: oklch(0.525 0.170 25);
+  --warning:  oklch(0.590 0.110 72);
+  --suit-red:  oklch(0.525 0.170 25);
+  --suit-dark: oklch(0.230 0.022 175);
+  --podium-gold:   oklch(0.630 0.110 82);
+  --podium-silver: oklch(0.565 0.012 240);
+  --podium-bronze: oklch(0.525 0.082 56);
+
+  --background: oklch(0.940 0.020 165);
+  --foreground: var(--ink-100);
+  --card: oklch(0.988 0.007 165);
+  --card-foreground: var(--ink-100);
+  --popover: oklch(0.988 0.007 165);
+  --popover-foreground: var(--ink-100);
+  --primary: var(--gold-600);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.905 0.026 165);
+  --secondary-foreground: oklch(0.235 0.022 175);
+  --muted: oklch(0.922 0.020 165);
+  --muted-foreground: var(--ink-500);
+  --accent: oklch(0.890 0.032 163);
+  --accent-foreground: oklch(0.235 0.022 175);
+  --border: oklch(0.838 0.032 165);
+  --input: oklch(0.812 0.034 165);
+  --ring: var(--emerald-500);
+
+  --tv-bg: radial-gradient(120% 90% at 50% 0%, oklch(0.978 0.010 165) 0%, oklch(0.935 0.016 165) 60%, oklch(0.902 0.020 165) 100%);
+  --tv-paused-bg: radial-gradient(120% 90% at 50% 0%, oklch(0.978 0.016 110) 0%, oklch(0.935 0.020 105) 55%, oklch(0.902 0.022 100) 100%);
+}
+
+/* ===== 3 · Clube diurno — creme quente, dourado assumido ===== */
+html[data-palette="clube"][data-theme="light"] {
+  --felt-950: oklch(0.878 0.034 88);
+  --felt-900: oklch(0.922 0.030 88);
+  --felt-850: oklch(0.988 0.012 90);
+  --felt-800: oklch(0.988 0.012 90);
+  --felt-750: oklch(0.898 0.034 88);
+  --felt-700: oklch(0.832 0.040 86);
+  --felt-600: oklch(0.765 0.044 84);
+
+  --ink-100: oklch(0.215 0.022 70);
+  --ink-300: oklch(0.315 0.026 72);
+  --ink-500: oklch(0.450 0.034 74);
+  --ink-600: oklch(0.515 0.036 74);
+
+  --gold-400: oklch(0.635 0.128 80);
+  --gold-500: oklch(0.605 0.132 78);
+  --gold-600: oklch(0.520 0.132 72);
+  --emerald-400: oklch(0.475 0.090 160);
+  --emerald-500: oklch(0.530 0.095 160);
+  --positive: oklch(0.525 0.100 158);
+  --negative: oklch(0.530 0.172 25);
+  --warning:  oklch(0.595 0.115 70);
+  --suit-red:  oklch(0.530 0.172 25);
+  --suit-dark: oklch(0.235 0.022 70);
+  --podium-gold:   oklch(0.625 0.125 84);
+  --podium-silver: oklch(0.570 0.012 240);
+  --podium-bronze: oklch(0.530 0.085 56);
+
+  --background: oklch(0.936 0.028 88);
+  --foreground: var(--ink-100);
+  --card: oklch(0.988 0.012 90);
+  --card-foreground: var(--ink-100);
+  --popover: oklch(0.988 0.012 90);
+  --popover-foreground: var(--ink-100);
+  --primary: var(--gold-600);
+  --primary-foreground: oklch(0.990 0.008 90);
+  --secondary: oklch(0.898 0.034 88);
+  --secondary-foreground: oklch(0.235 0.024 72);
+  --muted: oklch(0.918 0.030 88);
+  --muted-foreground: var(--ink-500);
+  --accent: oklch(0.882 0.040 86);
+  --accent-foreground: oklch(0.235 0.024 72);
+  --border: oklch(0.832 0.040 86);
+  --input: oklch(0.808 0.042 86);
+  --ring: var(--gold-500);
+
+  --tv-bg: radial-gradient(120% 90% at 50% 0%, oklch(0.978 0.018 90) 0%, oklch(0.935 0.024 88) 60%, oklch(0.900 0.028 86) 100%);
+  --tv-paused-bg: radial-gradient(120% 90% at 50% 0%, oklch(0.978 0.026 84) 0%, oklch(0.935 0.030 82) 55%, oklch(0.900 0.030 80) 100%);
+}
+
+/* ===== Acentos (Tweaks) — <html data-accent="…">.
+   Troca a rampa dourada (sidebar ativa, botões, links) por opções menos
+   pastel. Vale para os DOIS temas; compatível com qualquer paleta acima
+   (estas regras vêm DEPOIS das paletas, então vencem o empate de
+   especificidade — manter no fim do arquivo). */
+
+/* Ouro vivo — o mesmo dourado, mais croma, menos "champanhe" */
+html[data-accent="ouro"] {
+  --gold-400: oklch(0.820 0.130 84);
+  --gold-500: oklch(0.770 0.142 80);
+  --gold-600: oklch(0.700 0.148 74);
+}
+html[data-accent="ouro"][data-theme="light"] {
+  --gold-400: oklch(0.580 0.135 76);
+  --gold-500: oklch(0.620 0.140 78);
+  --gold-600: oklch(0.520 0.140 72);
+}
+
+/* Cobre — âmbar queimado, mais quente e assertivo */
+html[data-accent="cobre"] {
+  --gold-400: oklch(0.760 0.135 60);
+  --gold-500: oklch(0.710 0.145 55);
+  --gold-600: oklch(0.640 0.150 50);
+}
+html[data-accent="cobre"][data-theme="light"] {
+  --gold-400: oklch(0.560 0.145 52);
+  --gold-500: oklch(0.600 0.148 55);
+  --gold-600: oklch(0.500 0.148 48);
+}
+
+/* Vinho — bordô de veludo; texto claro sobre o primary no escuro */
+html[data-accent="vinho"] {
+  --gold-400: oklch(0.680 0.135 18);
+  --gold-500: oklch(0.600 0.150 18);
+  --gold-600: oklch(0.530 0.148 15);
+  --primary-foreground: oklch(0.960 0.010 15);
+}
+html[data-accent="vinho"][data-theme="light"] {
+  --gold-400: oklch(0.520 0.155 18);
+  --gold-500: oklch(0.550 0.160 20);
+  --gold-600: oklch(0.470 0.155 15);
+  --primary-foreground: oklch(0.985 0 0);
+}

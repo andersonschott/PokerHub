@@ -77,7 +77,20 @@ public class TournamentService : ITournamentService
 
         if (tournament == null) return null;
 
+        return await MapToDetailDtoAsync(tournament);
+    }
+
+    /// <summary>
+    /// Mapeamento ÚNICO para <see cref="TournamentDetailDto"/>, usado tanto por
+    /// <see cref="GetTournamentDetailAsync"/> quanto por <see cref="GetTournamentByInviteCodeAsync"/>.
+    /// Requer que o torneio tenha sido carregado com League, BlindLevels e Players (Player + EliminatedByPlayer).
+    /// Os prêmios por posição vêm da engine ÚNICA de premiação (a mesma da finalização) — nenhuma
+    /// regra de cálculo de dinheiro é duplicada aqui.
+    /// </summary>
+    private async Task<TournamentDetailDto> MapToDetailDtoAsync(Tournament tournament)
+    {
         var blindLevels = tournament.BlindLevels
+            .OrderBy(bl => bl.Order)
             .Select(bl => new BlindLevelDto(
                 bl.Id,
                 bl.Order,
@@ -116,6 +129,9 @@ public class TournamentService : ITournamentService
             ))
             .ToList();
 
+        var prizePool = CalculatePrizePool(tournament);
+        var prizes = await BuildPrizesAsync(tournament, prizePool);
+
         return new TournamentDetailDto(
             tournament.Id,
             tournament.LeagueId,
@@ -143,10 +159,36 @@ public class TournamentService : ITournamentService
             tournament.CreatedAt,
             tournament.StartedAt,
             tournament.FinishedAt,
-            CalculatePrizePool(tournament),
+            prizePool,
             blindLevels,
-            players
+            players,
+            prizes,
+            tournament.PrizeDistributionType
         );
+    }
+
+    /// <summary>
+    /// Deriva a lista de prêmios por posição REUSANDO a engine única de premiação
+    /// (<see cref="IPrizeTableService.CalculatePrizeDistributionAsync"/>) — a MESMA chamada usada na
+    /// finalização (<see cref="FinishTournamentAsync"/>). O valor (Amount) é a fonte única de dinheiro;
+    /// Percentage é apenas exibição (% do prize pool total). Posições com prêmio &lt;= 0 são omitidas.
+    /// </summary>
+    private async Task<IReadOnlyList<TournamentPrizeDto>> BuildPrizesAsync(Tournament tournament, decimal prizePool)
+    {
+        if (prizePool <= 0)
+            return [];
+
+        var distribution = await _prizeTableService.CalculatePrizeDistributionAsync(
+            tournament.LeagueId, prizePool, tournament.PrizeStructure, tournament.UsePrizeTable);
+
+        return distribution.Allocations
+            .Where(a => a.Amount > 0)
+            .OrderBy(a => a.Position)
+            .Select(a => new TournamentPrizeDto(
+                a.Position,
+                a.Amount,
+                prizePool > 0 ? a.Amount / prizePool * 100 : 0))
+            .ToList();
     }
 
     public async Task<TournamentDto> CreateTournamentAsync(Guid leagueId, CreateTournamentDto dto)
@@ -510,6 +552,7 @@ public class TournamentService : ITournamentService
         };
 
         _context.TournamentPlayers.Add(tp);
+        await MarkPlayerActivityAsync(playerId);
         await _context.SaveChangesAsync();
         return true;
     }
@@ -533,6 +576,7 @@ public class TournamentService : ITournamentService
 
         tp.IsCheckedIn = true;
         tp.CheckedInAt = DateTime.UtcNow;
+        await MarkPlayerActivityAsync(playerId);
         await _context.SaveChangesAsync();
         return true;
     }
@@ -547,6 +591,23 @@ public class TournamentService : ITournamentService
         tp.CheckedInAt = null;
         await _context.SaveChangesAsync();
         return true;
+    }
+
+    /// <summary>
+    /// Marca atividade do jogador (atividade = participar de torneio) e reativa
+    /// automaticamente quem foi inativado por POLÍTICA (não manualmente).
+    /// Não persiste — o chamador faz SaveChanges.
+    /// </summary>
+    private async Task MarkPlayerActivityAsync(Guid playerId)
+    {
+        var player = await _context.Players.FirstOrDefaultAsync(p => p.Id == playerId);
+        if (player == null) return;
+        player.LastActivityAt = DateTime.UtcNow;
+        if (player.MembershipStatus == PlayerMembershipStatus.Inactive && !player.DeactivatedManually)
+        {
+            player.MembershipStatus = PlayerMembershipStatus.Active;
+            player.DeactivatedAt = null;
+        }
     }
 
     public async Task<bool> AddRebuyAsync(Guid tournamentId, Guid playerId)
@@ -1066,14 +1127,21 @@ public class TournamentService : ITournamentService
         );
     }
 
-    public async Task<TournamentDto?> GetTournamentByInviteCodeAsync(string inviteCode)
+    public async Task<TournamentDetailDto?> GetTournamentByInviteCodeAsync(string inviteCode)
     {
+        // AsNoTracking + mesmos includes do detalhe: o by-invite alimenta o modo TV (React), que
+        // precisa de players[], blindLevels[] e dos prêmios calculados (TournamentDetailDto).
         var tournament = await _context.Tournaments
+            .AsNoTracking()
             .Include(t => t.League)
+            .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
             .Include(t => t.Players)
+                .ThenInclude(tp => tp.Player)
+            .Include(t => t.Players)
+                .ThenInclude(tp => tp.EliminatedByPlayer)
             .FirstOrDefaultAsync(t => t.InviteCode == inviteCode.ToUpper());
 
-        return tournament == null ? null : MapToDto(tournament);
+        return tournament == null ? null : await MapToDetailDtoAsync(tournament);
     }
 
     public async Task<(bool Success, string Message)> SelfRegisterPlayerAsync(Guid tournamentId, string userId)
@@ -1118,6 +1186,14 @@ public class TournamentService : ITournamentService
             IsCheckedIn = tournament.Status != TournamentStatus.Scheduled,
             CheckedInAt = tournament.Status != TournamentStatus.Scheduled ? DateTime.UtcNow : null
         };
+
+        // Atividade = participar de torneio; reativa quem estava inativo por política (não manual).
+        player.LastActivityAt = DateTime.UtcNow;
+        if (player.MembershipStatus == PlayerMembershipStatus.Inactive && !player.DeactivatedManually)
+        {
+            player.MembershipStatus = PlayerMembershipStatus.Active;
+            player.DeactivatedAt = null;
+        }
 
         _context.TournamentPlayers.Add(tournamentPlayer);
         await _context.SaveChangesAsync();

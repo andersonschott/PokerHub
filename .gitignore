@@ -3,3 +3,19 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
+# appsettings com connection string real (Azure SQL) — fora do git.
+# Runtime lê de App Settings (App Service) / secret (Container App) / user-secrets.
+# Ao clonar, copie dos .example e preencha localmente.
+src/PokerHub.Api/appsettings.Development.json
+src/PokerHub.Web/appsettings.Development.json
+src/PokerHub.Web/appsettings.Production.json
+
+# editor swap files
+*.kate-swp
+
+# front (web/)
+web/node_modules/
+web/dist/
+web/*.tsbuildinfo
+.superpowers/
+web/node_modules.bak/

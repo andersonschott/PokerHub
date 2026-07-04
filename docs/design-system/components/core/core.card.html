@@ -1,0 +1,60 @@
+<!-- @dsCard group="Components" viewport="700x430" name="Core — buttons, badges, status, avatars" subtitle="Button · IconButton · Badge · StatusPill · Avatar" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../../styles.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>
+  body { margin: 0; background: var(--background); padding: 20px; }
+  .group { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
+  .lbl { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted-foreground); width: 100%; margin-bottom: 2px; }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" data-presets="react">
+    const { Button, IconButton, Badge, StatusPill, Avatar } = window.PokerHubDesignSystem_b95f9b;
+    function Demo() {
+      return (
+        <React.Fragment>
+          <div className="group"><span className="lbl">Button</span>
+            <Button variant="primary" icon="play">Operar torneio</Button>
+            <Button variant="secondary">Assistir</Button>
+            <Button variant="outline" icon="user-plus">Check-in</Button>
+            <Button variant="ghost" iconRight="chevron-right">Ranking</Button>
+            <Button variant="destructive" icon="skull">Eliminar</Button>
+          </div>
+          <div className="group"><span className="lbl">Sizes · IconButton</span>
+            <Button size="sm">sm</Button>
+            <Button size="md">md</Button>
+            <Button size="lg">lg</Button>
+            <IconButton icon="copy" variant="solid" />
+            <IconButton icon="settings" />
+            <IconButton icon="crown" gold variant="solid" />
+          </div>
+          <div className="group"><span className="lbl">Badge · StatusPill</span>
+            <Badge tone="emerald">Agendado</Badge>
+            <Badge tone="warning">Pendente</Badge>
+            <Badge tone="positive" icon="check-check">Confirmado</Badge>
+            <Badge tone="gold">♠ Poker</Badge>
+            <StatusPill status="live" />
+            <StatusPill status="paused" />
+          </div>
+          <div className="group"><span className="lbl">Avatar</span>
+            <Avatar name="Bruno Lima" />
+            <Avatar name="Ana Reis" podium="gold" badge="1" badgeGold />
+            <Avatar name="Caio Souza" podium="silver" badge="2" />
+            <Avatar name="Org" badgeIcon="crown" badgeGold />
+          </div>
+        </React.Fragment>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+  </script>
+</body>
+</html>

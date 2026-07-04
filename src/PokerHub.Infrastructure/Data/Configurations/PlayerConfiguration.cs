@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using PokerHub.Domain.Entities;
+using PokerHub.Domain.Enums;
 
 namespace PokerHub.Infrastructure.Data.Configurations;
 
@@ -32,6 +33,13 @@ public class PlayerConfiguration : IEntityTypeConfiguration<Player>
         builder.Property(p => p.IsActive)
             .IsRequired()
             .HasDefaultValue(true);
+
+        builder.Property(p => p.MembershipStatus)
+            .IsRequired()
+            .HasDefaultValue(PlayerMembershipStatus.Active);
+
+        // Padrão dominante dos dropdowns: WHERE LeagueId=@id AND IsActive=1 AND MembershipStatus=0
+        builder.HasIndex(p => new { p.LeagueId, p.MembershipStatus });
 
         // Note: Player -> Participations relationship is configured in TournamentPlayerConfiguration
         // with RESTRICT to avoid multiple cascade paths through League

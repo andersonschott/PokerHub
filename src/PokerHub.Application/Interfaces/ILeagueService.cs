@@ -45,4 +45,13 @@ public interface ILeagueService
     /// but remains in rankings and history. Fails if the player has pending debts.
     /// </summary>
     Task<(bool Success, string Message)> LeaveLeagueAsync(Guid leagueId, string userId);
+
+    /// <summary>
+    /// Transfers league ownership to another active linked member.
+    /// Ensures the previous organizer remains as a regular member.
+    /// </summary>
+    Task<(bool Success, string Message)> TransferOwnershipAsync(
+        Guid leagueId,
+        string currentUserId,
+        string newOrganizerUserId);
 }

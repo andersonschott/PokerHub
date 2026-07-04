@@ -14,6 +14,7 @@ public record PlayerDto(
     string? UserId,
     DateTime CreatedAt,
     bool IsActive,
+    PlayerMembershipStatus MembershipStatus,
     decimal TotalProfit,
     int TournamentsPlayed,
     int Wins,

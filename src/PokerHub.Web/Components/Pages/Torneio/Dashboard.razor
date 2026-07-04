@@ -9,7 +9,6 @@
 @inject IPlayerService PlayerService
 @inject ITournamentExpenseService ExpenseService
 @inject ILeagueService LeagueService
-@inject TournamentTimerService TimerService
 @inject NavigationManager Navigation
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
@@ -81,7 +80,7 @@
                                               Color="Color.Warning"
                                               StartIcon="@Icons.Material.Filled.Pause"
                                               OnClick="PauseTournament"
-                                              Disabled="_processing">
+                                              Disabled="true">
                                         Pausar
                                     </MudButton>
                                 }
@@ -99,7 +98,7 @@
                                           Color="Color.Success"
                                           StartIcon="@Icons.Material.Filled.PlayArrow"
                                           OnClick="ResumeTournament"
-                                          Disabled="_processing">
+                                          Disabled="true">
                                     Retomar
                                 </MudButton>
                             }
@@ -283,14 +282,15 @@
                                           Size="Size.Small"
                                           StartIcon="@Icons.Material.Filled.SkipPrevious"
                                           OnClick="GoToPreviousLevel"
-                                          Disabled="@(_timerState?.CurrentLevel <= 1)">
+                                          Disabled="true">
                                     Anterior
                                 </MudButton>
                                 <MudButton Variant="Variant.Outlined"
                                           Color="Color.Primary"
                                           Size="Size.Small"
                                           EndIcon="@Icons.Material.Filled.SkipNext"
-                                          OnClick="AdvanceLevel">
+                                          OnClick="AdvanceLevel"
+                                          Disabled="true">
                                     Proximo
                                 </MudButton>
                             </MudStack>
@@ -1000,92 +1000,31 @@
         }
     }
 
-    private async Task PauseTournament()
+    // CONTROLES AO VIVO migraram para o app novo. O timer agora e hospedado unicamente
+    // pela Api; este Blazor e backup so-leitura. Os handlers abaixo apenas informam o
+    // usuario e nao executam nenhuma operacao ao vivo (botoes correspondentes ficam Disabled).
+    private Task PauseTournament()
     {
-        _processing = true;
-        try
-        {
-            // IMPORTANT: Persist timer state FIRST, before changing status
-            // This ensures we don't lose time when the status changes to Paused
-            await TimerService.PauseTournamentAsync(TournamentId);
-            await TournamentService.PauseTournamentAsync(TournamentId);
-            Snackbar.Add("Torneio pausado", Severity.Info);
-            await LoadTournament();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            _processing = false;
-        }
+        Snackbar.Add("Operação ao vivo migrou para o app novo", Severity.Info);
+        return Task.CompletedTask;
     }
 
-    private async Task ResumeTournament()
+    private Task ResumeTournament()
     {
-        _processing = true;
-        try
-        {
-            await TournamentService.ResumeTournamentAsync(TournamentId);
-            TimerService.ResumeTournament(TournamentId);
-            Snackbar.Add("Torneio retomado", Severity.Success);
-            await LoadTournament();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
-        }
-        finally
-        {
-            _processing = false;
-        }
+        Snackbar.Add("Operação ao vivo migrou para o app novo", Severity.Info);
+        return Task.CompletedTask;
     }
 
-    private async Task AdvanceLevel()
+    private Task AdvanceLevel()
     {
-        try
-        {
-            var success = await TournamentService.AdvanceToNextLevelAsync(TournamentId);
-            if (success)
-            {
-                // Sync timer service state and broadcast to all clients
-                await TimerService.ManualAdvanceLevel(TournamentId);
-                await LoadTournament();
-                Snackbar.Add("Nivel avancado", Severity.Success);
-            }
-            else
-            {
-                Snackbar.Add("Nao ha mais niveis para avancar", Severity.Warning);
-            }
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
-        }
+        Snackbar.Add("Operação ao vivo migrou para o app novo", Severity.Info);
+        return Task.CompletedTask;
     }
 
-    private async Task GoToPreviousLevel()
+    private Task GoToPreviousLevel()
     {
-        try
-        {
-            var success = await TournamentService.GoToPreviousLevelAsync(TournamentId);
-            if (success)
-            {
-                // Sync timer service state and broadcast to all clients
-                await TimerService.ManualGoToPreviousLevel(TournamentId);
-                await LoadTournament();
-                Snackbar.Add("Nivel anterior", Severity.Success);
-            }
-            else
-            {
-                Snackbar.Add("Ja esta no primeiro nivel", Severity.Warning);
-            }
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Erro: {ex.Message}", Severity.Error);
-        }
+        Snackbar.Add("Operação ao vivo migrou para o app novo", Severity.Info);
+        return Task.CompletedTask;
     }
 
     private async Task OpenAddPlayerDialog()
@@ -1121,13 +1060,6 @@
         {
             await TournamentService.CheckInPlayerAsync(TournamentId, playerId);
             await LoadTournament();
-
-            // Broadcast atualização para Timer e outros clientes
-            if (_detail != null)
-            {
-                await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail.PrizePool, GetTotalRebuys(), GetTotalAddons());
-                await TimerService.NotifyPlayerUpdated(TournamentId);
-            }
         }
         catch (Exception ex)
         {
@@ -1141,13 +1073,6 @@
         {
             await TournamentService.CheckOutPlayerAsync(TournamentId, playerId);
             await LoadTournament();
-
-            // Broadcast atualização para Timer e outros clientes
-            if (_detail != null)
-            {
-                await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail.PrizePool, GetTotalRebuys(), GetTotalAddons());
-                await TimerService.NotifyPlayerUpdated(TournamentId);
-            }
         }
         catch (Exception ex)
         {
@@ -1183,9 +1108,7 @@
         try
         {
             await TournamentService.AddRebuyAsync(TournamentId, playerId);
-            await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail!.PrizePool + (_detail.RebuyValue ?? 0), GetTotalRebuys() + 1, GetTotalAddons());
-            await TimerService.NotifyPlayerUpdated(TournamentId);
-            // RefreshPlayerData is called by SignalR handler when broadcast is received
+            await LoadTournament(); // backup so-leitura: recarrega estado local (substitui o refresh via SignalR)
         }
         catch (Exception ex)
         {
@@ -1204,9 +1127,7 @@
         try
         {
             await TournamentService.RemoveRebuyAsync(TournamentId, playerId);
-            await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail!.PrizePool - (_detail.RebuyValue ?? 0), GetTotalRebuys() - 1, GetTotalAddons());
-            await TimerService.NotifyPlayerUpdated(TournamentId);
-            // RefreshPlayerData is called by SignalR handler when broadcast is received
+            await LoadTournament();
         }
         catch (Exception ex)
         {
@@ -1225,11 +1146,7 @@
         try
         {
             await TournamentService.SetAddonAsync(TournamentId, playerId, hasAddon);
-            var change = hasAddon ? 1 : -1;
-            var prizeChange = hasAddon ? (_detail!.AddonValue ?? 0) : -(_detail!.AddonValue ?? 0);
-            await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail!.PrizePool + prizeChange, GetTotalRebuys(), GetTotalAddons() + change);
-            await TimerService.NotifyPlayerUpdated(TournamentId);
-            // RefreshPlayerData is called by SignalR handler when broadcast is received
+            await LoadTournament();
         }
         catch (Exception ex)
         {
@@ -1311,8 +1228,6 @@
                     Snackbar.Add(message, Severity.Error);
                     return;
                 }
-                await TimerService.NotifyPlayerEliminated(TournamentId, player.PlayerId, player.PlayerName, position);
-                await TimerService.NotifyPlayerUpdated(TournamentId);
                 await LoadTournament();
             }
             catch (Exception ex)
@@ -1337,7 +1252,6 @@
             try
             {
                 await TournamentService.RestoreEliminatedPlayerAsync(TournamentId, playerId);
-                await TimerService.NotifyPlayerUpdated(TournamentId);
                 await LoadTournament();
                 Snackbar.Add($"{player.PlayerName} foi restaurado ao torneio!", Severity.Success);
             }
@@ -1420,7 +1334,6 @@
                     Snackbar.Add(finishMessage, Severity.Error);
                     return;
                 }
-                await TimerService.NotifyTournamentFinished(TournamentId);
                 Snackbar.Add("Torneio finalizado!", Severity.Success);
                 Navigation.NavigateTo($"/torneios/{TournamentId}/pagamentos");
             }
@@ -1733,12 +1646,6 @@
             Snackbar.Add($"Check-in realizado para {count} jogador(es)", Severity.Success);
             _selectedPlayers.Clear();
             await LoadTournament();
-
-            if (_detail != null)
-            {
-                await TimerService.NotifyPrizePoolUpdate(TournamentId, _detail.PrizePool, GetTotalRebuys(), GetTotalAddons());
-                await TimerService.NotifyPlayerUpdated(TournamentId);
-            }
         }
         catch (Exception ex)
         {

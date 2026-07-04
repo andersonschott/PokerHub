@@ -1,0 +1,5 @@
+# Playwright (E2E) — artefatos de execução, não versionar
+/test-results/
+/playwright-report/
+/blob-report/
+/.playwright/

@@ -1,0 +1,237 @@
+using System.Globalization;
+using System.Text;
+using System.Threading.RateLimiting;
+using Azure.Core;
+using Azure.Identity;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using PokerHub.Api.Auth;
+using PokerHub.Api.Expenses;
+using PokerHub.Api.Jackpot;
+using PokerHub.Api.Leagues;
+using PokerHub.Api.Me;
+using PokerHub.Api.Payments;
+using PokerHub.Api.Players;
+using PokerHub.Api.PrizeTables;
+using PokerHub.Api.Rankings;
+using PokerHub.Api.Seasons;
+using PokerHub.Api.Tournaments;
+using PokerHub.Application;
+using PokerHub.Domain.Entities;
+using PokerHub.Infrastructure.Data;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Cultura pt-BR (mesma configuração do PokerHub.Web)
+var cultureInfo = new CultureInfo("pt-BR");
+CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
+CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
+
+// Sentry: monitoramento de erros/performance. Opções vêm da seção "Sentry" do config
+// (Dsn fica vazio por padrão → SDK desativado em dev/testes; em prod o DSN é injetado
+// via env Sentry__Dsn no Container App). Environment é inferido de ASPNETCORE_ENVIRONMENT.
+builder.WebHost.UseSentry();
+
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+
+builder.Services.AddDbContext<PokerHubDbContext>(options =>
+    options.UseSqlServer(connectionString, sqlOptions =>
+    {
+        sqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(30),
+            errorNumbersToAdd: null);
+        sqlOptions.CommandTimeout(60);
+        // Evita explosão cartesiana em queries com múltiplos Include de coleção (warning EF + perf).
+        sqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
+    }));
+
+// Identity core sem cookies — a API é JWT-only. AddSignInManager fica de fora;
+// senha é validada via UserManager.CheckPasswordAsync.
+builder.Services.AddIdentityCore<User>(options =>
+    {
+        options.SignIn.RequireConfirmedAccount = false;
+        options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
+        options.User.RequireUniqueEmail = true;
+    })
+    .AddEntityFrameworkStores<PokerHubDbContext>()
+    .AddDefaultTokenProviders();
+
+// Token de reset de senha (DataProtection) expira em 1 hora.
+builder.Services.Configure<DataProtectionTokenProviderOptions>(o =>
+    o.TokenLifespan = TimeSpan.FromHours(1));
+
+// Persiste as chaves do DataProtection no banco. Sem isto ficam no filesystem efêmero do
+// container (/root/.aspnet/DataProtection-Keys) → cada restart/scale-to-zero rotaciona as
+// chaves e invalida tokens de reset de senha em aberto. SetApplicationName mantém o ring estável.
+var dataProtection = builder.Services.AddDataProtection()
+    .PersistKeysToDbContext<PokerHubDbContext>()
+    .SetApplicationName("PokerHub");
+
+// Em prod, cifra as chaves em repouso com uma chave RSA do Azure Key Vault (wrap/unwrap via
+// Managed Identity) — assim um vazamento do banco não entrega chaves utilizáveis. Config-gated:
+// sem DataProtection:KeyVaultKeyId (dev/test) as chaves só são persistidas no banco. O URI da
+// chave e o clientId da UAMI não são segredos.
+var kvKeyId = builder.Configuration["DataProtection:KeyVaultKeyId"];
+if (!string.IsNullOrWhiteSpace(kvKeyId))
+{
+    var miClientId = builder.Configuration["DataProtection:ManagedIdentityClientId"];
+    TokenCredential credential = !string.IsNullOrWhiteSpace(miClientId)
+        ? new ManagedIdentityCredential(miClientId)
+        : new DefaultAzureCredential();
+    dataProtection.ProtectKeysWithAzureKeyVault(new Uri(kvKeyId), credential);
+}
+
+builder.Services.AddApplicationServices();
+builder.Services.AddSingleton<PokerHub.Api.Services.TournamentTimerService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<PokerHub.Api.Services.TournamentTimerService>());
+
+// --- JWT bearer ---
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
+var jwtOpts = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
+    ?? throw new InvalidOperationException("Jwt configuration section is missing.");
+if (string.IsNullOrWhiteSpace(jwtOpts.SigningKey) || jwtOpts.SigningKey.Length < 32)
+    throw new InvalidOperationException("Jwt:SigningKey must be at least 32 characters.");
+
+builder.Services.AddSingleton<JwtTokenService>();
+builder.Services.AddSingleton<RefreshTokenService>();
+
+// --- Email (SMTP Fastmail) para reset de senha ---
+builder.Services.Configure<PokerHub.Api.Email.EmailOptions>(
+    builder.Configuration.GetSection("Email"));
+builder.Services.AddSingleton<PokerHub.Api.Email.IPasswordResetEmailSender,
+    PokerHub.Api.Email.SmtpEmailSender>();
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(opts =>
+    {
+        // Mantém os nomes originais das claims (sub, name, email) sem remap XML.
+        opts.MapInboundClaims = false;
+        opts.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = jwtOpts.Issuer,
+            ValidateAudience = true,
+            ValidAudience = jwtOpts.Audience,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOpts.SigningKey)),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromMinutes(2),
+            NameClaimType = "name"
+        };
+    });
+builder.Services.AddAuthorization();
+
+// --- Rate limiting: brute-force protection no grupo anônimo /api/auth/* ---
+// Particiona por IP do cliente. ATENÇÃO: numa noite de poker presencial todos os
+// jogadores costumam estar na MESMA rede (mesmo IP público via NAT), então o limite
+// é generoso o bastante para uma mesa cheia logar/refrescar sem falso 429, mas ainda
+// inviabiliza brute force online (combinado à política forte de senha do Identity).
+// Tunável via config/env: RateLimit__Auth__PermitLimit / RateLimit__Auth__WindowSeconds.
+// O limite é lido em request-time (na criação da partição), não no startup — assim
+// honra overrides de config aplicados tardiamente (ex.: testes via WithWebHostBuilder)
+// e permite ajuste sem rebuild.
+builder.Services.AddRateLimiter(rateLimiter =>
+{
+    rateLimiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    rateLimiter.OnRejected = (context, _) =>
+    {
+        var windowSeconds = context.HttpContext.RequestServices
+            .GetRequiredService<IConfiguration>()
+            .GetValue<int?>("RateLimit:Auth:WindowSeconds") ?? 60;
+        context.HttpContext.Response.Headers.RetryAfter =
+            windowSeconds.ToString(CultureInfo.InvariantCulture);
+        return ValueTask.CompletedTask;
+    };
+    rateLimiter.AddPolicy(AuthEndpoints.RateLimitPolicy, httpContext =>
+    {
+        var config = httpContext.RequestServices.GetRequiredService<IConfiguration>();
+        var permitLimit = config.GetValue<int?>("RateLimit:Auth:PermitLimit") ?? 30;
+        var windowSeconds = config.GetValue<int?>("RateLimit:Auth:WindowSeconds") ?? 60;
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: GetClientPartitionKey(httpContext),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = TimeSpan.FromSeconds(windowSeconds),
+                QueueLimit = 0
+            });
+    });
+});
+
+builder.Services.AddOpenApi();
+builder.Services.AddSignalR();
+
+// CORS para o front (SWA em prod, Vite em dev usa proxy mas registramos por robustez).
+// Origens vêm de config: "Cors:AllowedOrigins": ["http://localhost:5173", "https://<swa>.azurestaticapps.net"]
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+builder.Services.AddCors(options => options.AddPolicy("web", policy =>
+    policy.WithOrigins(allowedOrigins)
+          .AllowAnyHeader()
+          .AllowAnyMethod()
+          .AllowCredentials()));
+
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<PokerHubDbContext>("database");
+
+var app = builder.Build();
+
+app.MapOpenApi(); // /openapi/v1.json — fonte para geração de tipos TS na Fase 1
+
+if (allowedOrigins.Length > 0)
+    app.UseCors("web");
+
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseRateLimiter();
+
+AuthEndpoints.Map(app);
+LeagueEndpoints.Map(app);
+TournamentEndpoints.Map(app);
+PaymentEndpoints.Map(app);
+PlayerEndpoints.Map(app);
+MeEndpoints.Map(app);
+SeasonEndpoints.Map(app);
+RankingEndpoints.Map(app);
+PrizeTableEndpoints.Map(app);
+JackpotEndpoints.Map(app);
+ExpenseEndpoints.Map(app);
+
+app.MapHub<PokerHub.Api.Hubs.TournamentHub>("/hub/tournaments");
+
+app.MapHealthChecks("/health");
+
+// Endpoint de smoke do Sentry — lança uma exceção de propósito para validar a captura
+// em produção. Desativado por padrão; habilitar pontualmente via env
+// Sentry__EnableTestEndpoint=true, bater uma vez, e desabilitar.
+if (builder.Configuration.GetValue<bool>("Sentry:EnableTestEndpoint"))
+{
+    app.MapGet("/debug/sentry-test", () =>
+        {
+            throw new InvalidOperationException("PokerHub API — smoke test do Sentry (intencional).");
+        })
+        .AllowAnonymous()
+        .ExcludeFromDescription();
+}
+
+app.Run();
+
+// Chave de partição do rate limiter: usa o IP real do cliente. Atrás do ingress do
+// Container App (Envoy) o IP do socket é o do proxy, e o IP do cliente chega em
+// X-Forwarded-For — por isso priorizamos o primeiro entry do header. Em dev/test
+// (sem proxy) cai no RemoteIpAddress. XFF é spoofável, mas isso só permitiria a um
+// atacante driblar o próprio limite (limitação inerente de rate limit por IP).
+static string GetClientPartitionKey(HttpContext context)
+{
+    var forwarded = context.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+    if (!string.IsNullOrWhiteSpace(forwarded))
+        return forwarded.Split(',')[0].Trim();
+    return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+}
+
+// Exposto para WebApplicationFactory nos testes de integração.
+public partial class Program { }

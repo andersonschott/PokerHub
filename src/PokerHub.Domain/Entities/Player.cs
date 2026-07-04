@@ -16,6 +16,12 @@ public class Player
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public bool IsActive { get; set; } = true;
 
+    // Status de participação (independente do soft-delete IsActive).
+    public PlayerMembershipStatus MembershipStatus { get; set; } = PlayerMembershipStatus.Active;
+    public DateTime? DeactivatedAt { get; set; }    // quando virou inativo (manual ou política)
+    public DateTime? LastActivityAt { get; set; }   // última atividade relevante (participação em torneio)
+    public bool DeactivatedManually { get; set; }   // true=manual; false=por política (controla reativação automática)
+
     // Navigation properties
     public League League { get; set; } = null!;
     public User? User { get; set; }

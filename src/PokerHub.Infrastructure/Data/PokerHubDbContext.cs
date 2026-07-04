@@ -1,10 +1,11 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using PokerHub.Domain.Entities;
 
 namespace PokerHub.Infrastructure.Data;
 
-public class PokerHubDbContext : IdentityDbContext<User>
+public class PokerHubDbContext : IdentityDbContext<User>, IDataProtectionKeyContext
 {
     public PokerHubDbContext(DbContextOptions<PokerHubDbContext> options) : base(options)
     {
@@ -25,6 +26,10 @@ public class PokerHubDbContext : IdentityDbContext<User>
     public DbSet<LeaguePrizeTableEntry> LeaguePrizeTableEntries => Set<LeaguePrizeTableEntry>();
     public DbSet<PlayerSeasonStats> PlayerSeasonStats => Set<PlayerSeasonStats>();
     public DbSet<TournamentDelegate> TournamentDelegates => Set<TournamentDelegate>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
+    /// <summary>Chaves do ASP.NET DataProtection persistidas no banco (sobrevivem a restart/scale do container).</summary>
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

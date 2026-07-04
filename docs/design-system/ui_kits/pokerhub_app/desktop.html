@@ -1,0 +1,60 @@
+<!-- @dsCard group="PokerHub App" viewport="1280x820" name="PokerHub — versão PC (desktop)" subtitle="Sidebar colapsável + dashboard da liga (torneio ativo, ranking, próximos, acerto)" -->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>PokerHub — Desktop</title>
+<link rel="stylesheet" href="../../styles.css" />
+<link rel="stylesheet" href="palettes.css" />
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script src="data.js"></script>
+<style>
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--felt-950); color: var(--foreground); font-family: var(--font-display); }
+  #root { height: 100vh; }
+  .dk-app { display: flex; height: 100vh; overflow: hidden;
+    background:
+      radial-gradient(70% 50% at 80% -10%, var(--felt-800) 0%, transparent 55%),
+      var(--felt-950);
+  }
+  .dk-main { flex: 1; min-width: 0; overflow-y: auto; }
+  .dk-scroll { padding: 28px 32px 48px; max-width: 1320px; margin: 0 auto; }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-thumb { background: var(--felt-700); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+  *::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+  <script>
+    (function () {
+      try { document.documentElement.setAttribute('data-theme', localStorage.getItem('ph-theme') || 'dark'); }
+      catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
+      /* Paleta experimental (Tweaks) — aplicada antes do paint. */
+      try {
+        var p = localStorage.getItem('ph-palette');
+        if (p && p !== 'meia-noite') document.documentElement.setAttribute('data-palette', p);
+        var a = localStorage.getItem('ph-accent');
+        if (a && a !== 'champanhe') document.documentElement.setAttribute('data-accent', a);
+      } catch (e) {}
+    })();
+  </script>
+  <div id="root"></div>
+  <script type="text/babel" data-presets="react" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" data-presets="react" src="Forms.jsx"></script>
+  <script type="text/babel" data-presets="react" src="DesktopParts.jsx"></script>
+  <script type="text/babel" data-presets="react" src="TimerTV.jsx"></script>
+  <script type="text/babel" data-presets="react" src="DesktopTorneio.jsx"></script>
+  <script type="text/babel" data-presets="react" src="DesktopHistorico.jsx"></script>
+  <script type="text/babel" data-presets="react" src="DesktopPagamentos.jsx"></script>
+  <script type="text/babel" data-presets="react" src="DesktopLiga.jsx"></script>
+  <script type="text/babel" data-presets="react" src="DesktopWizard.jsx"></script>
+  <script type="text/babel" data-presets="react" src="DesktopPerfil.jsx"></script>
+  <script type="text/babel" data-presets="react" src="Desktop.jsx"></script>
+  <script type="text/babel" data-presets="react" src="PaletteTweaks.jsx"></script>
+</body>
+</html>

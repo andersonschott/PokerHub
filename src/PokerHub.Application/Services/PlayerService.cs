@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using PokerHub.Application.DTOs.Me;
 using PokerHub.Application.DTOs.Payment;
 using PokerHub.Application.DTOs.Player;
 using PokerHub.Application.Interfaces;
@@ -19,15 +20,40 @@ public class PlayerService : IPlayerService
         _paymentService = paymentService;
     }
 
-    public async Task<IReadOnlyList<PlayerDto>> GetPlayersByLeagueAsync(Guid leagueId)
+    public async Task<IReadOnlyList<PlayerDto>> GetPlayersByLeagueAsync(Guid leagueId, bool includeInactive = false)
     {
         var players = await _context.Players
-            .Where(p => p.LeagueId == leagueId && p.IsActive)
+            .Where(p => p.LeagueId == leagueId && p.IsActive
+                && (includeInactive || p.MembershipStatus == PlayerMembershipStatus.Active))
             .Include(p => p.Participations)
                 .ThenInclude(tp => tp.Tournament)
             .ToListAsync();
 
         return players.Select(p => MapToDto(p)).ToList();
+    }
+
+    /// <summary>Inativa um jogador (manual) sem soft-delete: mantém UserId e histórico.</summary>
+    public async Task<bool> DeactivatePlayerAsync(Guid playerId)
+    {
+        var player = await _context.Players.FirstOrDefaultAsync(p => p.Id == playerId && p.IsActive);
+        if (player == null) return false;
+        player.MembershipStatus = PlayerMembershipStatus.Inactive;
+        player.DeactivatedAt = DateTime.UtcNow;
+        player.DeactivatedManually = true;
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
+    /// <summary>Reativa um jogador inativado.</summary>
+    public async Task<bool> ActivatePlayerAsync(Guid playerId)
+    {
+        var player = await _context.Players.FirstOrDefaultAsync(p => p.Id == playerId && p.IsActive);
+        if (player == null) return false;
+        player.MembershipStatus = PlayerMembershipStatus.Active;
+        player.DeactivatedAt = null;
+        player.DeactivatedManually = false;
+        await _context.SaveChangesAsync();
+        return true;
     }
 
     public async Task<PlayerDto?> GetPlayerByIdAsync(Guid playerId)
@@ -157,6 +183,23 @@ public class PlayerService : IPlayerService
         await _context.SaveChangesAsync();
 
         return MapToDto(player);
+    }
+
+    public async Task<int> UpdateContactForUserAsync(string userId, UpdateMyContactDto dto)
+    {
+        var players = await _context.Players
+            .Where(p => p.UserId == userId && p.IsActive)
+            .ToListAsync();
+
+        foreach (var player in players)
+        {
+            player.PixKey = dto.PixKey;
+            player.PixKeyType = dto.PixKeyType;
+            player.Phone = dto.Phone;
+        }
+
+        await _context.SaveChangesAsync();
+        return players.Count;
     }
 
     public async Task<(bool Success, string Message)> DeletePlayerAsync(Guid playerId, bool checkDebts = true)
@@ -292,6 +335,7 @@ public class PlayerService : IPlayerService
             player.UserId,
             player.CreatedAt,
             player.IsActive,
+            player.MembershipStatus,
             totalPrizes - totalBuyIns,
             finishedParticipations.Count,
             finishedParticipations.Count(tp => tp.Position == 1),
