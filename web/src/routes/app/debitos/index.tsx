@@ -25,6 +25,7 @@ import {
   PaymentStatus,
 } from '@/lib/api/hooks/use-payments';
 import { paymentTypeLabel } from '@/features/payments/payment-type-label';
+import { calculateSettlementSummary } from '@/features/payments/settlement-balance';
 
 // ---------------------------------------------------------------------------
 // Status badge helper
@@ -71,17 +72,14 @@ export default function SettlementRoute() {
     );
   }
 
-  const activeDebts = debts?.filter(d => d.status !== PaymentStatus.Confirmed) ?? [];
-  const pendingConfirmationDebts = debts?.filter(d => d.status === PaymentStatus.Paid) ?? [];
-  const activeCredits = credits?.filter(c => c.status !== PaymentStatus.Confirmed && !c.isJackpotContribution) ?? [];
-
-  const pendingDebts = activeDebts.filter(d => d.status === PaymentStatus.Pending);
-  const pendingCredits = activeCredits.filter(c => c.status === PaymentStatus.Pending);
-
-  const totalDebts = pendingDebts.reduce((s, d) => s + d.amount, 0);
-  const totalPendingConfirmation = pendingConfirmationDebts.reduce((s, d) => s + d.amount, 0);
-  const totalCredits = pendingCredits.reduce((s, c) => s + c.amount, 0);
-  const netBalance = totalCredits - totalDebts;
+  const {
+    activeDebts,
+    pendingDebts,
+    pendingConfirmationDebts,
+    activeCredits,
+    totalPendingConfirmationDebts: totalPendingConfirmation,
+    netBalance,
+  } = calculateSettlementSummary(debts, credits);
 
   // ---- PIX copy ----
   const copyPix = (pix: string) => {
@@ -178,7 +176,7 @@ export default function SettlementRoute() {
       {/* ---- Tabs ---- */}
       <div className="flex gap-1 bg-secondary p-1 rounded-[var(--radius-md)] mb-[14px]">
         {([
-          { k: 'pagar', l: `A pagar · ${activeDebts.length}` },
+          { k: 'pagar', l: `A pagar · ${pendingDebts.length}` },
           { k: 'receber', l: `A receber · ${activeCredits.length}` },
           ...(isOrganizer ? [{ k: 'liga', l: `Liga · ${orgPending.length}` }] : []),
         ] as { k: 'pagar' | 'receber' | 'liga'; l: string }[]).map((x) => {
