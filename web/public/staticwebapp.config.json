@@ -1,7 +1,7 @@
 {
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/assets/*", "*.{js,css,png,svg,ico,webmanifest,woff2,map}"]
+    "exclude": ["/assets/*", "*.{js,css,png,svg,ico,webmanifest,woff2,map}", "/api/*", "/hub/*"]
   },
   "mimeTypes": {
     ".webmanifest": "application/manifest+json"
