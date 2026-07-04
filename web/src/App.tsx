@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/lib/theme-context';
 import { Toaster } from '@/components/ui/sonner';
 import { Splash } from '@/components/splash';
 import { InstallPrompt } from '@/components/install-prompt';
+import { ReloadPrompt } from '@/components/ReloadPrompt';
 import LoginRoute from '@/routes/login';
 import CadastroRoute from '@/routes/cadastro';
 import RecuperarSenhaRoute from '@/routes/recuperar-senha';
@@ -133,6 +134,7 @@ export default function App() {
             </BrowserRouter>
             <Toaster position="top-center" richColors />
             <InstallPrompt />
+            <ReloadPrompt />
             {splash && <Splash onDone={() => setSplash(false)} />}
           </ActiveLeagueProvider>
         </AuthProvider>
