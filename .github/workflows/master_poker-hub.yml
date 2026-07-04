@@ -7,12 +7,13 @@ on:
   push:
     branches:
       - master
+      - main
   workflow_dispatch:
 
 env:
   DOTNET_VERSION: '10.0.x'
   AZURE_WEBAPP_NAME: 'poker-hub'
-  WORKING_DIRECTORY: './src/PokerHub.Web'
+  WORKING_DIRECTORY: './src/PokerHub.Api'
 
 jobs:
   build:
@@ -70,7 +71,7 @@ jobs:
         run: >
           dotnet ef migrations script --idempotent
           --project src/PokerHub.Infrastructure
-          --startup-project src/PokerHub.Web
+          --startup-project src/PokerHub.Api
           --output migrations.sql
 
       - name: Apply migration
@@ -79,6 +80,7 @@ jobs:
           -d ${{ secrets.AZURE_SQL_DATABASE }}
           -U ${{ secrets.AZURE_SQL_USER }}
           -P ${{ secrets.AZURE_SQL_PASSWORD }}
+          -C
           -i migrations.sql
 
   deploy:

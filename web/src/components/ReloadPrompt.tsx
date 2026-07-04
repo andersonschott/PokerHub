@@ -3,14 +3,13 @@ import { useRegisterSW } from 'virtual:pwa-register/react';
 
 export function ReloadPrompt() {
   const {
-    offlineReady: [offlineReady, setOfflineReady],
-    needRefresh: [needRefresh, setNeedRefresh],
+    needRefresh: [needRefresh],
     updateServiceWorker,
   } = useRegisterSW({
-    onRegistered(r) {
-      console.log(`Service worker registered`);
+    onRegistered(r: any) {
+      console.log(`Service worker registered`, r);
     },
-    onRegisterError(error) {
+    onRegisterError(error: any) {
       console.error('Error during service worker registration:', error);
     },
   });
