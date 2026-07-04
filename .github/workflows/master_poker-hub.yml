@@ -1,7 +1,7 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
-name: Build and deploy ASP.Net Core app to Azure Web App - poker-hub
+name: Build and deploy ASP.Net Core app to Azure Container Apps - pokerhub-api
 
 on:
   push:
@@ -90,11 +90,7 @@ jobs:
       contents: read
 
     steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
-        with:
-          name: .net-app
-          path: ./app
+      - uses: actions/checkout@v4
 
       - name: Login to Azure
         uses: azure/login@v2
@@ -103,11 +99,12 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_E78B3EC317474A4583525EEEC2DA076A }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_54A2C9B556FC4D36B7216B6F99873A3F }}
 
-      - name: Deploy to Azure Web App
-        id: deploy-to-webapp
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          slot-name: 'Production'
-          package: ./app
+      - name: Build, Push and Deploy to Azure Container App
+        run: |
+          az account set --subscription 3a8f01e0-e749-4a9c-9d81-f6078b4195d2
+          az acr login --name acrhsprdd43a
+          docker build -t acrhsprdd43a.azurecr.io/pokerhub-api:${{ github.sha }} -t acrhsprdd43a.azurecr.io/pokerhub-api:latest -f src/PokerHub.Api/Dockerfile .
+          docker push acrhsprdd43a.azurecr.io/pokerhub-api:${{ github.sha }}
+          docker push acrhsprdd43a.azurecr.io/pokerhub-api:latest
+          az containerapp update -g Projeto-X -n pokerhub-api --image acrhsprdd43a.azurecr.io/pokerhub-api:${{ github.sha }}
 
