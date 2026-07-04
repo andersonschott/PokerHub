@@ -75,9 +75,12 @@ export default function SettlementRoute() {
   const pendingConfirmationDebts = debts?.filter(d => d.status === PaymentStatus.Paid) ?? [];
   const activeCredits = credits?.filter(c => c.status !== PaymentStatus.Confirmed && !c.isJackpotContribution) ?? [];
 
-  const totalDebts = activeDebts.reduce((s, d) => s + d.amount, 0);
+  const pendingDebts = activeDebts.filter(d => d.status === PaymentStatus.Pending);
+  const pendingCredits = activeCredits.filter(c => c.status === PaymentStatus.Pending);
+
+  const totalDebts = pendingDebts.reduce((s, d) => s + d.amount, 0);
   const totalPendingConfirmation = pendingConfirmationDebts.reduce((s, d) => s + d.amount, 0);
-  const totalCredits = activeCredits.reduce((s, c) => s + c.amount, 0);
+  const totalCredits = pendingCredits.reduce((s, c) => s + c.amount, 0);
   const netBalance = totalCredits - totalDebts;
 
   // ---- PIX copy ----
