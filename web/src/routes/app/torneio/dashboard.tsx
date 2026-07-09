@@ -17,7 +17,7 @@ import { ActionSheet } from '@/features/live/action-sheet';
 import { EliminateSheet } from '@/features/live/eliminate-sheet';
 import { Sheet } from '@/components/ui/sheet';
 
-import { useTournaments, useTournament, TournamentStatus, usePauseTournament, useResumeTournament, useNextLevel, usePrevLevel, useCheckInPlayer, useEliminatePlayer, useAddRebuy, useSetAddon, useUndoElimination, useFinishTournament, useDelegates, useAddPlayerToTournament, type FinishPlayerPosition } from '@/lib/api/hooks/use-tournaments';
+import { useTournaments, useTournament, TournamentStatus, usePauseTournament, useResumeTournament, useNextLevel, usePrevLevel, useCheckInPlayer, useEliminatePlayer, useAddRebuy, useRemoveRebuy, useSetAddon, useUndoElimination, useFinishTournament, useDelegates, useAddPlayerToTournament, type FinishPlayerPosition } from '@/lib/api/hooks/use-tournaments';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { useTournamentClock } from '@/lib/api/hooks/use-tournament-clock';
 import { useLeague, useLeaguePlayers, type PlayerDto } from '@/lib/api/hooks/use-leagues';
@@ -110,6 +110,7 @@ export default function DashboardRoute() {
   const checkInMut = useCheckInPlayer(activeTId);
   const eliminateMut = useEliminatePlayer(activeTId);
   const rebuyMut = useAddRebuy(activeTId);
+  const removeRebuyMut = useRemoveRebuy(activeTId);
   const addonMut = useSetAddon(activeTId);
   const undoEliminateMut = useUndoElimination(activeTId);
   const finishMut = useFinishTournament(activeTId, activeLeagueId ?? '');
@@ -243,11 +244,13 @@ export default function DashboardRoute() {
         addonMut.mutate({ playerId: id, hasAddon: true }, { onSuccess: () => toast.success('Add-on adicionado') });
       }
     } else {
-      if (key === 'addons') {
+      if (key === 'rebuys') {
+        removeRebuyMut.mutate(id, { onSuccess: () => toast.success('Rebuy removido') });
+      } else {
         addonMut.mutate({ playerId: id, hasAddon: false }, { onSuccess: () => toast.success('Add-on removido') });
       }
     }
-  }, [rebuyMut, addonMut]);
+  }, [rebuyMut, removeRebuyMut, addonMut]);
 
   const handleCheckIn = useCallback(() => {
     if (!selectedPlayer) return;

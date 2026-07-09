@@ -326,6 +326,17 @@ export function useAddRebuy(tournamentId: string) {
   });
 }
 
+export function useRemoveRebuy(tournamentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (playerId: string) =>
+      api<void>(`/tournaments/${tournamentId}/players/${playerId}/rebuy`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] });
+    },
+  });
+}
+
 export function useSetAddon(tournamentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
