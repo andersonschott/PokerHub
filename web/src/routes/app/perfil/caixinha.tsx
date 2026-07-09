@@ -126,7 +126,7 @@ export default function CaixinhaRoute() {
       </Card>
 
       {/* Quick stats */}
-      <div className="grid grid-cols-3 gap-2.5 mb-4">
+      <div className="grid grid-cols-2 gap-2.5 mb-4">
         <StatTile
           value={<MoneyValue value={entriesTotal} signed cents={false} size="16px" />}
           label="Entradas"
@@ -139,12 +139,6 @@ export default function CaixinhaRoute() {
           label="Saídas"
           center
           tone="negative"
-          valueSize="16px"
-        />
-        <StatTile
-          value={safeEntries.length}
-          label="Torneios"
-          center
           valueSize="16px"
         />
       </div>

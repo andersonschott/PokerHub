@@ -43,16 +43,16 @@ interface DetailPanelProps {
 function DetailPanel({ h, canOperate, onDuplicate, onViewPayments }: DetailPanelProps) {
   return (
     <>
-      {/* Numbers */}
-      <div className="grid grid-cols-3 gap-2.5 mb-4">
-        <StatTile
-          className="px-2.5"
-          valueSize="17px"
-          value={<MoneyValue value={h.prizePool} cents={false} color="none" size="17px" />}
-          label="Prize pool"
-          tone="emerald"
-          center
-        />
+      {/* Numbers — prize pool é o número-herói da tela, em tile de largura total */}
+      <StatTile
+        className="mb-2.5"
+        valueSize="26px"
+        value={<MoneyValue value={h.prizePool} cents={false} color="none" size="26px" />}
+        label="Prize pool"
+        tone="emerald"
+        center
+      />
+      <div className="grid grid-cols-2 gap-2.5 mb-4">
         <StatTile className="px-2.5" valueSize="17px" value={h.players} label="Jogadores" center />
         <StatTile className="px-2.5" valueSize="17px" value={h.rebuys} label="Rebuys" center />
       </div>
