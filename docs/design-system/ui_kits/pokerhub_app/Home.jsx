@@ -23,7 +23,14 @@ function PHHome({ go }) {
   const { Card, Button, StatusPill, StatTile, MoneyValue, SectionTitle, PodiumStat, Avatar, Badge, IconButton } = window.PokerHubDesignSystem_b95f9b;
   const D = window.PH_DATA;
   const [tab, setTab] = React.useState('torneios');
+  const [notif, setNotif] = React.useState(false);
+  const [rsvp, setRsvp] = React.useState(null);       // torneio aberto no sheet de presença
+  const [going, setGoing] = React.useState({});        // nome do torneio → true/false
+  const [toast, setToast] = React.useState(null);
+  const { Sheet } = window.PokerHubDesignSystem_b95f9b;
   const t = D.tournament;
+  const fire = (m) => { setToast(m); setTimeout(() => setToast(null), 2200); };
+  React.useEffect(() => { if (window.lucide) window.lucide.createIcons(); });
 
   return (
     <div style={{ padding: '14px 16px 96px' }}>
@@ -40,7 +47,10 @@ function PHHome({ go }) {
           </div>
         </button>
         <button onClick={() => { window.PHTheme.toggle(); setTab((x) => x); go('home'); }} title="Tema claro/escuro" style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, background: 'var(--secondary)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted-foreground)', cursor: 'pointer', padding: 0 }}><i data-lucide={window.PHTheme.get() === 'dark' ? 'sun' : 'moon-star'}></i></button>
-        <div style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, background: 'var(--secondary)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted-foreground)' }}><i data-lucide="bell"></i></div>
+        <button onClick={() => setNotif(true)} title="Notificações" style={{ position: 'relative', width: 40, height: 40, borderRadius: '50%', flexShrink: 0, background: 'var(--secondary)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted-foreground)', cursor: 'pointer', padding: 0 }}>
+          <i data-lucide="bell"></i>
+          <span style={{ position: 'absolute', top: 9, right: 10, width: 7, height: 7, borderRadius: '50%', background: 'var(--live)', border: '1.5px solid var(--background)' }}></span>
+        </button>
       </div>
 
       {/* Live tournament — discreet banner (tap = assistir, gear = operar) */}
@@ -50,7 +60,7 @@ function PHHome({ go }) {
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--live)', flexShrink: 0, animation: 'ph-pulse 1.4s var(--ease-out) infinite' }}></span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 14.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{D.league.liveName || t.name}</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--muted-foreground)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.levelLabel} · {t.sb}/{t.bb} · {t.remaining}/{t.players} na mesa</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--muted-foreground)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.levelLabel} · {t.sb}/{t.bb} · {t.remaining}/{t.players}</div>
           </div>
           <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em', flexShrink: 0 }}>12:43</span>
           <IconButton icon="settings-2" variant="solid" size="sm" gold title="Operar" onClick={(e) => { e.stopPropagation(); go('dashboard'); }} style={{ flexShrink: 0 }} />
@@ -78,15 +88,15 @@ function PHHome({ go }) {
       {tab === 'torneios' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <SectionTitle icon="calendar-clock">Próximos</SectionTitle>
-          {D.upcoming.map((u, i) => (
-            <Card key={i} interactive pad="md">
+          {D.upcoming.filter((u) => !(u.status === 'live' && D.league.live)).map((u, i) => (
+            <Card key={u.name} interactive pad="md" onClick={() => setRsvp(u)}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15 }}>{u.name}</span>
-                    {u.status === 'live' && D.league.live ? <StatusPill status="live" dot={true} /> : null}
+                    {going[u.name] === true ? <Badge tone="positive" icon="check">Vou</Badge> : null}
                   </div>
-                  <div style={{ fontSize: 12.5, color: 'var(--muted-foreground)', marginTop: 2 }}>{u.when} · {u.confirmed} confirmados</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--muted-foreground)', marginTop: 2 }}>{u.when} · {u.confirmed + (going[u.name] === true ? 1 : 0)} confirmados</div>
                 </div>
                 <Badge tone="neutral">R$ {u.buyIn}</Badge>
                 <i data-lucide="chevron-right" style={{ color: 'var(--muted-foreground)' }}></i>
@@ -126,6 +136,45 @@ function PHHome({ go }) {
               </div>
             </Card>
           ))}
+        </div>
+      )}
+      {/* RSVP — confirmar presença no próximo torneio */}
+      {rsvp && (
+        <Sheet open onClose={() => setRsvp(null)} title={rsvp.name} subtitle={`${rsvp.when} · buy-in R$ ${rsvp.buyIn}`}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--card)' }}>
+              <i data-lucide="users" style={{ width: 15, height: 15, color: 'var(--muted-foreground)', flexShrink: 0 }}></i>
+              <span style={{ flex: 1, fontSize: 13.5 }}>Confirmados</span>
+              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 13.5 }}>{rsvp.confirmed + (going[rsvp.name] === true ? 1 : 0)}</span>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted-foreground)', lineHeight: 1.45, padding: '0 2px' }}>O organizador usa as confirmações para montar a mesa e estimar o prize pool.</div>
+            {going[rsvp.name] !== true && <Button variant="primary" icon="check" block onClick={() => { setGoing({ ...going, [rsvp.name]: true }); setRsvp(null); fire('Presença confirmada · ' + rsvp.when); }}>Confirmar presença</Button>}
+            <Button variant="ghost" block onClick={() => { setGoing({ ...going, [rsvp.name]: false }); setRsvp(null); if (going[rsvp.name] === true) fire('Presença desmarcada'); }}>{going[rsvp.name] === true ? 'Desmarcar presença' : 'Não vou'}</Button>
+          </div>
+        </Sheet>
+      )}
+
+      {/* Notificações */}
+      {notif && (
+        <Sheet open onClose={() => setNotif(false)} title="Notificações">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[['receipt', 'Você tem pagamentos pendentes do Torneio da Sexta', 'há 2h', 'settlement'],
+              ['calendar-clock', 'Especial de Fim de Mês é sábado — confirme sua presença', 'ontem', null],
+              ['trending-up', 'Você subiu para 2º no ranking da temporada', 'há 3 dias', 'ranking']].map(([ic, txt, when, dest]) => (
+              <button key={txt} onClick={() => { setNotif(false); if (dest) go(dest); }} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 14px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', background: 'var(--card)', cursor: 'pointer', color: 'var(--foreground)', textAlign: 'left', width: '100%' }}>
+                <i data-lucide={ic} style={{ width: 16, height: 16, color: 'var(--gold-400)', flexShrink: 0, marginTop: 2 }}></i>
+                <span style={{ flex: 1, fontSize: 13.5, lineHeight: 1.45 }}>{txt}</span>
+                <span style={{ fontSize: 11.5, color: 'var(--muted-foreground)', flexShrink: 0 }}>{when}</span>
+              </button>
+            ))}
+          </div>
+        </Sheet>
+      )}
+
+      {toast && (
+        <div style={{ position: 'absolute', left: 16, right: 16, bottom: 84, zIndex: 70, background: 'var(--felt-700)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10, boxShadow: 'var(--shadow-lg)' }}>
+          <i data-lucide="check-circle" style={{ color: 'var(--positive)', width: 18, height: 18 }}></i>
+          <span style={{ fontSize: 14, fontWeight: 500 }}>{toast}</span>
         </div>
       )}
     </div>
