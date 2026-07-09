@@ -50,7 +50,7 @@ export const PodiumStat = forwardRef<HTMLDivElement, PodiumStatProps>(
         >
           {position}
         </span>
-        <span className="flex-1 min-w-0">
+        <span className="flex-1 min-w-0 flex flex-col gap-px">
           <span className="block font-sans font-semibold text-[15px] text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
             {name}
           </span>

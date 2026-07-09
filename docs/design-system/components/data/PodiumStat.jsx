@@ -22,7 +22,7 @@ const CSS = `
 .ph-podium--1 .ph-podium__pos{background:var(--podium-gold);color:var(--primary-foreground);}
 .ph-podium--2 .ph-podium__pos{background:var(--podium-silver);color:#1a1a1a;}
 .ph-podium--3 .ph-podium__pos{background:var(--podium-bronze);color:#1a1a1a;}
-.ph-podium__body{flex:1;min-width:0;}
+.ph-podium__body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
 .ph-podium__name{font-family:var(--font-display);font-weight:600;font-size:15px;color:var(--foreground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ph-podium__sub{font-size:12px;color:var(--muted-foreground);}
 .ph-podium__prize{font-family:var(--font-mono);font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;flex-shrink:0;}
