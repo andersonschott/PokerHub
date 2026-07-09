@@ -12,6 +12,8 @@ export interface AggregatableDebt {
   type: PaymentType;
   status: number;
   isJackpotContribution: boolean;
+  /** Descrição da despesa (só em pagamentos do tipo Expense). */
+  description?: string | null;
 }
 
 /** Breakdown do total devido por tipo de pagamento. */
@@ -39,6 +41,10 @@ export interface AggregatedDebt {
   paymentIds: string[];
   /** IDs dos pagamentos componentes estritamente pendentes (status Pending). */
   pendingPaymentIds: string[];
+  /** IDs dos pagamentos componentes ainda não confirmados (Pending ou Paid). */
+  openPaymentIds: string[];
+  /** Descrição da despesa quando o grupo tem componente Expense (para o detalhe inline). */
+  expenseDescription: string | null;
   /** Todos os pagamentos componentes estão confirmados? */
   allConfirmed: boolean;
   /** Pelo menos um componente está estritamente Pending. */
@@ -77,6 +83,8 @@ export function aggregateDebts(debts: readonly AggregatableDebt[]): AggregatedDe
         breakdown: [],
         paymentIds: [],
         pendingPaymentIds: [],
+        openPaymentIds: [],
+        expenseDescription: null,
         allConfirmed: true,
         hasPending: false,
       };
@@ -93,8 +101,13 @@ export function aggregateDebts(debts: readonly AggregatableDebt[]): AggregatedDe
       group.breakdown.push({ type: d.type, amount: d.amount });
     }
 
+    if (d.type === PaymentType.Expense && !group.expenseDescription && d.description) {
+      group.expenseDescription = d.description;
+    }
+
     if (d.status !== 2) {
       group.allConfirmed = false;
+      group.openPaymentIds.push(d.id);
     }
     if (d.status === 0) {
       group.hasPending = true;

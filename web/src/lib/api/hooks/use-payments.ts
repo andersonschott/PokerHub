@@ -151,6 +151,7 @@ export function useMarkAsPaid() {
       api<void>(`/payments/${paymentId}/mark-paid`, { method: 'POST' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payments', 'my-debts'] });
+      queryClient.invalidateQueries({ queryKey: ['payments', 'tournament'] });
     },
   });
 }
@@ -163,6 +164,7 @@ export function useConfirmPayment() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payments', 'my-debts'] });
       queryClient.invalidateQueries({ queryKey: ['payments', 'organizer'] });
+      queryClient.invalidateQueries({ queryKey: ['payments', 'tournament'] });
     },
   });
 }

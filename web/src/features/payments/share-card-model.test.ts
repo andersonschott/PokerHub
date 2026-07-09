@@ -11,6 +11,8 @@ function makeAggregatedDebt(overrides: Partial<AggregatedDebt> & Pick<Aggregated
     breakdown: [],
     paymentIds: [],
     pendingPaymentIds: [],
+    openPaymentIds: [],
+    expenseDescription: null,
     allConfirmed: false,
     hasPending: true,
     ...overrides,

@@ -164,4 +164,35 @@ describe('aggregateDebts', () => {
     const result = aggregateDebts(debts);
     expect(result.map((r) => r.totalAmount)).toEqual([100, 50, 10]);
   });
+
+  it('agrupa os ids ainda não confirmados (Pending ou Paid) em openPaymentIds', () => {
+    const debts: AggregatableDebt[] = [
+      makeDebt({ id: 'p1', fromPlayerId: 'a', toPlayerId: 'b', amount: 10, type: PaymentType.Poker, status: 0 }),
+      makeDebt({ id: 'p2', fromPlayerId: 'a', toPlayerId: 'b', amount: 20, type: PaymentType.Expense, status: 1 }),
+      makeDebt({ id: 'p3', fromPlayerId: 'a', toPlayerId: 'b', amount: 40, type: PaymentType.Expense, status: 2 }),
+    ];
+
+    const result = aggregateDebts(debts);
+    expect(result[0].openPaymentIds).toEqual(['p1', 'p2']);
+  });
+
+  it('captura a descrição da despesa para o detalhe inline do grupo', () => {
+    const debts: AggregatableDebt[] = [
+      makeDebt({ id: 'p1', fromPlayerId: 'a', toPlayerId: 'b', amount: 50, type: PaymentType.Poker, description: 'não é despesa' }),
+      makeDebt({ id: 'p2', fromPlayerId: 'a', toPlayerId: 'b', amount: 5, type: PaymentType.Expense, description: 'Pizza e bebidas' }),
+    ];
+
+    const result = aggregateDebts(debts);
+    expect(result[0].expenseDescription).toBe('Pizza e bebidas');
+  });
+
+  it('expenseDescription fica null sem componente de despesa descrito', () => {
+    const debts: AggregatableDebt[] = [
+      makeDebt({ id: 'p1', fromPlayerId: 'a', toPlayerId: 'b', amount: 50, type: PaymentType.Poker }),
+      makeDebt({ id: 'p2', fromPlayerId: 'a', toPlayerId: 'b', amount: 5, type: PaymentType.Expense, description: null }),
+    ];
+
+    const result = aggregateDebts(debts);
+    expect(result[0].expenseDescription).toBeNull();
+  });
 });

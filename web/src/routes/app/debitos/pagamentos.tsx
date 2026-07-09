@@ -10,15 +10,16 @@ import {
   CheckCheck,
   ListChecks,
   Clock,
+  Info,
   PiggyBank,
   RefreshCcw,
   Megaphone,
   Copy,
   ChevronRight,
-  ChevronDown,
   Loader2,
   QrCode,
   Share2,
+  Utensils,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -27,7 +28,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar } from '@/components/ui/avatar';
-import { MoneyValue } from '@/components/ui/money-value';
+import { MoneyValue, formatBRL } from '@/components/ui/money-value';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { StatTile } from '@/components/ui/stat-tile';
 import { PixQrSheet } from '@/features/payments/pix-qr-sheet';
@@ -43,16 +44,19 @@ import {
   useCalculatePayments,
   useAdminMarkAsPaid,
   useBulkConfirmPayments,
+  useConfirmPayment,
+  useMarkAsPaid,
   useJackpotContribution,
   PaymentStatus,
+  PaymentType,
 } from '@/lib/api/hooks/use-payments';
 
 import { useTournament as useTournamentData, useDelegates } from '@/lib/api/hooks/use-tournaments';
+import { useExpenses } from '@/lib/api/hooks/use-expenses';
 import { useAuth } from '@/lib/auth-context';
-import { useLeague } from '@/lib/api/hooks/use-leagues';
+import { useLeague, useLeaguePlayers } from '@/lib/api/hooks/use-leagues';
 import { canOperateTournament } from '@/features/tournaments/permissions';
-import { aggregateDebts } from '@/features/payments/aggregate-debts';
-import { paymentTypeLabel } from '@/features/payments/payment-type-label';
+import { aggregateDebts, type AggregatedDebt } from '@/features/payments/aggregate-debts';
 
 // ---------------------------------------------------------------------------
 // Status badge helper
@@ -81,10 +85,13 @@ export default function PagamentosRoute() {
   const { data: delegates } = useDelegates(tId ?? '');
   const canOperate = canOperateTournament(tId, user, league, delegates ?? []);
 
+  // Jogador do usuário logado nesta liga — decide o que ELE pode confirmar/pagar.
+  const { data: leaguePlayers } = useLeaguePlayers(tournament?.leagueId ?? '');
+  const myPlayerId = leaguePlayers?.find((p) => p.userId === user?.userId)?.id ?? null;
+
   const [tab, setTab] = useState<'saldo' | 'pagamentos'>('saldo');
   const [copied, setCopied] = useState<string | null>(null);
   const [qrFor, setQrFor] = useState<{ key: string; name: string; amount: number } | null>(null);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [isSharing, setIsSharing] = useState(false);
   const shareCardRef = useRef<HTMLDivElement>(null);
   const balanceShareCardRef = useRef<HTMLDivElement>(null);
@@ -92,11 +99,14 @@ export default function PagamentosRoute() {
   const { data: balances, isLoading: isLoadingB } = useTournamentBalances(tId ?? '');
   const { data: payments, isLoading: isLoadingP } = useTournamentPayments(tId ?? '');
   const { data: jackpot } = useJackpotContribution(tId ?? '');
+  const { data: expenses } = useExpenses(tId ?? '');
 
   // ---- Mutations ----
   const calcMut = useCalculatePayments(tId ?? '');
   const markPaidMut = useAdminMarkAsPaid();
   const bulkMut = useBulkConfirmPayments();
+  const confirmMut = useConfirmPayment();
+  const selfMarkPaidMut = useMarkAsPaid();
 
   // Auto-calculate on load if no payments exist
   useEffect(() => {
@@ -128,14 +138,6 @@ export default function PagamentosRoute() {
   const saldo = balances ?? [];
 
   const aggregated = aggregateDebts(transfers);
-  const toggleExpanded = (key: string) => {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
 
   // ---- Actions ----
   const copyPix = (pixKey: string, id: string) => {
@@ -163,12 +165,32 @@ export default function PagamentosRoute() {
   };
 
   const bulkConfirm = () => {
-    const ids = aggregated.filter((g) => !g.allConfirmed).flatMap((g) => g.paymentIds);
+    const ids = aggregated.filter((g) => !g.allConfirmed).flatMap((g) => g.openPaymentIds);
     if (ids.length === 0) return;
     bulkMut.mutate(ids, {
       onSuccess: (r) => toast.success(`${r?.confirmed ?? ids.length} pagamento(s) confirmado(s)`),
       onError: () => toast.error('Falha ao confirmar pagamentos'),
     });
+  };
+
+  // Credor (não-admin): confirma o recebimento dos pagamentos EM QUE ELE é o destino.
+  const confirmReceipt = async (g: AggregatedDebt) => {
+    try {
+      for (const id of g.openPaymentIds) await confirmMut.mutateAsync(id);
+      toast.success(`Recebimento de ${g.fromPlayerName.split(' ')[0]} confirmado`);
+    } catch {
+      toast.error('Falha ao confirmar recebimento');
+    }
+  };
+
+  // Devedor (não-admin): marca o próprio débito como pago — aguarda confirmação do credor.
+  const markOwnPaid = async (g: AggregatedDebt) => {
+    try {
+      for (const id of g.pendingPaymentIds) await selfMarkPaidMut.mutateAsync(id);
+      toast.success(`Marcado como pago para ${g.toPlayerName.split(' ')[0]} — aguardando confirmação`);
+    } catch {
+      toast.error('Falha ao marcar como pago');
+    }
   };
 
   const tName = tournament.name;
@@ -265,6 +287,15 @@ export default function PagamentosRoute() {
   const tPrizePool = tournament.prizePool;
   const tCaixinha = jackpot?.amount ?? 0;
 
+  // Composição do total a transferir por tipo — sempre visível para explicar o valor.
+  const totalByType = (type: PaymentType) =>
+    aggregated.reduce((s, g) => s + (g.breakdown.find((b) => b.type === type)?.amount ?? 0), 0);
+  const totPoker = totalByType(PaymentType.Poker);
+  const totDespesas = totalByType(PaymentType.Expense);
+  const totCaixinha = totalByType(PaymentType.Jackpot);
+
+  const tExpenses = expenses ?? [];
+
   return (
     <div className="px-4 pb-24 min-h-full">
       {/* ---- Header ---- */}
@@ -312,7 +343,7 @@ export default function PagamentosRoute() {
         <div className="grid grid-cols-[1fr_auto_auto] gap-4 items-start">
           <div>
             <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
-              A receber
+              Total a transferir
             </div>
             <MoneyValue value={totalReceber} cents={false} size="26px" />
           </div>
@@ -338,8 +369,13 @@ export default function PagamentosRoute() {
         </div>
         <div className="mt-3">
           <ProgressBar value={pct} tone="emerald" />
-          <div className="text-[11.5px] text-muted-foreground mt-[6px] font-mono">
-            {pct}% concluído
+          <div className="flex justify-between items-baseline gap-2 mt-[6px] flex-wrap">
+            <span className="text-[11.5px] text-muted-foreground font-mono">
+              {pct}% concluído
+            </span>
+            <span className="text-[11.5px] text-muted-foreground font-mono whitespace-nowrap">
+              ♠ poker {formatBRL(totPoker)} · despesas {formatBRL(totDespesas)} · caixinha {formatBRL(totCaixinha)}
+            </span>
           </div>
         </div>
       </Card>
@@ -455,6 +491,15 @@ export default function PagamentosRoute() {
             </div>
           </Card>
 
+          {/* O saldo é só poker — e é só ele que vale para o ranking. */}
+          <div className="flex gap-2 items-start px-1 py-[2px]">
+            <Info className="w-[14px] h-[14px] text-muted-foreground shrink-0 mt-[1px]" />
+            <span className="text-[12px] text-muted-foreground leading-[1.45]">
+              Saldo = prêmio − investimento (só o poker). É esse valor que conta para o
+              ranking. Despesas e caixinha entram apenas nos pagamentos.
+            </span>
+          </div>
+
           {/* Caixinha tile (mobile) */}
           <Card
             pad="md"
@@ -479,6 +524,43 @@ export default function PagamentosRoute() {
               <MoneyValue value={tPrizePool} cents={false} color="none" size="15px" />
             </div>
           </Card>
+
+          {/* Despesas da noite — rateadas nos pagamentos, fora do ranking */}
+          {tExpenses.length > 0 && (
+            <Card pad="none">
+              <div className="flex items-center gap-[10px] px-[14px] py-[10px] border-b border-border">
+                <Utensils className="w-[15px] h-[15px] text-muted-foreground shrink-0" />
+                <span className="flex-1 font-sans text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  Despesas rateadas
+                </span>
+                <span className="text-[11px] text-muted-foreground">fora do ranking</span>
+              </div>
+              {tExpenses.map((e) => {
+                const firstNames = e.shares.map((s) => s.playerName.split(' ')[0]);
+                const among =
+                  firstNames.length > 1
+                    ? `${firstNames.slice(0, -1).join(', ')} e ${firstNames[firstNames.length - 1]}`
+                    : firstNames[0] ?? '';
+                const equalShares =
+                  e.shares.length > 0 && e.shares.every((s) => s.amount === e.shares[0].amount);
+                return (
+                  <div key={e.id} className="flex items-center gap-3 px-[14px] py-[10px]">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-sans font-semibold text-[14px]">{e.description}</div>
+                      <div className="text-[11.5px] text-muted-foreground">
+                        pagou {e.paidByPlayerName.split(' ')[0]} ·{' '}
+                        {equalShares
+                          ? `R$ ${formatBRL(e.shares[0].amount)} × ${e.shares.length}`
+                          : `${e.shares.length} rateando`}
+                        {among ? ` (${among})` : ''}
+                      </div>
+                    </div>
+                    <MoneyValue value={e.totalAmount} cents={false} color="none" size="14.5px" />
+                  </div>
+                );
+              })}
+            </Card>
+          )}
 
           {/* Actions */}
           <div className="flex flex-wrap gap-2 mt-1">
@@ -514,8 +596,17 @@ export default function PagamentosRoute() {
       {/* ---- Lista de pagamentos ---- */}
       {tab === 'pagamentos' && (
         <div className="flex flex-col gap-[10px]">
-          {/* Confirmar em lote — disponível no mobile e desktop */}
-          {toConfirm.length > 0 && (
+          {/* O que compõe cada valor — resposta à dúvida mais reportada */}
+          <div className="flex gap-2 items-start px-1 py-[2px]">
+            <Info className="w-[14px] h-[14px] text-muted-foreground shrink-0 mt-[1px]" />
+            <span className="text-[12px] text-muted-foreground leading-[1.45]">
+              Cada transferência soma o acerto do poker com as despesas rateadas da noite.
+              Despesas e caixinha não contam para o ranking.
+            </span>
+          </div>
+
+          {/* Confirmar em lote — só organizador/delegado */}
+          {canOperate && toConfirm.length > 0 && (
             <div
               className="flex items-center gap-[10px] px-3 py-[10px] rounded-[var(--radius-md)]"
               style={{
@@ -590,7 +681,6 @@ export default function PagamentosRoute() {
           )}
 
           {aggregated.map((g) => {
-            const isExpanded = expanded.has(g.key);
             const groupStatus = g.allConfirmed
               ? PaymentStatus.Confirmed
               : g.hasPending
@@ -598,14 +688,16 @@ export default function PagamentosRoute() {
                 : PaymentStatus.Paid;
             const copyId = `group-${g.key}`;
 
+            // Papel do usuário neste grupo: credor confirma, devedor marca como pago.
+            const isMyReceivable = !canOperate && myPlayerId != null && g.toPlayerId === myPlayerId;
+            const isMyDebt = !canOperate && myPlayerId != null && g.fromPlayerId === myPlayerId;
+            const actionPending =
+              bulkMut.isPending || confirmMut.isPending || selfMarkPaidMut.isPending || markPaidMut.isPending;
+
             return (
               <Card key={g.key} pad="md">
-                {/* Transfer header: from → to + expand toggle */}
-                <button
-                  type="button"
-                  onClick={() => toggleExpanded(g.key)}
-                  className="w-full flex items-center gap-2 mb-[10px] cursor-pointer text-left"
-                >
+                {/* Transfer header: from → to + status */}
+                <div className="flex items-center gap-2 mb-[10px]">
                   <span className="font-sans font-semibold text-[14px] whitespace-nowrap overflow-hidden text-ellipsis min-w-0">
                     {g.fromPlayerName.split(' ')[0]}
                   </span>
@@ -619,18 +711,32 @@ export default function PagamentosRoute() {
                   >
                     {g.toPlayerName.split(' ')[0]}
                   </span>
-                  <ChevronDown
-                    className={[
-                      'w-[16px] h-[16px] text-muted-foreground shrink-0 ml-auto transition-transform',
-                      isExpanded ? 'rotate-180' : '',
-                    ].join(' ')}
-                  />
-                </button>
+                  <span className="ml-auto shrink-0">
+                    <StatusBadge status={groupStatus} />
+                  </span>
+                </div>
 
-                {/* Amount + PIX copy + status */}
-                <div className="flex items-center gap-[10px]">
-                  <MoneyValue value={g.totalAmount} cents={false} color="none" size="18px" />
-                  {g.toPlayerPixKey ? (
+                {/* Amount + composição inline (o detalhe do que soma o valor) */}
+                <div className="flex items-baseline gap-[10px]">
+                  <MoneyValue value={g.totalAmount} color="none" size="20px" />
+                  {g.breakdown.length > 1 ? (
+                    <span className="ml-auto font-mono text-[11.5px] text-muted-foreground whitespace-nowrap">
+                      {g.breakdown
+                        .map((b) =>
+                          `${b.type === PaymentType.Poker ? '♠ poker' : b.type === PaymentType.Jackpot ? 'caixinha' : 'despesas'} ${formatBRL(b.amount)}`,
+                        )
+                        .join(' + ')}
+                    </span>
+                  ) : g.breakdown[0]?.type === PaymentType.Expense ? (
+                    <span className="ml-auto text-[11.5px] text-muted-foreground whitespace-nowrap overflow-hidden text-ellipsis">
+                      despesas · {g.expenseDescription ?? 'rateio'}
+                    </span>
+                  ) : null}
+                </div>
+
+                {/* PIX: copiar + QR (alvos ≥44px) */}
+                {g.toPlayerPixKey ? (
+                  <div className="flex items-center gap-[10px] mt-[10px]">
                     <button
                       type="button"
                       onClick={() => copyPix(g.toPlayerPixKey!, copyId)}
@@ -649,8 +755,6 @@ export default function PagamentosRoute() {
                       )}
                       {copied === copyId ? 'Copiado' : 'Copiar'}
                     </button>
-                  ) : null}
-                  {g.toPlayerPixKey ? (
                     <button
                       type="button"
                       onClick={() => setQrFor({ key: g.toPlayerPixKey!, name: g.toPlayerName, amount: g.totalAmount })}
@@ -659,32 +763,20 @@ export default function PagamentosRoute() {
                     >
                       <QrCode className="w-[18px] h-[18px]" />
                     </button>
-                  ) : null}
-                  <span className="ml-auto shrink-0">
-                    <StatusBadge status={groupStatus} />
-                  </span>
-                </div>
+                  </div>
+                ) : null}
 
-                {/* Expanded breakdown */}
-                {isExpanded && (
-                  <div className="mt-[10px] pt-[10px] border-t border-border">
-                    <div className="text-[12.5px] text-muted-foreground mb-2">
-                      {g.breakdown.map((b, i) => (
-                        <span key={b.type}>
-                          {i > 0 && ' · '}
-                          {paymentTypeLabel(b.type)}{' '}
-                          <MoneyValue value={b.amount} cents={false} color="none" size="12.5px" />
-                        </span>
-                      ))}
-                    </div>
-
-                    {groupStatus !== PaymentStatus.Confirmed ? (
-                      <div className="flex gap-2">
-                        {groupStatus === PaymentStatus.Pending ? (
+                {/* Ações por papel: admin opera tudo; jogador só o que é dele */}
+                {groupStatus !== PaymentStatus.Confirmed && (
+                  <>
+                    {canOperate && (
+                      <div className="flex gap-2 mt-[10px]">
+                        {groupStatus === PaymentStatus.Pending && (
                           <Button
                             variant="secondary"
                             size="sm"
                             block
+                            disabled={actionPending}
                             onClick={() =>
                               g.pendingPaymentIds.forEach((id) =>
                                 adminMarkPaid(id, g.fromPlayerName)
@@ -693,22 +785,50 @@ export default function PagamentosRoute() {
                           >
                             Pago
                           </Button>
-                        ) : null}
+                        )}
                         <Button
                           variant="primary"
                           size="sm"
                           block
-                          onClick={() => bulkMut.mutate(g.paymentIds, {
-                            onSuccess: (r) => toast.success(`${r?.confirmed ?? g.paymentIds.length} pagamento(s) confirmado(s)`),
+                          disabled={actionPending}
+                          onClick={() => bulkMut.mutate(g.openPaymentIds, {
+                            onSuccess: (r) => toast.success(`${r?.confirmed ?? g.openPaymentIds.length} pagamento(s) confirmado(s)`),
                             onError: () => toast.error('Falha ao confirmar pagamentos'),
                           })}
-                          disabled={bulkMut.isPending}
                         >
-                          Confirmar todos
+                          Confirmar
                         </Button>
                       </div>
-                    ) : null}
-                  </div>
+                    )}
+                    {isMyDebt && groupStatus === PaymentStatus.Pending && (
+                      <div className="mt-[10px]">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          icon={Check}
+                          block
+                          disabled={actionPending}
+                          onClick={() => void markOwnPaid(g)}
+                        >
+                          Marcar como pago
+                        </Button>
+                      </div>
+                    )}
+                    {isMyReceivable && (
+                      <div className="mt-[10px]">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={CheckCheck}
+                          block
+                          disabled={actionPending}
+                          onClick={() => void confirmReceipt(g)}
+                        >
+                          Confirmar recebimento
+                        </Button>
+                      </div>
+                    )}
+                  </>
                 )}
               </Card>
             );
