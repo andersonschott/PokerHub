@@ -1,12 +1,14 @@
 /**
  * StandingsList — lista de classificação escaneável com uma mão.
- * Port do standings list de Ranking.jsx.
+ * Card: coluna de posição (nº + movimento), meio (avatar/nome/subline),
+ * direita (métrica ativa + dots de forma recente dos últimos 5 resultados).
  */
-import { ChevronRight, Trophy } from 'lucide-react';
+import type { CSSProperties } from 'react';
+import { Trophy } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Avatar } from '@/components/ui/avatar';
 import { MoneyValue } from '@/components/ui/money-value';
-import type { RankingEntry } from './ranking-map';
+import type { FormDot, RankingEntry } from './ranking-map';
 import type { SortKey } from './sort-toggle';
 
 const PODIUM_COLORS = [
@@ -15,16 +17,78 @@ const PODIUM_COLORS = [
   'var(--podium-bronze)',
 ];
 
-function RankNum({ rank }: { rank: number }) {
+function RankCol({ rank, delta }: { rank: number; delta: number | null }) {
   const color =
     rank <= 3 ? PODIUM_COLORS[rank - 1] : 'var(--muted-foreground)';
   return (
-    <span
-      className="font-mono font-bold text-[15px] shrink-0"
-      style={{ width: 28, textAlign: 'center', color }}
+    <div
+      className="flex flex-col items-center justify-center shrink-0"
+      style={{ width: 28 }}
     >
-      {rank}
-    </span>
+      <span className="font-mono font-bold text-[15px]" style={{ color }}>
+        {rank}
+      </span>
+      {delta != null && (
+        <span
+          className="font-mono text-[10px] leading-tight"
+          style={{
+            color:
+              delta > 0
+                ? 'var(--positive)'
+                : delta < 0
+                  ? 'var(--negative)'
+                  : 'var(--muted-foreground)',
+          }}
+        >
+          {delta > 0 ? `▲${delta}` : delta < 0 ? `▼${-delta}` : '–'}
+        </span>
+      )}
+    </div>
+  );
+}
+
+const DOT_STYLES: Record<FormDot, CSSProperties> = {
+  win: { background: 'var(--podium-gold)' },
+  itm: { background: 'var(--positive)' },
+  out: { background: 'var(--secondary)', border: '1px solid var(--border)' },
+};
+
+function Dot({ kind }: { kind: FormDot }) {
+  return (
+    <span
+      className="rounded-full shrink-0"
+      style={{ width: 6, height: 6, ...DOT_STYLES[kind] }}
+    />
+  );
+}
+
+/** Forma recente: dots dos últimos 5 resultados, do mais antigo ao mais novo. */
+function FormDots({ form }: { form: FormDot[] }) {
+  if (form.length === 0) return null;
+  return (
+    <div className="flex items-center" style={{ gap: 3.5 }}>
+      {form.map((kind, i) => (
+        <Dot key={i} kind={kind} />
+      ))}
+    </div>
+  );
+}
+
+/** Legenda dos dots de forma — rodapé da lista. */
+export function FormLegend() {
+  return (
+    <div className="flex items-center justify-center gap-2 mt-4 font-mono text-[11px] text-muted-foreground">
+      <span className="flex items-center gap-1">
+        <Dot kind="win" /> 1º
+      </span>
+      <span className="flex items-center gap-1">
+        <Dot kind="itm" /> premiado
+      </span>
+      <span className="flex items-center gap-1">
+        <Dot kind="out" /> fora
+      </span>
+      <span>· últimos 5</span>
+    </div>
   );
 }
 
@@ -68,7 +132,7 @@ export function StandingsList({ data, sorted, sort, onPick }: StandingsListProps
         return (
           <Card key={p.nick} interactive pad="md" onClick={() => onPick(p)}>
             <div className="flex items-center gap-3">
-              <RankNum rank={rank} />
+              <RankCol rank={rank} delta={p.delta} />
               <Avatar name={p.name} size={40} />
               <div className="flex-1 min-w-0">
                 <div className="font-sans font-semibold text-[15px]">{p.name}</div>
@@ -81,8 +145,10 @@ export function StandingsList({ data, sorted, sort, onPick }: StandingsListProps
                   {p.part != null ? <span className="shrink-0">· {p.part}%</span> : null}
                 </div>
               </div>
-              <MetricValue p={p} sort={sort} />
-              <ChevronRight className="w-[18px] h-[18px] text-muted-foreground shrink-0" />
+              <div className="flex flex-col items-end gap-1 shrink-0">
+                <MetricValue p={p} sort={sort} />
+                <FormDots form={p.form} />
+              </div>
             </div>
           </Card>
         );

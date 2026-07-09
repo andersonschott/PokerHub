@@ -12,11 +12,20 @@
  *             /players/{id}/ranking-stats).
  *  - best/worst/recent: undefined -> vêm do player-stats (F16).
  */
-import type { PlayerRankingDto } from '@/lib/api/hooks/use-rankings';
+import type { PlayerRankingDto, PlayerRecentResultDto } from '@/lib/api/hooks/use-rankings';
 import type { MockRankingEntry } from '@/mocks/data';
 
 // O type-source para os consumidores deste módulo (evita import direto de mocks).
 export type { MockRankingEntry };
+
+/** Classificação de um resultado para o dot de forma recente. */
+export type FormDot = 'win' | 'itm' | 'out';
+
+export function formDot(r: PlayerRecentResultDto): FormDot {
+  if (r.position === 1) return 'win';
+  if (r.prize > 0) return 'itm';
+  return 'out';
+}
 
 /**
  * MockRankingEntry + playerId real. MockRankingEntry não tem id; o playerId é
@@ -24,6 +33,10 @@ export type { MockRankingEntry };
  */
 export interface RankingEntry extends MockRankingEntry {
   playerId: string;
+  /** Movimento desde o último torneio (null = sem movimento a exibir — ranking geral/legado). */
+  delta: number | null;
+  /** Dots de forma recente, do mais antigo ao mais novo (máx. 5). */
+  form: FormDot[];
 }
 
 export function mapRankingEntry(dto: PlayerRankingDto): RankingEntry {
@@ -47,6 +60,8 @@ export function mapRankingEntry(dto: PlayerRankingDto): RankingEntry {
     buyIns: dto.totalBuyIns,
     prizes: dto.totalPrizes,
     part: dto.participationPercentage,
+    delta: dto.delta ?? null,
+    form: (dto.recentResults ?? []).map(formDot),
     // best / worst / recent: undefined — preenchidos pela F16 (player-stats real).
   };
 }

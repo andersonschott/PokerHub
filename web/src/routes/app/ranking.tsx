@@ -18,7 +18,7 @@ import { ArrowLeftRight, ChevronDown, Loader2, Trophy } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { PodiumHero } from '@/features/rankings/podium';
 import { RkSort, type SortKey } from '@/features/rankings/sort-toggle';
-import { StandingsList } from '@/features/rankings/standings-list';
+import { FormLegend, StandingsList } from '@/features/rankings/standings-list';
 import { SeasonSheet } from '@/features/rankings/season-sheet';
 import { PlayerStats } from '@/features/rankings/player-stats';
 import { PlayerStatsModal } from '@/features/rankings/player-stats-modal';
@@ -215,9 +215,7 @@ export default function RankingRoute() {
 
             <StandingsList data={entries} sorted={sorted} sort={sort} onPick={setSel} />
 
-            <div className="text-center mt-4 text-[11.5px] text-muted-foreground font-mono">
-              Toque em um jogador para ver as estatísticas completas
-            </div>
+            <FormLegend />
           </div>
 
           {/* Desktop layout: podium + table side-by-side */}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapRankingEntry, mapRanking } from './ranking-map';
+import { mapRankingEntry, mapRanking, formDot } from './ranking-map';
 import type { PlayerRankingDto } from '@/lib/api/hooks/use-rankings';
 
 function makeDto(overrides: Partial<PlayerRankingDto> = {}): PlayerRankingDto {
@@ -20,6 +20,8 @@ function makeDto(overrides: Partial<PlayerRankingDto> = {}): PlayerRankingDto {
     itmRate: 62,
     totalSeasonTournaments: 14,
     participationPercentage: 98,
+    delta: null,
+    recentResults: null,
     ...overrides,
   };
 }
@@ -74,6 +76,50 @@ describe('mapRankingEntry', () => {
 
   it('preserva nickname em sub quando presente', () => {
     expect(mapRankingEntry(makeDto({ nickname: 'brunin' })).sub).toBe('brunin');
+  });
+
+  it('delta passa direto (0 = manteve) e vira null quando ausente (ranking geral/legado)', () => {
+    expect(mapRankingEntry(makeDto({ delta: 3 })).delta).toBe(3);
+    expect(mapRankingEntry(makeDto({ delta: -2 })).delta).toBe(-2);
+    expect(mapRankingEntry(makeDto({ delta: 0 })).delta).toBe(0);
+    expect(mapRankingEntry(makeDto({ delta: null })).delta).toBeNull();
+    expect(
+      mapRankingEntry(makeDto({ delta: undefined as unknown as null })).delta,
+    ).toBeNull();
+  });
+
+  it('form deriva os dots dos recentResults preservando a ordem (antigo → recente)', () => {
+    const e = mapRankingEntry(
+      makeDto({
+        recentResults: [
+          { position: 1, prize: 200 }, // campeão → win (mesmo com prize > 0)
+          { position: 2, prize: 90 }, // premiado → itm
+          { position: 5, prize: 0 }, // fora do dinheiro → out
+          { position: null, prize: 0 }, // sem posição → out
+          { position: 3, prize: 40 }, // premiado → itm
+        ],
+      }),
+    );
+    expect(e.form).toEqual(['win', 'itm', 'out', 'out', 'itm']);
+  });
+
+  it('form fica vazio quando recentResults é null (temporada legada)', () => {
+    expect(mapRankingEntry(makeDto({ recentResults: null })).form).toEqual([]);
+  });
+});
+
+describe('formDot', () => {
+  it('1º lugar é win mesmo sem prêmio registrado', () => {
+    expect(formDot({ position: 1, prize: 0 })).toBe('win');
+  });
+
+  it('prêmio > 0 fora do 1º lugar é itm', () => {
+    expect(formDot({ position: 4, prize: 25 })).toBe('itm');
+  });
+
+  it('sem prêmio e fora do 1º lugar é out', () => {
+    expect(formDot({ position: 6, prize: 0 })).toBe('out');
+    expect(formDot({ position: null, prize: 0 })).toBe('out');
   });
 });
 

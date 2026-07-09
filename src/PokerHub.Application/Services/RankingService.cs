@@ -51,7 +51,8 @@ public class RankingService : IRankingService
                     r.ROI,
                     r.ITMRate,
                     dbTotalFinished,
-                    CalculateParticipationPercentage(r.TournamentsPlayed, dbTotalFinished)
+                    CalculateParticipationPercentage(r.TournamentsPlayed, dbTotalFinished),
+                    RecentResults: r.RecentResults
                 ))
                 .ToList();
         }
@@ -120,7 +121,8 @@ public class RankingService : IRankingService
                 TotalPrizes = totalPrize,
                 Profit = profit,
                 ROI = roi,
-                ITMRate = itmRate
+                ITMRate = itmRate,
+                RecentResults = (IReadOnlyList<PlayerRecentResultDto>?)(hasTournament ? tournament!.RecentResults : null)
             };
         })
         .Where(p => p.TournamentsPlayed > 0)
@@ -144,7 +146,8 @@ public class RankingService : IRankingService
                 p.ROI,
                 p.ITMRate,
                 totalFinished,
-                CalculateParticipationPercentage(p.TournamentsPlayed, totalFinished)
+                CalculateParticipationPercentage(p.TournamentsPlayed, totalFinished),
+                RecentResults: p.RecentResults
             ))
             .ToList();
     }
@@ -162,7 +165,8 @@ public class RankingService : IRankingService
         decimal TotalPrizes,
         decimal Profit,
         decimal ROI,
-        decimal ITMRate
+        decimal ITMRate,
+        IReadOnlyList<PlayerRecentResultDto> RecentResults
     );
 
     private async Task<List<TournamentStatsRaw>> GetTournamentStatsRawAsync(Guid leagueId)
@@ -193,6 +197,11 @@ public class RankingService : IRankingService
                 var itmCount = finishedParticipations.Count(tp => tp.Prize > 0);
                 var itmRate = tournamentsPlayed > 0 ? (decimal)itmCount / tournamentsPlayed * 100 : 0;
                 var roi = totalBuyIns > 0 ? (profit / totalBuyIns) * 100 : 0;
+                var recentResults = finishedParticipations
+                    .OrderBy(tp => tp.Tournament.ScheduledDateTime)
+                    .TakeLast(5)
+                    .Select(tp => new PlayerRecentResultDto(tp.Position, tp.Prize))
+                    .ToList();
 
                 return new TournamentStatsRaw(
                     p.Id,
@@ -207,7 +216,8 @@ public class RankingService : IRankingService
                     totalPrizes,
                     profit,
                     roi,
-                    itmRate
+                    itmRate,
+                    recentResults
                 );
             })
             .Where(r => r != null)

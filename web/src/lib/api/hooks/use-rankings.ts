@@ -11,6 +11,11 @@ import { api } from '../client';
  * Nota: o backend escala ROI / ITMRate / ParticipationPercentage para 0–100
  * (ex.: 58 == 58%), então os campos podem ir direto para a UI.
  */
+export interface PlayerRecentResultDto {
+  position: number | null;
+  prize: number;
+}
+
 export interface PlayerRankingDto {
   position: number;
   playerId: string;
@@ -28,6 +33,13 @@ export interface PlayerRankingDto {
   itmRate: number;
   totalSeasonTournaments: number;
   participationPercentage: number;
+  /**
+   * Movimento de posição desde o último torneio da temporada (positivo = subiu).
+   * null/ausente no ranking geral/acumulado e em temporadas legadas — ocultar na UI.
+   */
+  delta?: number | null;
+  /** Últimos 5 resultados (antigo → recente) para os dots de forma. null sem dados por torneio. */
+  recentResults?: PlayerRecentResultDto[] | null;
 }
 
 export const rankingKeys = {

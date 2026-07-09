@@ -254,6 +254,16 @@ public class SeasonService : ISeasonService
                 .ThenInclude(tp => tp.Tournament)
             .ToListAsync();
 
+        // Último torneio finalizado da temporada — referência do movimento (Delta).
+        var lastTournamentId = await _context.Tournaments
+            .Where(t => t.LeagueId == season.LeagueId &&
+                        t.Status == TournamentStatus.Finished &&
+                        t.ScheduledDateTime.Date >= season.StartDate.Date &&
+                        t.ScheduledDateTime.Date <= season.EndDate.Date)
+            .OrderByDescending(t => t.ScheduledDateTime)
+            .Select(t => (Guid?)t.Id)
+            .FirstOrDefaultAsync();
+
         var rankings = players
             .Select(p =>
             {
@@ -278,6 +288,7 @@ public class SeasonService : ISeasonService
                 return new
                 {
                     Player = p,
+                    Participations = seasonParticipations,
                     TournamentsPlayed = played,
                     Wins = wins,
                     SecondPlaces = secondPlaces,
@@ -291,6 +302,30 @@ public class SeasonService : ISeasonService
             })
             .Where(x => x != null)
             .OrderByDescending(x => x!.Profit)
+            .ToList();
+
+        // Ranking anterior (excluindo o último torneio), por lucro — base do Delta.
+        var previousPositions = new Dictionary<Guid, int>();
+        if (lastTournamentId != null)
+        {
+            var previous = rankings
+                .Select(x => new
+                {
+                    x!.Player.Id,
+                    Played = x.Participations.Count(tp => tp.TournamentId != lastTournamentId),
+                    Profit = x.Participations
+                        .Where(tp => tp.TournamentId != lastTournamentId)
+                        .Sum(tp => tp.Prize - tp.TotalInvestment(tp.Tournament!))
+                })
+                .Where(x => x.Played > 0)
+                .OrderByDescending(x => x.Profit)
+                .ToList();
+
+            for (var i = 0; i < previous.Count; i++)
+                previousPositions[previous[i].Id] = i + 1;
+        }
+
+        return rankings
             .Select((x, index) => new PlayerRankingDto(
                 index + 1,
                 x!.Player.Id,
@@ -307,11 +342,16 @@ public class SeasonService : ISeasonService
                 x.ROI,
                 x.ITMRate,
                 totalFinished,
-                totalFinished > 0 ? (int)Math.Round((decimal)x.TournamentsPlayed / totalFinished * 100) : 0
+                totalFinished > 0 ? (int)Math.Round((decimal)x.TournamentsPlayed / totalFinished * 100) : 0,
+                // Estreante (sem ranking anterior) conta como "manteve" (0).
+                Delta: previousPositions.TryGetValue(x.Player.Id, out var prevPos) ? prevPos - (index + 1) : 0,
+                RecentResults: x.Participations
+                    .OrderBy(tp => tp.Tournament!.ScheduledDateTime)
+                    .TakeLast(5)
+                    .Select(tp => new PlayerRecentResultDto(tp.Position, tp.Prize))
+                    .ToList()
             ))
             .ToList();
-
-        return rankings;
     }
 
     public async Task<bool> ValidateSeasonDatesAsync(Guid leagueId, DateTime startDate, DateTime endDate, Guid? excludeSeasonId = null)
