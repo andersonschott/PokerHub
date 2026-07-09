@@ -16,12 +16,13 @@
 
 import { Outlet } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Bell } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
 import { Sidebar } from './sidebar';
 import { BottomNav } from './bottom-nav';
 import { Logo } from './logo';
+import { NotificationsBell } from './notifications-bell';
 
 export function AppShell() {
   const { clear } = useAuth();
@@ -53,21 +54,8 @@ export function AppShell() {
         <Logo />
 
         <div className="flex items-center gap-1">
-          {/* Notifications (placeholder) */}
-          <button
-            type="button"
-            aria-label="Notificações"
-            title="Notificações"
-            className={cn(
-              'flex items-center justify-center w-10 h-10 rounded-full border-0',
-              'bg-transparent text-muted-foreground cursor-pointer',
-              'transition-colors duration-[var(--dur-fast,120ms)]',
-              'hover:bg-secondary hover:text-foreground',
-              'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--ring)] focus-visible:outline-offset-[-2px]',
-            )}
-          >
-            <Bell className="w-5 h-5" aria-hidden="true" />
-          </button>
+          {/* Notificações: pagamentos pendentes + próximo torneio */}
+          <NotificationsBell />
 
           {/* Sign out */}
           <button
