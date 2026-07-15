@@ -1,5 +1,7 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using PokerHub.Application.DTOs.Payment;
 using PokerHub.Application.DTOs.Tournament;
 using PokerHub.Application.Interfaces;
 using PokerHub.Domain.Entities;
@@ -1173,8 +1175,13 @@ public class TournamentService : ITournamentService
         // Check for pending debts if league blocks check-in with debt
         if (tournament.League.BlockCheckInWithDebt)
         {
-            if (await _paymentService.HasPendingDebtsAsync(player.Id))
-                return (false, "Voce possui debitos nao confirmados. Aguarde a confirmacao do credor antes de se inscrever.");
+            // Mesma regra de HasPendingDebtsAsync: caixinha (sem credor) não bloqueia inscrição.
+            var blockingDebts = (await _paymentService.GetPendingDebtsByPlayerAsync(player.Id))
+                .Where(d => d.CreditorPlayerId != Guid.Empty)
+                .ToList();
+
+            if (blockingDebts.Count > 0)
+                return (false, BuildDebtBlockedMessage(blockingDebts));
         }
 
         // Add player to tournament and auto-checkin if tournament already started
@@ -1199,6 +1206,42 @@ public class TournamentService : ITournamentService
         await _context.SaveChangesAsync();
 
         return (true, "Inscricao realizada com sucesso!");
+    }
+
+    /// <summary>
+    /// Mensagem do bloqueio de inscrição por débito, separando "em aberto" (Pending) de
+    /// "pago aguardando confirmação do credor" (Paid) — o jogador precisa saber o que falta.
+    /// </summary>
+    internal static string BuildDebtBlockedMessage(IReadOnlyList<PendingDebtDto> blockingDebts)
+    {
+        var ptBr = CultureInfo.GetCultureInfo("pt-BR");
+        string Money(decimal v) => v.ToString("C2", ptBr);
+
+        string Creditors(IReadOnlyList<PendingDebtDto> group)
+        {
+            var names = group.Select(d => d.CreditorPlayerName).Distinct().ToList();
+            return names.Count switch
+            {
+                1 => names[0],
+                2 => $"{names[0]} e {names[1]}",
+                _ => $"{names.Count} credores"
+            };
+        }
+
+        var open = blockingDebts.Where(d => d.Status == PaymentStatus.Pending).ToList();
+        var awaiting = blockingDebts.Where(d => d.Status == PaymentStatus.Paid).ToList();
+
+        if (open.Count > 0 && awaiting.Count > 0)
+            return $"Inscrição bloqueada: você tem {Money(open.Sum(d => d.Amount))} em débito em aberto com {Creditors(open)} " +
+                   $"e {Money(awaiting.Sum(d => d.Amount))} pagos aguardando confirmação de {Creditors(awaiting)}. " +
+                   "Acompanhe em Meus Débitos.";
+
+        if (awaiting.Count > 0)
+            return $"Inscrição bloqueada: seu pagamento de {Money(awaiting.Sum(d => d.Amount))} a {Creditors(awaiting)} " +
+                   "ainda aguarda a confirmação do credor. Peça a confirmação do recebimento para liberar a inscrição.";
+
+        return $"Inscrição bloqueada: você tem {Money(open.Sum(d => d.Amount))} em débito em aberto com {Creditors(open)}. " +
+               "Pague e registre o pagamento em Meus Débitos para liberar a inscrição.";
     }
 
     public async Task<bool> SelfUnregisterPlayerAsync(Guid tournamentId, string userId)
