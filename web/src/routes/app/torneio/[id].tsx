@@ -43,8 +43,12 @@ import {
   useDelegates,
   useAddDelegate,
   useRemoveDelegate,
+  useSelfRegister,
+  useSelfUnregister,
+  useIsRegistered,
   TournamentStatus,
 } from '@/lib/api/hooks/use-tournaments';
+import { ApiError } from '@/lib/api/client';
 import { canOperateTournament, isLeagueOrganizer } from '@/features/tournaments/permissions';
 import { formatPtBrDate } from '@/routes/app/torneio/historico-map';
 
@@ -266,6 +270,12 @@ export default function TorneioDetalheRoute() {
   const checkInMut = useCheckInPlayer(tournamentId);
   const checkoutMut = useCheckoutPlayer(tournamentId);
 
+  // Auto-inscrição (membro comum, mesma regra do Blazor Dashboard.razor): visível quando o
+  // check-in está aberto — agendado sempre; ao vivo até o nível-limite (isCheckInAllowed).
+  const selfRegisterMut = useSelfRegister(tournamentId);
+  const selfUnregisterMut = useSelfUnregister(tournamentId);
+  const { data: reg } = useIsRegistered(tournamentId, !!user);
+
   const status = detail ? statusLabel(detail.status) : null;
   const players = detail?.players ?? [];
   const checkedInCount = players.filter((p) => p.isCheckedIn).length;
@@ -319,6 +329,21 @@ export default function TorneioDetalheRoute() {
     const mut = isCheckedIn ? checkoutMut : checkInMut;
     mut.mutate(playerId, { onError: () => toast.error('Não foi possível atualizar o check-in.') });
   };
+
+  const selfRegister = () =>
+    selfRegisterMut.mutate(undefined, {
+      onSuccess: () => toast.success('Inscrição realizada!'),
+      onError: (err) =>
+        toast.error(
+          err instanceof ApiError && err.message ? err.message : 'Não foi possível se inscrever.',
+        ),
+    });
+
+  const selfUnregister = () =>
+    selfUnregisterMut.mutate(undefined, {
+      onSuccess: () => toast.success('Inscrição cancelada'),
+      onError: () => toast.error('Não foi possível cancelar a inscrição.'),
+    });
 
   return (
     <div className="px-4 pt-[14px] pb-24 min-h-full lg:px-8 lg:py-6">
@@ -393,6 +418,44 @@ export default function TorneioDetalheRoute() {
                   </Button>
                 </div>
               </Card>
+            ) : null}
+
+            {/* Auto-inscrição (membro comum) — espelha o Blazor: quem opera usa "Adicionar
+                jogador"; membro vê "Inscrever-me" enquanto o check-in estiver aberto. `reg`
+                undefined = ainda carregando → não renderiza para não piscar o botão errado. */}
+            {!canOperate && detail.isCheckInAllowed && reg ? (
+              reg.isRegistered ? (
+                <Card pad="md" className="mb-4">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="w-[18px] h-[18px] text-positive shrink-0" />
+                    <div className="flex-1 min-w-0 font-sans font-semibold text-[14px]">
+                      Você está inscrito
+                    </div>
+                    {isScheduled ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={selfUnregister}
+                        disabled={selfUnregisterMut.isPending}
+                        className="shrink-0"
+                      >
+                        Cancelar inscrição
+                      </Button>
+                    ) : null}
+                  </div>
+                </Card>
+              ) : (
+                <Button
+                  variant="primary"
+                  icon={UserPlus}
+                  block
+                  className="mb-4"
+                  onClick={selfRegister}
+                  disabled={selfRegisterMut.isPending}
+                >
+                  {selfRegisterMut.isPending ? 'Inscrevendo…' : 'Inscrever-me'}
+                </Button>
+              )
             ) : null}
 
             {/* Ações de administração (organizador + delegado) */}

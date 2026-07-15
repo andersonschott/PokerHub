@@ -133,6 +133,8 @@ function extractErrorMessage(body: unknown, fallback: string): string {
       if (msgs.length > 0) return msgs[0];
     }
     if (typeof b.title === 'string' && b.title) return b.title;
+    // Endpoints de negócio (ex.: self-register) retornam { message: "..." }.
+    if (typeof b.message === 'string' && b.message) return b.message;
   }
   return fallback;
 }

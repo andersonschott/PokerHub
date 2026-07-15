@@ -218,6 +218,17 @@ export function useSelfRegister(tournamentId: string) {
   });
 }
 
+export function useSelfUnregister(tournamentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api<void>(`/tournaments/${tournamentId}/self-unregister`, { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId] });
+    },
+  });
+}
+
 /** GET /api/tournaments/{id}/is-registered — requer auth; só consultar quando logado. */
 export function useIsRegistered(tournamentId: string, enabled = true) {
   return useQuery({
