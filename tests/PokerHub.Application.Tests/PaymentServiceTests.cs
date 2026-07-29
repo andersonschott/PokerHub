@@ -163,4 +163,83 @@ public class PaymentServiceTests
         Assert.Equal(200m, result.Amount);
         Assert.False(result.IsJackpotContribution);
     }
+
+    // ── CalculateAndCreatePaymentsAsync: rateio de despesas ────────────────────
+
+    /// <summary>
+    /// Despesa de R$ 173 dividida entre 5 dá R$ 34,60 por pessoa. O settlement de poker
+    /// trabalha em reais inteiros, mas isso não pode vazar para o rateio de despesas —
+    /// antes o pagamento saía como R$ 35 e cobrava R$ 0,40 a mais de cada jogador.
+    /// </summary>
+    [Fact]
+    public async Task CalculateAndCreatePaymentsAsync_ExpenseSplitWithCents_KeepsCents()
+    {
+        var dbName = $"{nameof(CalculateAndCreatePaymentsAsync_ExpenseSplitWithCents_KeepsCents)}_{Guid.NewGuid()}";
+        await using var ctx = CreateInMemoryContext(dbName);
+
+        var leagueId = Guid.NewGuid();
+        var tournamentId = Guid.NewGuid();
+        var payerId = Guid.NewGuid();
+
+        var (_, tournament, _) = SeedLeagueAndPlayer(ctx, leagueId, tournamentId, payerId, "Thiago");
+        tournament.Status = TournamentStatus.Finished;
+
+        // Prêmio = investimento para todo mundo: zera o settlement de poker e a caixinha,
+        // deixando só os pagamentos de despesa no resultado.
+        var debtorIds = Enumerable.Range(0, 5).Select(_ => Guid.NewGuid()).ToList();
+        foreach (var (id, i) in debtorIds.Select((id, i) => (id, i)))
+        {
+            ctx.Players.Add(new Player
+            {
+                Id = id,
+                LeagueId = leagueId,
+                Name = $"Devedor {i}",
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        foreach (var id in debtorIds.Append(payerId))
+        {
+            ctx.TournamentPlayers.Add(new TournamentPlayer
+            {
+                Id = Guid.NewGuid(),
+                TournamentId = tournamentId,
+                PlayerId = id,
+                IsCheckedIn = true,
+                Prize = tournament.BuyIn
+            });
+        }
+
+        var expenseId = Guid.NewGuid();
+        var expense = new TournamentExpense
+        {
+            Id = expenseId,
+            TournamentId = tournamentId,
+            PaidByPlayerId = payerId,
+            Description = "Lanche",
+            TotalAmount = 173m,
+            SplitType = ExpenseSplitType.Equal,
+            CreatedAt = DateTime.UtcNow
+        };
+        foreach (var id in debtorIds)
+        {
+            expense.Shares.Add(new TournamentExpenseShare
+            {
+                Id = Guid.NewGuid(),
+                ExpenseId = expenseId,
+                PlayerId = id,
+                Amount = 34.60m
+            });
+        }
+        ctx.TournamentExpenses.Add(expense);
+        await ctx.SaveChangesAsync();
+
+        var service = new PaymentService(ctx);
+        var payments = await service.CalculateAndCreatePaymentsAsync(tournamentId);
+
+        var expensePayments = payments.Where(p => p.Type == PaymentType.Expense).ToList();
+        Assert.Equal(5, expensePayments.Count);
+        Assert.All(expensePayments, p => Assert.Equal(34.60m, p.Amount));
+        Assert.Equal(173m, expensePayments.Sum(p => p.Amount));
+    }
 }
