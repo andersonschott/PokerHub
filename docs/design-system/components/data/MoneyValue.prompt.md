@@ -7,5 +7,6 @@
 <MoneyValue value={4800} cents={false} size="40px" color="none" />  {/* prize pool */}
 ```
 
+- `cents={false}` só esconde os centavos de valores redondos; valores com centavos (R$ 4,50) sempre mostram os centavos — nunca arredonda.
 - `color="auto"` (default) colors by sign; pass `"none"` for neutral hero figures.
 - `dimCents` fades the centavos so the reais read first.

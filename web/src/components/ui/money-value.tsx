@@ -12,11 +12,18 @@ export interface MoneyValueProps extends HTMLAttributes<HTMLSpanElement> {
   dimCents?: boolean;
 }
 
+// cents={false} esconde os centavos de valores redondos — nunca arredonda
+// centavos reais (R$ 4,50 não pode virar R$ 5).
+export function hasCents(n: number): boolean {
+  return Math.round(Math.abs(n) * 100) % 100 !== 0;
+}
+
 export function formatBRL(n: number, cents = false): string {
   const abs = Math.abs(n);
+  const showCents = cents || hasCents(abs);
   return abs.toLocaleString('pt-BR', {
-    minimumFractionDigits: cents ? 2 : 0,
-    maximumFractionDigits: cents ? 2 : 0,
+    minimumFractionDigits: showCents ? 2 : 0,
+    maximumFractionDigits: showCents ? 2 : 0,
   });
 }
 
@@ -50,6 +57,7 @@ export const MoneyValue = forwardRef<HTMLSpanElement, MoneyValueProps>(
       tone = color;
     }
 
+    const showCents = cents || hasCents(value);
     const formatted = formatBRL(value, cents);
     // pt-BR uses comma as decimal separator
     const commaIdx = formatted.lastIndexOf(',');
@@ -68,7 +76,7 @@ export const MoneyValue = forwardRef<HTMLSpanElement, MoneyValueProps>(
         {...props}
       >
         {sign}R$&nbsp;{intPart}
-        {cents && centPart != null ? (
+        {showCents && centPart != null ? (
           dimCents ? (
             <span className="opacity-60 text-[0.78em]">,{centPart}</span>
           ) : (
