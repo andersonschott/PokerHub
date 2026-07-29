@@ -231,7 +231,9 @@ public class PaymentService : IPaymentService
             {
                 if (share.PlayerId != expense.PaidByPlayerId)
                 {
-                    var amount = FinancialMath.FinancialRound(share.Amount);
+                    // Despesa rateada mantém os centavos: R$ 173 / 5 = R$ 34,60 por pessoa.
+                    // Arredondar para inteiro (como no settlement de poker) cobrava R$ 35.
+                    var amount = FinancialMath.RoundCents(share.Amount);
                     if (amount > 0)
                     {
                         payments.Add(CreatePayment(tournamentId, share.PlayerId,
@@ -286,7 +288,7 @@ public class PaymentService : IPaymentService
         }
     }
 
-    private static Payment CreatePayment(Guid tournamentId, Guid fromPlayerId, Guid? toPlayerId, int amount, PaymentType type, string? description = null, Guid? expenseId = null)
+    private static Payment CreatePayment(Guid tournamentId, Guid fromPlayerId, Guid? toPlayerId, decimal amount, PaymentType type, string? description = null, Guid? expenseId = null)
     {
         return new Payment
         {
