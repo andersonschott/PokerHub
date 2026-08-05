@@ -993,8 +993,11 @@ public class TournamentService : ITournamentService
         foreach (var playerId in playerIds)
         {
             var tp = tournament.Players.FirstOrDefault(p => p.PlayerId == playerId);
-            if (tp != null && tp.CheckedInAt == null)
+            if (tp != null && !tp.IsCheckedIn)
             {
+                // IsCheckedIn é a flag lida por prize pool, despesas, caixinha e pelo toggle
+                // da SPA; gravar só o CheckedInAt deixava o jogador em "meio check-in".
+                tp.IsCheckedIn = true;
                 tp.CheckedInAt = DateTime.UtcNow;
                 count++;
             }
