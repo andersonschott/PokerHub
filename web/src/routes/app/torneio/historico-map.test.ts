@@ -58,6 +58,8 @@ function makeDetail(overrides: Partial<TournamentDetailDto> = {}): TournamentDet
     players: [],
     prizes: [],
     isCheckInAllowed: false,
+    isOrganizer: false,
+    canOperate: false,
     ...overrides,
   };
 }

@@ -8,7 +8,8 @@ public interface ITournamentService
     Task<IReadOnlyList<TournamentDto>> GetTournamentsByLeagueAsync(Guid leagueId);
     Task<IReadOnlyList<TournamentDto>> GetTournamentsByUserAsync(string userId);
     Task<TournamentDto?> GetTournamentByIdAsync(Guid tournamentId);
-    Task<TournamentDetailDto?> GetTournamentDetailAsync(Guid tournamentId);
+    /// <param name="userId">Quem está pedindo — define IsOrganizer/CanOperate no DTO. Null = sem usuário (TV/convite).</param>
+    Task<TournamentDetailDto?> GetTournamentDetailAsync(Guid tournamentId, string? userId = null);
     Task<TournamentDto> CreateTournamentAsync(Guid leagueId, CreateTournamentDto dto);
     Task<bool> UpdateTournamentAsync(Guid tournamentId, CreateTournamentDto dto);
     Task<bool> DeleteTournamentAsync(Guid tournamentId);

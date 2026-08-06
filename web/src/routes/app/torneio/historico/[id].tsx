@@ -20,11 +20,8 @@ import { SectionTitle } from '@/components/ui/section-title';
 import { Avatar } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
-import { useTournament, useTournaments, useDelegates } from '@/lib/api/hooks/use-tournaments';
+import { useTournament, useTournaments } from '@/lib/api/hooks/use-tournaments';
 import { useJackpotContribution } from '@/lib/api/hooks/use-payments';
-import { useAuth } from '@/lib/auth-context';
-import { useLeague } from '@/lib/api/hooks/use-leagues';
-import { canOperateTournament } from '@/features/tournaments/permissions';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { selectRealizados } from '@/routes/app/torneio/torneio-lists';
 import { tournamentDetailToHistorico, formatPtBrDate, type HistoricoDetail } from '@/routes/app/torneio/historico-map';
@@ -298,13 +295,10 @@ function DesktopHistorico({ tournamentId, canOperate }: DesktopHistoricoProps) {
 
 export default function HistoricoDetalheRoute() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { tournamentId = '' } = useParams<{ tournamentId: string }>();
 
   const { data: detail, isLoading: isLoadingDetail } = useTournament(tournamentId);
-  const { data: league } = useLeague(detail?.leagueId ?? '');
-  const { data: delegates } = useDelegates(tournamentId);
-  const canOperate = canOperateTournament(tournamentId, user, league, delegates ?? []);
+  const canOperate = detail?.canOperate ?? false;
 
   const { data: jackpotContribution, isLoading: isLoadingJackpot } = useJackpotContribution(tournamentId);
 

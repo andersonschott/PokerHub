@@ -230,4 +230,64 @@ public class DelegatePermissionsTests : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.Forbidden,
             (await delegateClient.PostAsync($"/api/tournaments/{tournament.Id}/cancel", null)).StatusCode);
     }
+
+    // ── Desfazer check-in: dono da liga e delegado, mais ninguém ────────────────
+
+    private sealed record DetailPermissions(bool IsOrganizer, bool CanOperate);
+
+    private static async Task<DetailPermissions> ReadDetailPermissionsAsync(HttpClient client, Guid tournamentId)
+    {
+        var resp = await client.GetAsync($"/api/tournaments/{tournamentId}");
+        Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
+        var root = System.Text.Json.JsonDocument.Parse(await resp.Content.ReadAsStringAsync()).RootElement;
+        return new DetailPermissions(
+            root.GetProperty("isOrganizer").GetBoolean(),
+            root.GetProperty("canOperate").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Organizer_CanUndoCheckIn_AndDetailSaysSo()
+    {
+        var (organizer, _, _, _, tournament, playerIds) =
+            await SetupTournamentWithDelegateAsync("undo-org");
+
+        var perms = await ReadDetailPermissionsAsync(organizer, tournament.Id);
+        Assert.True(perms.IsOrganizer);
+        Assert.True(perms.CanOperate);
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await organizer.PostAsync($"/api/tournaments/{tournament.Id}/players/{playerIds[0]}/checkout", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Delegate_CanUndoCheckIn_AndDetailSaysSo()
+    {
+        var (_, delegateClient, _, _, tournament, playerIds) =
+            await SetupTournamentWithDelegateAsync("undo-del");
+
+        var perms = await ReadDetailPermissionsAsync(delegateClient, tournament.Id);
+        Assert.False(perms.IsOrganizer);
+        Assert.True(perms.CanOperate);
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await delegateClient.PostAsync($"/api/tournaments/{tournament.Id}/players/{playerIds[0]}/checkout", null)).StatusCode);
+    }
+
+    [Fact]
+    public async Task LeagueMember_CannotUndoCheckIn_AndDetailSaysSo()
+    {
+        var (_, _, _, league, tournament, playerIds) =
+            await SetupTournamentWithDelegateAsync("undo-member");
+
+        var (member, _) = await RegisteredClientAsync("undo-member-plain@test.com");
+        Assert.Equal(HttpStatusCode.OK,
+            (await member.PostAsync($"/api/leagues/join/{league.InviteCode}", null)).StatusCode);
+
+        var perms = await ReadDetailPermissionsAsync(member, tournament.Id);
+        Assert.False(perms.IsOrganizer);
+        Assert.False(perms.CanOperate);
+
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await member.PostAsync($"/api/tournaments/{tournament.Id}/players/{playerIds[0]}/checkout", null)).StatusCode);
+    }
 }

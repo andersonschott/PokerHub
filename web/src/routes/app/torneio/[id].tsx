@@ -49,7 +49,6 @@ import {
   TournamentStatus,
 } from '@/lib/api/hooks/use-tournaments';
 import { ApiError } from '@/lib/api/client';
-import { canOperateTournament, isLeagueOrganizer } from '@/features/tournaments/permissions';
 import { formatPtBrDate } from '@/routes/app/torneio/historico-map';
 
 // Ordena/filtra seletores de jogador por nome (pt-BR).
@@ -254,11 +253,12 @@ export default function TorneioDetalheRoute() {
   const { data: detail, isLoading } = useTournament(tournamentId);
   const leagueId = detail?.leagueId ?? '';
   const { data: league } = useLeague(leagueId);
-  const { data: delegates } = useDelegates(tournamentId);
-  const isOrganizer = isLeagueOrganizer(league, user);
-  // Organizador OU delegado podem operar (iniciar, adicionar jogador, check-in).
-  // Gerir delegados e cancelar seguem exclusivos do organizador.
-  const canOperate = canOperateTournament(tournamentId, user, league, delegates ?? []);
+  // Permissão vem do servidor (mesma regra dos guards de endpoint): organizador OU delegado
+  // podem operar (iniciar, adicionar jogador, check-in e desfazer check-in); gerir delegados e
+  // cancelar seguem exclusivos do organizador. Deduzir isso no cliente a partir de liga +
+  // delegados fazia um GET falho rebaixar o organizador a membro, sumindo com os botões.
+  const isOrganizer = detail?.isOrganizer ?? false;
+  const canOperate = detail?.canOperate ?? false;
 
   const [copied, setCopied] = useState(false);
   const [delegatesOpen, setDelegatesOpen] = useState(false);

@@ -27,7 +27,7 @@ import { RealizadosList } from '@/features/timer/realizados-list';
 import { useAuth } from '@/lib/auth-context';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { useLeague } from '@/lib/api/hooks/use-leagues';
-import { isLeagueOrganizer, canOperateTournament } from '@/features/tournaments/permissions';
+import { isLeagueOrganizer } from '@/features/tournaments/permissions';
 import {
   useTournaments,
   useTournament,
@@ -35,7 +35,6 @@ import {
   usePauseTournament,
   useNextLevel,
   usePrevLevel,
-  useDelegates,
   TournamentStatus,
   type TournamentDto,
 } from '@/lib/api/hooks/use-tournaments';
@@ -95,10 +94,7 @@ function TimerView({ tournamentId }: { tournamentId: string }) {
 
   // Controles só para quem pode operar (organizador + delegado) — membro comum via
   // os botões e levava 403 do backend; agora vê apenas o atalho de TV.
-  const { user } = useAuth();
-  const { data: league } = useLeague(tDetail?.leagueId ?? '');
-  const { data: delegates } = useDelegates(tournamentId);
-  const canOperate = canOperateTournament(tournamentId, user, league, delegates ?? []);
+  const canOperate = tDetail?.canOperate ?? false;
 
   // Controles do timer = mutations REST (espelha dashboard.tsx; não reinventa pause/resume).
   // Esta tela só monta com InProgress|Paused → retomar é /resume, nunca /start.
