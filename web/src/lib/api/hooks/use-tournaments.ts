@@ -122,6 +122,10 @@ export interface TournamentDetailDto {
   players: TournamentPlayerDto[];
   prizes: TournamentPrizeDto[];
   isCheckInAllowed: boolean;
+  /** Dono da liga — ações exclusivas do organizador (delegar, cancelar). */
+  isOrganizer: boolean;
+  /** Pode operar a mesa (dono da liga ou delegado). Vem do servidor, mesma regra dos guards. */
+  canOperate: boolean;
 }
 
 export interface CreateTournamentDto {

@@ -33,7 +33,16 @@ public record TournamentDetailDto(
     IReadOnlyList<BlindLevelDto> BlindLevels,
     IReadOnlyList<TournamentPlayerDto> Players,
     IReadOnlyList<TournamentPrizeDto> Prizes,
-    PrizeDistributionType PrizeDistributionType
+    PrizeDistributionType PrizeDistributionType,
+
+    // Quem pede o detalhe é dono da liga? Vale para as ações exclusivas do organizador
+    // (delegar, cancelar). false para chamadas sem usuário (modo TV / convite público).
+    bool IsOrganizer = false,
+
+    // Pode operar a mesa (dono da liga OU delegado do torneio). É a MESMA regra que os
+    // endpoints aplicam — a SPA não rededuz permissão a partir de liga + delegados, senão
+    // um GET que falha vira "silenciosamente virou membro" e o botão some.
+    bool CanOperate = false
 )
 {
     public bool IsCheckInAllowed => Status == TournamentStatus.Scheduled ||

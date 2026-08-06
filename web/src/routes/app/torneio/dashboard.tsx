@@ -17,14 +17,12 @@ import { ActionSheet } from '@/features/live/action-sheet';
 import { EliminateSheet } from '@/features/live/eliminate-sheet';
 import { Sheet } from '@/components/ui/sheet';
 
-import { useTournaments, useTournament, TournamentStatus, usePauseTournament, useResumeTournament, useNextLevel, usePrevLevel, useCheckInPlayer, useEliminatePlayer, useAddRebuy, useRemoveRebuy, useSetAddon, useUndoElimination, useFinishTournament, useDelegates, useAddPlayerToTournament, type FinishPlayerPosition } from '@/lib/api/hooks/use-tournaments';
+import { useTournaments, useTournament, TournamentStatus, usePauseTournament, useResumeTournament, useNextLevel, usePrevLevel, useCheckInPlayer, useEliminatePlayer, useAddRebuy, useRemoveRebuy, useSetAddon, useUndoElimination, useFinishTournament, useAddPlayerToTournament, type FinishPlayerPosition } from '@/lib/api/hooks/use-tournaments';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { useTournamentClock } from '@/lib/api/hooks/use-tournament-clock';
-import { useLeague, useLeaguePlayers, type PlayerDto } from '@/lib/api/hooks/use-leagues';
-import { useAuth } from '@/lib/auth-context';
+import { useLeaguePlayers, type PlayerDto } from '@/lib/api/hooks/use-leagues';
 import { ApiError } from '@/lib/api/client';
 import { type MockTablePlayer } from '@/mocks/data';
-import { canOperateTournament, isLeagueOrganizer } from '@/features/tournaments/permissions';
 import { useTickingRestClock } from '../use-ticking-rest-clock';
 import { isLiveClock } from '../tv-projection';
 import { levelChangeSound } from '@/features/timer/level-change-sound';
@@ -47,7 +45,6 @@ type ExpenseSheetMode = { open: boolean; expense: TournamentExpenseDto | null };
 
 export default function DashboardRoute() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { activeLeagueId } = useActiveLeague();
 
   // Find active tournament
@@ -90,9 +87,8 @@ export default function DashboardRoute() {
     primeAudioOnGesture();
   }, []);
 
-  const { data: league } = useLeague(tDetail?.leagueId ?? '');
-  const { data: delegates } = useDelegates(activeTId);
-  const canOperate = canOperateTournament(activeTId, user, league, delegates ?? []);
+  // Permissão autoritativa do servidor (mesma regra dos guards); ver [id].tsx.
+  const canOperate = tDetail?.canOperate ?? false;
 
   const { data: expenses, isLoading: isLoadingExpenses } = useExpenses(activeTId);
   const { data: eligiblePlayers } = useEligiblePlayers(activeTId);
@@ -161,7 +157,7 @@ export default function DashboardRoute() {
   // ---- Inscrição tardia (mesma regra do Blazor Dashboard.razor) ----
   // Botão visível: Scheduled sempre; em jogo (InProgress|Paused) só para o organizador ou
   // enquanto o check-in é permitido (allowCheckInUntilLevel ≥ nível atual → isCheckInAllowed).
-  const isOrganizer = isLeagueOrganizer(league, user);
+  const isOrganizer = tDetail?.isOrganizer ?? false;
   const tStatus = tDetail?.status;
   const canAddPlayer = canOperate && (
     tStatus === TournamentStatus.Scheduled ||

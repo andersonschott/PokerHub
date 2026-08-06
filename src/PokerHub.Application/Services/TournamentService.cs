@@ -64,7 +64,7 @@ public class TournamentService : ITournamentService
         return tournament != null ? MapToDto(tournament) : null;
     }
 
-    public async Task<TournamentDetailDto?> GetTournamentDetailAsync(Guid tournamentId)
+    public async Task<TournamentDetailDto?> GetTournamentDetailAsync(Guid tournamentId, string? userId = null)
     {
         // Use AsNoTracking to ensure fresh data is fetched (important for SignalR updates)
         var tournament = await _context.Tournaments
@@ -79,7 +79,7 @@ public class TournamentService : ITournamentService
 
         if (tournament == null) return null;
 
-        return await MapToDetailDtoAsync(tournament);
+        return await MapToDetailDtoAsync(tournament, userId);
     }
 
     /// <summary>
@@ -88,8 +88,9 @@ public class TournamentService : ITournamentService
     /// Requer que o torneio tenha sido carregado com League, BlindLevels e Players (Player + EliminatedByPlayer).
     /// Os prêmios por posição vêm da engine ÚNICA de premiação (a mesma da finalização) — nenhuma
     /// regra de cálculo de dinheiro é duplicada aqui.
+    /// <paramref name="userId"/> null = chamada sem usuário (modo TV / convite público): sem permissão.
     /// </summary>
-    private async Task<TournamentDetailDto> MapToDetailDtoAsync(Tournament tournament)
+    private async Task<TournamentDetailDto> MapToDetailDtoAsync(Tournament tournament, string? userId = null)
     {
         var blindLevels = tournament.BlindLevels
             .OrderBy(bl => bl.Order)
@@ -134,6 +135,14 @@ public class TournamentService : ITournamentService
         var prizePool = CalculatePrizePool(tournament);
         var prizes = await BuildPrizesAsync(tournament, prizePool);
 
+        // Mesma regra dos guards de endpoint (IsUserOrganizerOrDelegateAsync): dono da liga
+        // ou delegado do torneio. O flag por ação (CheckIn/Eliminate/...) continua sendo
+        // conferido no endpoint; aqui é só o gate de "esta tela é operável por mim".
+        var isOrganizer = !string.IsNullOrEmpty(userId) && tournament.League.OrganizerId == userId;
+        var canOperate = isOrganizer
+            || (!string.IsNullOrEmpty(userId) && await _context.TournamentDelegates
+                .AnyAsync(td => td.TournamentId == tournament.Id && td.UserId == userId));
+
         return new TournamentDetailDto(
             tournament.Id,
             tournament.LeagueId,
@@ -165,7 +174,9 @@ public class TournamentService : ITournamentService
             blindLevels,
             players,
             prizes,
-            tournament.PrizeDistributionType
+            tournament.PrizeDistributionType,
+            isOrganizer,
+            canOperate
         );
     }
 

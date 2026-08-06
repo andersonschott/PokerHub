@@ -79,7 +79,7 @@ public static class TournamentEndpoints
             ILeagueService leagues,
             ITournamentService tournaments) =>
         {
-            var detail = await tournaments.GetTournamentDetailAsync(id);
+            var detail = await tournaments.GetTournamentDetailAsync(id, user.GetUserId());
             if (detail is null) return Results.NotFound();
 
             if (!await leagues.CanUserAccessLeagueAsync(detail.LeagueId, user.GetUserId()))
