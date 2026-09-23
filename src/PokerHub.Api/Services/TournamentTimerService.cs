@@ -83,6 +83,10 @@ public class TournamentTimerService : BackgroundService
             {
                 await ProcessTimer(tournamentId, timerState, stoppingToken);
             }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error processing timer for tournament {TournamentId}", tournamentId);
