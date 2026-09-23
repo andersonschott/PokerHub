@@ -24,7 +24,6 @@ RUN dotnet publish "PokerHub.Api.csproj" -c $BUILD_CONFIGURATION -o /app/publish
 # Final runtime stage
 FROM base AS final
 WORKDIR /app
-ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "PokerHub.Api.dll"]
