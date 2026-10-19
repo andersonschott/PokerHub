@@ -169,3 +169,11 @@ describe('reduceSync (descarte de seq fora de ordem)', () => {
     expect(again).toBe(first);
   });
 });
+
+it('aceita sequência reiniciada de uma nova instância e rejeita mensagens atrasadas da antiga', () => {
+  const old = reduceSync(EMPTY_SYNC_STATE, makeDto({ seq: 500, serverInstanceId: 'old' }), BASE);
+  const restarted = reduceSync(old, makeDto({ seq: 1, serverInstanceId: 'new', currentLevel: 2, serverNowUtc: iso(BASE + 1000) }), BASE + 1000);
+  expect(restarted.dto?.currentLevel).toBe(2);
+  expect(restarted.lastSeq).toBe(1);
+  expect(reduceSync(restarted, makeDto({ seq: 999, serverInstanceId: 'old', serverNowUtc: iso(BASE + 2000) }), BASE + 2000)).toBe(restarted);
+});

@@ -1,0 +1,39 @@
+name: PokerHub isolated preview
+on:
+  push:
+    branches: [codex/pokerhub-integrity-preview]
+  workflow_dispatch:
+concurrency:
+  group: pokerhub-isolated-preview
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+  preview:
+    if: github.ref == 'refs/heads/codex/pokerhub-integrity-preview'
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Authenticate Azure for preview
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_79EC0FD12B084F60B2C2A3F182FEE896 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_E78B3EC317474A4583525EEEC2DA076A }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_54A2C9B556FC4D36B7216B6F99873A3F }}
+      - name: Install Azure Container Apps CLI extension
+        run: az extension add --name containerapp --upgrade --yes
+      - name: Provision isolated preview
+        env:
+          PREVIEW_RESOURCE_GROUP: pokerhub-preview-codex
+          PREVIEW_LOCATION: brazilsouth
+        run: bash scripts/preview-azure.sh

@@ -1,3 +1,5 @@
+using PokerHub.Domain.Enums;
+using PokerHub.Application.Helpers;
 using Microsoft.EntityFrameworkCore;
 using PokerHub.Application.DTOs.PrizeTable;
 using PokerHub.Application.Interfaces;
@@ -80,8 +82,12 @@ public class PrizeTableService : IPrizeTableService
         );
     }
 
-    public async Task<LeaguePrizeTableDto> CreatePrizeTableAsync(Guid leagueId, CreatePrizeTableDto dto)
+    public Task<LeaguePrizeTableDto> CreatePrizeTableAsync(Guid leagueId, CreatePrizeTableDto dto)
+        => MutationScope.RunAsync(_context, leagueId, "Tabela de premiação criada", () => CreatePrizeTableCoreAsync(leagueId, dto), "League");
+
+    private async Task<LeaguePrizeTableDto> CreatePrizeTableCoreAsync(Guid leagueId, CreatePrizeTableDto dto)
     {
+        PrizeCalculation.ValidateTotal(dto.PrizePoolTotal, dto.JackpotAmount, dto.Entries.Select(e => (e.Position, e.PrizeAmount)));
         var existingTable = await _context.LeaguePrizeTables
             .AnyAsync(pt => pt.LeagueId == leagueId && pt.PrizePoolTotal == dto.PrizePoolTotal);
 
@@ -133,11 +139,19 @@ public class PrizeTableService : IPrizeTableService
 
     public async Task<LeaguePrizeTableDto?> UpdatePrizeTableAsync(Guid prizeTableId, UpdatePrizeTableDto dto)
     {
+        var leagueId = await _context.LeaguePrizeTables.AsNoTracking().Where(p => p.Id == prizeTableId).Select(p => (Guid?)p.LeagueId).FirstOrDefaultAsync();
+        if (leagueId == null) return null;
+        return await MutationScope.RunAsync(_context, leagueId.Value, "Tabela de premiação atualizada", () => UpdatePrizeTableCoreAsync(prizeTableId, dto), "League");
+    }
+
+    private async Task<LeaguePrizeTableDto?> UpdatePrizeTableCoreAsync(Guid prizeTableId, UpdatePrizeTableDto dto)
+    {
         var prizeTable = await _context.LeaguePrizeTables
             .FirstOrDefaultAsync(pt => pt.Id == prizeTableId);
 
         if (prizeTable == null) return null;
 
+        PrizeCalculation.ValidateTotal(dto.PrizePoolTotal, dto.JackpotAmount, dto.Entries.Select(e => (e.Position, e.PrizeAmount)));
         // Check if another table has the same prize pool total
         var existingTable = await _context.LeaguePrizeTables
             .AnyAsync(pt => pt.LeagueId == prizeTable.LeagueId &&
@@ -200,7 +214,8 @@ public class PrizeTableService : IPrizeTableService
         Guid leagueId,
         decimal prizePoolTotal,
         string? fallbackPercentages,
-        bool usePrizeTable = true)
+        bool usePrizeTable = true,
+        PrizeDistributionType distributionType = PrizeDistributionType.Percentage)
     {
         // Only try to find prize table if usePrizeTable is true
         if (usePrizeTable)
@@ -223,38 +238,13 @@ public class PrizeTableService : IPrizeTableService
             }
         }
 
-        // Fallback to percentage-based calculation
-        var percentages = ParsePrizeStructure(fallbackPercentages);
+        var values = PrizeCalculation.Parse(fallbackPercentages, distributionType);
         var league = await _context.Leagues.FindAsync(leagueId);
         var jackpotPercentage = league?.JackpotPercentage ?? 0;
-        var jackpotContribution = prizePoolTotal * jackpotPercentage / 100;
-        var distributablePool = prizePoolTotal - jackpotContribution;
-
-        var allocations2 = percentages
-            .Select((percentage, index) => new PrizeAllocationDto(
-                index + 1,
-                distributablePool * percentage / 100,
-                false
-            ))
-            .ToList();
-
-        return new PrizeDistributionResultDto(
-            false,
-            null,
-            jackpotContribution,
-            allocations2
-        );
-    }
-
-    private static List<decimal> ParsePrizeStructure(string? prizeStructure)
-    {
-        if (string.IsNullOrEmpty(prizeStructure))
-            return [100]; // Default: winner takes all
-
-        return prizeStructure
-            .Split(',')
-            .Select(s => decimal.TryParse(s.Trim(), out var val) ? val : 0)
-            .Where(v => v > 0)
-            .ToList();
+        if (jackpotPercentage < 0 || jackpotPercentage > 100)
+            throw new PokerHub.Application.Exceptions.BusinessRuleException("O percentual da caixinha deve estar entre 0 e 100.");
+        var jackpot = FinancialMath.RoundCents(prizePoolTotal * jackpotPercentage / 100);
+        return new PrizeDistributionResultDto(false, null, jackpot,
+            PrizeCalculation.Allocate(prizePoolTotal, jackpot, values, distributionType));
     }
 }

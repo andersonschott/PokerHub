@@ -40,10 +40,10 @@ export function buildShareCardModel(
   const lines = pending.map((g) => ({
     from: g.fromPlayerName,
     to: g.toPlayerName,
-    amount: g.totalAmount,
+    amount: g.pendingAmount,
   }));
 
-  const total = pending.reduce((sum, g) => sum + g.totalAmount, 0);
+  const total = pending.reduce((sum, g) => sum + g.pendingAmount, 0);
 
   return {
     title: tournamentName,

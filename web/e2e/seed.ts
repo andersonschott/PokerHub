@@ -131,7 +131,7 @@ export async function createTournament(
     `/api/leagues/${leagueId}/tournaments`,
     {
       name,
-      scheduledDateTime: '2026-06-21T20:00:00Z',
+      scheduledDateTime: new Date().toISOString(),
       location: 'E2E',
       buyIn: 50,
       startingStack: 10000,
@@ -146,7 +146,7 @@ export async function createTournament(
       prizeDistributionType: 0,
       usePrizeTable: false,
       prizeTableId: null,
-      allowCheckInUntilLevel: null,
+      allowCheckInUntilLevel: levels,
       blindLevels,
     },
     token,

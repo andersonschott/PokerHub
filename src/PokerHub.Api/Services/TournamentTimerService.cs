@@ -28,6 +28,7 @@ public class TournamentTimerService : BackgroundService
     // Number.MAX_SAFE_INTEGER (9e15) so it loses precision as a JS double, and two ops within the
     // same DateTime resolution tick would collide — with the client's `seq <= last` discard, a real
     // update would be dropped. Interlocked.Increment guarantees a unique, ordered value per emission.
+    private static readonly string ServerInstanceId = Guid.NewGuid().ToString("N");
     private static long _sequenceCounter;
 
     private static long NextSeq() => Interlocked.Increment(ref _sequenceCounter);
@@ -230,6 +231,7 @@ public class TournamentTimerService : BackgroundService
         var dto = new TimerStateSyncDto
         {
             Seq = NextSeq(),
+            ServerInstanceId = ServerInstanceId,
             TournamentId = tournamentId,
             Status = tournament.Status.ToString(),
             CurrentLevel = timerState.CurrentLevel,
@@ -526,6 +528,7 @@ public class TournamentTimerService : BackgroundService
         return new TimerStateSyncDto
         {
             Seq = NextSeq(),
+            ServerInstanceId = ServerInstanceId,
             TournamentId = tournamentId,
             Status = tournament.Status.ToString(),
             CurrentLevel = timerState.CurrentLevel,

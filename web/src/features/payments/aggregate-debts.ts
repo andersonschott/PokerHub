@@ -36,6 +36,9 @@ export interface AggregatedDebt {
   /** Grupo de contribuição para a caixinha (credor virtual, sem jogador destino). */
   isJackpot: boolean;
   totalAmount: number;
+  pendingAmount: number;
+  paidAmount: number;
+  confirmedAmount: number;
   breakdown: DebtBreakdown[];
   /** IDs dos pagamentos componentes para quitação em lote. */
   paymentIds: string[];
@@ -80,6 +83,7 @@ export function aggregateDebts(debts: readonly AggregatableDebt[]): AggregatedDe
         toPlayerPixKey: d.toPlayerPixKey,
         isJackpot,
         totalAmount: 0,
+        pendingAmount: 0, paidAmount: 0, confirmedAmount: 0,
         breakdown: [],
         paymentIds: [],
         pendingPaymentIds: [],
@@ -91,12 +95,16 @@ export function aggregateDebts(debts: readonly AggregatableDebt[]): AggregatedDe
       groups.set(key, group);
     }
 
-    group.totalAmount += d.amount;
+    const add = (a: number, b: number) => (Math.round(a * 100) + Math.round(b * 100)) / 100;
+    group.totalAmount = add(group.totalAmount, d.amount);
+    if (d.status === 0) group.pendingAmount = add(group.pendingAmount, d.amount);
+    if (d.status === 1) group.paidAmount = add(group.paidAmount, d.amount);
+    if (d.status === 2) group.confirmedAmount = add(group.confirmedAmount, d.amount);
     group.paymentIds.push(d.id);
 
     const breakdown = group.breakdown.find((b) => b.type === d.type);
     if (breakdown) {
-      breakdown.amount += d.amount;
+      breakdown.amount = add(breakdown.amount, d.amount);
     } else {
       group.breakdown.push({ type: d.type, amount: d.amount });
     }

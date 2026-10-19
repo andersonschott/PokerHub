@@ -172,8 +172,9 @@ public class RankingService : IRankingService
     private async Task<List<TournamentStatsRaw>> GetTournamentStatsRawAsync(Guid leagueId)
     {
         var players = await _context.Players
+            .AsNoTracking()
             .Where(p => p.LeagueId == leagueId)
-            .Include(p => p.Participations)
+            .Include(p => p.Participations.Where(tp => tp.IsCheckedIn && tp.Tournament.Status == TournamentStatus.Finished))
                 .ThenInclude(tp => tp.Tournament)
             .ToListAsync();
 
@@ -181,7 +182,7 @@ public class RankingService : IRankingService
             .Select(p =>
             {
                 var finishedParticipations = p.Participations
-                    .Where(tp => tp.Tournament.Status == TournamentStatus.Finished)
+                    .Where(tp => tp.IsCheckedIn && tp.Tournament.Status == TournamentStatus.Finished)
                     .ToList();
 
                 if (finishedParticipations.Count == 0) return null;
@@ -291,7 +292,7 @@ public class RankingService : IRankingService
             .Select(p =>
             {
                 var finishedParticipations = p.Participations
-                    .Where(tp => tp.Tournament.Status == TournamentStatus.Finished)
+                    .Where(tp => tp.IsCheckedIn && tp.Tournament.Status == TournamentStatus.Finished)
                     .ToList();
 
                 var totalBuyIns = finishedParticipations.Sum(tp => tp.TotalInvestment(tp.Tournament));
@@ -377,16 +378,22 @@ public class RankingService : IRankingService
 
         // Dados de torneios
         var finishedParticipations = player.Participations
-            .Where(tp => tp.Tournament.Status == TournamentStatus.Finished)
+            .Where(tp => tp.IsCheckedIn && tp.Tournament.Status == TournamentStatus.Finished)
             .ToList();
 
+        var resultTournamentIds = finishedParticipations.Select(tp => tp.TournamentId).ToList();
+        var participantCounts = await _context.TournamentPlayers.AsNoTracking()
+            .Where(tp => tp.IsCheckedIn && resultTournamentIds.Contains(tp.TournamentId))
+            .GroupBy(tp => tp.TournamentId)
+            .Select(g => new { TournamentId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(g => g.TournamentId, g => g.Count);
         var results = finishedParticipations
             .Select(tp => new PlayerTournamentResultDto(
                 tp.TournamentId,
                 tp.Tournament.Name,
                 tp.Tournament.ScheduledDateTime,
                 tp.Position,
-                tp.Tournament.Players.Count,
+                participantCounts.GetValueOrDefault(tp.TournamentId),
                 tp.TotalInvestment(tp.Tournament),
                 tp.Prize,
                 tp.ProfitLoss(tp.Tournament)

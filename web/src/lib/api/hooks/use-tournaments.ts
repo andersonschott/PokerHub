@@ -1,3 +1,4 @@
+import type { components } from '../schema';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../client';
 
@@ -20,52 +21,13 @@ export enum PrizeDistributionType {
   Fixed = 1,
 }
 
-export interface BlindLevelDto {
-  id: string;
-  order: number;
-  smallBlind: number;
-  bigBlind: number;
-  ante: number;
-  durationMinutes: number;
-  isBreak: boolean;
-  breakDescription: string | null;
-}
+export type BlindLevelDto = components['schemas']['BlindLevelDto'];
 
-export interface CreateBlindLevelDto {
-  order: number;
-  smallBlind: number;
-  bigBlind: number;
-  ante: number;
-  durationMinutes: number;
-  isBreak: boolean;
-  breakDescription: string | null;
-}
+export type CreateBlindLevelDto = components['schemas']['CreateBlindLevelDto'];
 
-export interface TournamentPlayerDto {
-  id: string;
-  tournamentId: string;
-  playerId: string;
-  playerName: string;
-  nickname: string | null;
-  isCheckedIn: boolean;
-  checkedInAt: string | null;
-  rebuyCount: number;
-  hasAddon: boolean;
-  position: number | null;
-  prize: number;
-  eliminatedByPlayerId: string | null;
-  eliminatedByPlayerName: string | null;
-  eliminatedAt: string | null;
-  totalInvestment: number;
-  profitLoss: number;
-}
+export type TournamentPlayerDto = components['schemas']['TournamentPlayerDto'];
 
-export interface TournamentPrizeDto {
-  position: number;
-  amount: number;
-  /** Derivação de exibição (amount / prizePool * 100); o dinheiro vem do backend. */
-  percentage: number;
-}
+export type TournamentPrizeDto = components['schemas']['TournamentPrizeDto'];
 
 export interface TournamentDto {
   id: string;
@@ -89,65 +51,9 @@ export interface TournamentDto {
   isCheckInAllowed: boolean;
 }
 
-export interface TournamentDetailDto {
-  id: string;
-  leagueId: string;
-  leagueName: string;
-  name: string;
-  scheduledDateTime: string;
-  location: string | null;
-  buyIn: number;
-  startingStack: number;
-  rebuyValue: number | null;
-  rebuyStack: number | null;
-  rebuyLimitLevel: number | null;
-  rebuyLimitMinutes: number | null;
-  rebuyLimitType: RebuyLimitType;
-  addonValue: number | null;
-  addonStack: number | null;
-  prizeStructure: string | null;
-  prizeDistributionType: PrizeDistributionType;
-  usePrizeTable: boolean;
-  inviteCode: string;
-  allowCheckInUntilLevel: number | null;
-  status: TournamentStatus;
-  currentLevel: number;
-  timeRemainingSeconds: number | null;
-  currentLevelStartedAt: string | null;
-  createdAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-  prizePool: number;
-  blindLevels: BlindLevelDto[];
-  players: TournamentPlayerDto[];
-  prizes: TournamentPrizeDto[];
-  isCheckInAllowed: boolean;
-  /** Dono da liga — ações exclusivas do organizador (delegar, cancelar). */
-  isOrganizer: boolean;
-  /** Pode operar a mesa (dono da liga ou delegado). Vem do servidor, mesma regra dos guards. */
-  canOperate: boolean;
-}
+export type TournamentDetailDto = components['schemas']['TournamentDetailDto'];
 
-export interface CreateTournamentDto {
-  name: string;
-  scheduledDateTime: string;
-  location: string | null;
-  buyIn: number;
-  startingStack: number;
-  rebuyValue: number | null;
-  rebuyStack: number | null;
-  rebuyLimitLevel: number | null;
-  rebuyLimitMinutes: number | null;
-  rebuyLimitType: RebuyLimitType;
-  addonValue: number | null;
-  addonStack: number | null;
-  prizeStructure: string | null;
-  prizeDistributionType: PrizeDistributionType;
-  usePrizeTable: boolean;
-  prizeTableId: string | null;
-  allowCheckInUntilLevel: number | null;
-  blindLevels: CreateBlindLevelDto[];
-}
+export type CreateTournamentDto = components['schemas']['CreateTournamentDto'];
 
 export function useTournaments(leagueId: string) {
   return useQuery({
@@ -476,5 +382,23 @@ export function useRemoveDelegate(tournamentId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tournament', tournamentId, 'delegates'] });
     },
+  });
+}
+
+export type SettlementPreview = components['schemas']['PrizeDistributionResultDto'];
+export function useSettlementPreview(tournamentId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['settlement-preview', tournamentId],
+    queryFn: () => api<SettlementPreview>(`/tournaments/${tournamentId}/settlement-preview`),
+    enabled: enabled && !!tournamentId,
+    staleTime: 0,
+  });
+}
+export function useTournamentHistory(tournamentId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['tournament-history', tournamentId],
+    queryFn: () => api<{ id: string; action: string; actorName: string; createdAt: string }[]>(`/tournaments/${tournamentId}/history`),
+    enabled: enabled && !!tournamentId,
+    staleTime: 0,
   });
 }

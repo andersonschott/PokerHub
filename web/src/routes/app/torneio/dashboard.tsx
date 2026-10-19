@@ -17,7 +17,7 @@ import { ActionSheet } from '@/features/live/action-sheet';
 import { EliminateSheet } from '@/features/live/eliminate-sheet';
 import { Sheet } from '@/components/ui/sheet';
 
-import { useTournaments, useTournament, TournamentStatus, usePauseTournament, useResumeTournament, useNextLevel, usePrevLevel, useCheckInPlayer, useEliminatePlayer, useAddRebuy, useRemoveRebuy, useSetAddon, useUndoElimination, useFinishTournament, useAddPlayerToTournament, type FinishPlayerPosition } from '@/lib/api/hooks/use-tournaments';
+import { useTournaments, useTournament, useSettlementPreview, useTournamentHistory, TournamentStatus, usePauseTournament, useResumeTournament, useNextLevel, usePrevLevel, useCheckInPlayer, useEliminatePlayer, useAddRebuy, useRemoveRebuy, useSetAddon, useUndoElimination, useFinishTournament, useAddPlayerToTournament, type FinishPlayerPosition } from '@/lib/api/hooks/use-tournaments';
 import { useActiveLeague } from '@/features/leagues/league-context';
 import { useTournamentClock } from '@/lib/api/hooks/use-tournament-clock';
 import { useLeaguePlayers, type PlayerDto } from '@/lib/api/hooks/use-leagues';
@@ -48,14 +48,14 @@ export default function DashboardRoute() {
   const { activeLeagueId } = useActiveLeague();
 
   // Find active tournament
-  const { data: tournaments, isLoading: isLoadingTournaments } = useTournaments(activeLeagueId ?? '');
+  const { data: tournaments, isLoading: isLoadingTournaments, error: tournamentsError, refetch: refetchTournaments } = useTournaments(activeLeagueId ?? '');
   const activeT = tournaments?.find(t => t.status === TournamentStatus.InProgress || t.status === TournamentStatus.Paused);
   const activeTId = activeT?.id ?? '';
 
   // Poll de segurança (5s, igual /tv): mantém jogadores/prize pool frescos e, se o SignalR
   // estiver inacessível, é o poll que alimenta o fallback de clock abaixo.
-  const { data: tDetail, isLoading: isLoadingDetail } = useTournament(activeTId, { refetchInterval: 5000 });
-  const { state: liveClock } = useTournamentClock(activeTId);
+  const { data: tDetail, isLoading: isLoadingDetail, error: detailError, refetch: refetchDetail } = useTournament(activeTId, { refetchInterval: 5000 });
+  const { state: liveClock, connectionStatus } = useTournamentClock(activeTId);
 
   // Clock fiel via SignalR; sem 1º sync (level 0) → fallback REST que TICA localmente.
   // Antes o dashboard não tinha fallback nenhum e ficava ZERADO até o 1º sync do hub.
@@ -114,6 +114,10 @@ export default function DashboardRoute() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [step, setStep] = useState<SheetStep>('actions');
   const [finishOpen, setFinishOpen] = useState(false);
+  const [finishSelections, setFinishSelections] = useState<Record<string, number>>({});
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const preview = useSettlementPreview(activeTId, finishOpen);
+  const history = useTournamentHistory(activeTId, historyOpen);
   const [expenseSheet, setExpenseSheet] = useState<ExpenseSheetMode>({ open: false, expense: null });
   const [addPlayerOpen, setAddPlayerOpen] = useState(false);
 
@@ -135,7 +139,7 @@ export default function DashboardRoute() {
   // Transform API players to MockTablePlayer shape for existing UI components
   // Consider checked-in players or eliminated ones
   const table: MockTablePlayer[] = (tDetail?.players ?? [])
-    .filter(p => p.isCheckedIn || p.position !== null)
+    .filter(p => p.isCheckedIn)
     .map(p => ({
       id: p.playerId,
       name: p.playerName,
@@ -177,7 +181,7 @@ export default function DashboardRoute() {
 
   // ---- Final standings (derived from RAW tDetail.players) ----
   // participants = checked-in OR already eliminated (position != null)
-  const participants = (tDetail?.players ?? []).filter(p => p.isCheckedIn || p.position !== null);
+  const participants = (tDetail?.players ?? []).filter(p => p.isCheckedIn);
   const eliminatedParticipants = participants.filter(p => p.position !== null);
   // alive = still in play (no position) → ordered by the on-table display order
   const aliveParticipants = inPlay
@@ -187,15 +191,15 @@ export default function DashboardRoute() {
   // alive get positions 1..k (champion = 1)
   const finishPositions: FinishPlayerPosition[] = [
     ...eliminatedParticipants.map(p => ({ playerId: p.playerId, position: p.position as number })),
-    ...aliveParticipants.map((p, i) => ({ playerId: p.playerId, position: i + 1 })),
+    ...aliveParticipants.map((p) => ({ playerId: p.playerId, position: aliveParticipants.length === 1 ? 1 : finishSelections[p.playerId] ?? 0 })),
   ];
 
   // Display ranking ordered by position (1º, 2º, 3º…)
   const finishRanking = [
-    ...aliveParticipants.map((p, i) => ({
+    ...aliveParticipants.map((p) => ({
       playerId: p.playerId,
       name: p.playerName,
-      position: i + 1,
+      position: aliveParticipants.length === 1 ? 1 : finishSelections[p.playerId] ?? 0,
     })),
     ...eliminatedParticipants.map(p => ({
       playerId: p.playerId,
@@ -203,6 +207,12 @@ export default function DashboardRoute() {
       position: p.position as number,
     })),
   ].sort((a, b) => a.position - b.position);
+
+  const standingsReady = finishPositions.length > 0 && finishPositions.every(p => p.position > 0)
+    && new Set(finishPositions.map(p => p.position)).size === finishPositions.length;
+  const previewTotal = (preview.data?.allocations.reduce((sum, p) => sum + p.amount, 0) ?? 0) + (preview.data?.jackpotContribution ?? 0);
+  const previewBalanced = !!preview.data && Math.round(previewTotal * 100) === Math.round(prizePool * 100)
+    && !preview.data.allocations.some(p => p.amount > 0 && p.position > participants.length);
 
   const handleConfirmFinish = async () => {
     try {
@@ -233,17 +243,19 @@ export default function DashboardRoute() {
   }, []);
 
   const adjust = useCallback((id: string, key: 'rebuys' | 'addons', delta: number) => {
+    if (rebuyMut.isPending || removeRebuyMut.isPending || addonMut.isPending) return;
+    const onError = (err: unknown) => toast.error(err instanceof ApiError ? err.message : 'Falha ao atualizar o jogador.');
     if (delta > 0) {
       if (key === 'rebuys') {
-        rebuyMut.mutate(id, { onSuccess: () => toast.success('Rebuy adicionado') });
+        rebuyMut.mutate(id, { onError, onSuccess: () => toast.success('Rebuy adicionado') });
       } else {
-        addonMut.mutate({ playerId: id, hasAddon: true }, { onSuccess: () => toast.success('Add-on adicionado') });
+        addonMut.mutate({ playerId: id, hasAddon: true }, { onError, onSuccess: () => toast.success('Add-on adicionado') });
       }
     } else {
       if (key === 'rebuys') {
-        removeRebuyMut.mutate(id, { onSuccess: () => toast.success('Rebuy removido') });
+        removeRebuyMut.mutate(id, { onError, onSuccess: () => toast.success('Rebuy removido') });
       } else {
-        addonMut.mutate({ playerId: id, hasAddon: false }, { onSuccess: () => toast.success('Add-on removido') });
+        addonMut.mutate({ playerId: id, hasAddon: false }, { onError, onSuccess: () => toast.success('Add-on removido') });
       }
     }
   }, [rebuyMut, removeRebuyMut, addonMut]);
@@ -254,7 +266,8 @@ export default function DashboardRoute() {
       onSuccess: () => {
         toast.success(`${selectedPlayer.name}: check-in confirmado`);
         closeSheet();
-      }
+      },
+      onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Falha no check-in.'),
     });
   }, [selectedPlayer, checkInMut, closeSheet]);
 
@@ -342,6 +355,15 @@ export default function DashboardRoute() {
     );
   }
 
+  if ((tournamentsError && !tournaments) || (detailError && !tDetail)) {
+    return (
+      <div className="flex flex-col min-h-screen items-center justify-center text-center p-4">
+        <p role="alert" className="text-muted-foreground mb-4">Não foi possível carregar o torneio.</p>
+        <Button onClick={() => { void refetchTournaments(); if (activeTId) void refetchDetail(); }}>Tentar novamente</Button>
+      </div>
+    );
+  }
+
   if (!activeTId || !tDetail) {
     return (
       <div className="flex flex-col min-h-screen items-center justify-center text-center p-4">
@@ -382,18 +404,22 @@ export default function DashboardRoute() {
         <div className="lg:grid lg:grid-cols-[minmax(320px,0.9fr)_minmax(0,1.3fr)] lg:gap-5 lg:items-start">
           {/* Left column */}
           <div className="flex flex-col gap-3">
+            <div role="status" className="text-sm text-muted-foreground">
+              {connectionStatus === 'synced' ? 'Relógio sincronizado' : connectionStatus === 'connecting' ? 'Conectando relógio…' : 'Sem conexão com o relógio. Tentando reconectar…'}
+            </div>
             <LevelControl state={clock} onPrev={handlePrevLevel} onTogglePause={handleTogglePause} onNext={handleNextLevel} />
 
             <div className="grid grid-cols-3 gap-[10px]">
               <StatTile value={`${inPlay.length}/${tMaxPlayers}`} label="Na mesa" icon={Users} center valueSize="17px" />
-              <StatTile value={<MoneyValue value={prizePool} cents={false} color="none" size="17px" />} label="Prize pool" icon={Trophy} tone="emerald" center valueSize="17px" />
+              <StatTile value={<MoneyValue value={prizePool} cents={false} color="none" size="17px" />} label="Arrecadação" icon={Trophy} tone="emerald" center valueSize="17px" />
               <StatTile value={totalRebuys} label="Rebuys" icon={Repeat} center valueSize="17px" />
             </div>
 
             <div className="mt-1">
-              <Button variant="primary" icon={Flag} block onClick={() => setFinishOpen(true)}>
+              <Button variant="secondary" icon={Flag} block onClick={() => { setFinishSelections({}); setFinishOpen(true); }}>
                 Encerrar torneio
               </Button>
+              <Button variant="ghost" block onClick={() => setHistoryOpen(true)}>Histórico de operações</Button>
               <div className="text-[12px] text-muted-foreground text-center mt-2">
                 Calcula prêmios, caixinha e quem paga quem.
               </div>
@@ -558,7 +584,9 @@ export default function DashboardRoute() {
       {selectedPlayer && step === 'actions' && (
         <ActionSheet
           player={selectedPlayer}
-          buyIn={tBuyIn}
+          rebuyValue={tDetail.rebuyValue ?? tBuyIn}
+          addonValue={tDetail.addonValue ?? tBuyIn}
+          busy={rebuyMut.isPending || removeRebuyMut.isPending || addonMut.isPending || checkInMut.isPending}
           onClose={closeSheet}
           onAdjust={adjust}
           onEliminate={() => setStep('eliminate')}
@@ -630,6 +658,11 @@ export default function DashboardRoute() {
         </Sheet>
       )}
 
+      {historyOpen && <Sheet title="Histórico de operações" onClose={() => setHistoryOpen(false)} fixed>
+        {history.isPending ? <p>Carregando histórico…</p> : history.error ? <p role="alert">{history.error.message} <button onClick={() => void history.refetch()}>Tentar novamente</button></p> : <ol className="space-y-3">{history.data?.map(item => <li key={item.id} className="text-sm border-b border-border pb-2"><strong>{item.action}</strong><div className="text-muted-foreground">{item.actorName} · {new Date(item.createdAt).toLocaleString('pt-BR')}</div></li>)}</ol>}
+        {history.data?.length === 0 && <p>Nenhuma operação registrada ainda.</p>}
+      </Sheet>}
+
       {finishOpen && (
         <Sheet
           open
@@ -640,9 +673,7 @@ export default function DashboardRoute() {
         >
           <div className="flex flex-col gap-2">
             {aliveParticipants.length > 1 && (
-              <div className="text-[12px] text-muted-foreground px-[2px] pb-1">
-                Há mais de um jogador na mesa: a ordem de exibição vira o ranking (primeiro = campeão).
-              </div>
+              <p className="text-sm text-muted-foreground pb-1">Escolha a posição final de cada jogador que ainda está na mesa.</p>
             )}
 
             {finishRanking.length === 0 ? (
@@ -660,20 +691,37 @@ export default function DashboardRoute() {
                       r.position === 1 ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'
                     }`}
                   >
-                    {r.position}º
+                    {r.position > 0 ? `${r.position}º` : '—'}
                   </span>
                   <span className="flex-1 min-w-0 font-sans font-medium text-[14px] text-foreground whitespace-nowrap overflow-hidden text-ellipsis">
                     {r.name}
                   </span>
+                  {aliveParticipants.length > 1 && aliveParticipants.some(p => p.playerId === r.playerId) && (
+                    <select aria-label={`Posição de ${r.name}`} value={finishSelections[r.playerId] ?? ''}
+                      onChange={event => setFinishSelections(current => ({ ...current, [r.playerId]: Number(event.target.value) }))}
+                      className="rounded-md border border-border bg-card p-2 text-sm">
+                      <option value="">Escolha</option>
+                      {Array.from({ length: aliveParticipants.length }, (_, i) => <option key={i} value={i + 1}>{i + 1}º lugar</option>)}
+                    </select>
+                  )}
+                  <span className="text-sm"><MoneyValue value={preview.data?.allocations.find(p => p.position === r.position)?.amount ?? 0} /></span>
                 </div>
               ))
             )}
 
+            <div className="rounded-md border border-border p-3 text-sm space-y-1" aria-live="polite">
+              <div>Arrecadação: <MoneyValue value={prizePool} /></div>
+              <div>Caixinha: <MoneyValue value={preview.data?.jackpotContribution ?? 0} /></div>
+              <div>Prêmios + caixinha: <MoneyValue value={previewTotal} /></div>
+              {preview.isPending && <p>Calculando prévia…</p>}
+              {preview.error && <p role="alert">{preview.error.message} <button type="button" onClick={() => void preview.refetch()}>Tentar novamente</button></p>}
+              {preview.data && !previewBalanced && <p role="alert" className="text-destructive">A premiação não fecha com a arrecadação ou inclui posições sem participantes. Revise a configuração antes de encerrar.</p>}
+            </div>
             <Button
               variant="primary"
               icon={finishMut.isPending ? Loader2 : Flag}
               block
-              disabled={finishMut.isPending || finishRanking.length === 0}
+              disabled={finishMut.isPending || !standingsReady || !previewBalanced || preview.isFetching}
               onClick={handleConfirmFinish}
               className={finishMut.isPending ? '[&_svg]:animate-spin' : undefined}
             >

@@ -81,7 +81,7 @@ if (!string.IsNullOrWhiteSpace(kvKeyId))
 {
     var miClientId = builder.Configuration["DataProtection:ManagedIdentityClientId"];
     TokenCredential credential = !string.IsNullOrWhiteSpace(miClientId)
-        ? new ManagedIdentityCredential(miClientId)
+        ? new ManagedIdentityCredential(ManagedIdentityId.FromUserAssignedClientId(miClientId))
         : new DefaultAzureCredential();
     dataProtection.ProtectKeysWithAzureKeyVault(new Uri(kvKeyId), credential);
 }
@@ -179,6 +179,28 @@ builder.Services.AddHealthChecks()
     .AddDbContextCheck<PokerHubDbContext>("database");
 
 var app = builder.Build();
+var servePreviewWeb = builder.Configuration.GetValue<bool>("Preview:ServeWeb");
+if (servePreviewWeb)
+{
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
+}
+
+// Business validation must remain actionable in the React client.
+app.Use(async (context, next) =>
+{
+    try { await next(context); }
+    catch (PokerHub.Application.Exceptions.BusinessRuleException ex) when (!context.Response.HasStarted)
+    {
+        context.Response.StatusCode = StatusCodes.Status409Conflict;
+        await context.Response.WriteAsJsonAsync(new { Message = ex.Message });
+    }
+    catch (DbUpdateConcurrencyException) when (!context.Response.HasStarted)
+    {
+        context.Response.StatusCode = StatusCodes.Status409Conflict;
+        await context.Response.WriteAsJsonAsync(new { Message = "Os dados foram alterados em outra sessão. Atualize a tela e tente novamente." });
+    }
+});
 
 app.MapOpenApi(); // /openapi/v1.json — fonte para geração de tipos TS na Fase 1
 
@@ -189,9 +211,16 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
 
+app.Use(async (context, next) =>
+{
+    context.RequestServices.GetRequiredService<PokerHubDbContext>().OperationActorId = context.User.FindFirst("sub")?.Value;
+    await next(context);
+});
+
 AuthEndpoints.Map(app);
 LeagueEndpoints.Map(app);
 TournamentEndpoints.Map(app);
+TournamentReviewEndpoints.Map(app);
 PaymentEndpoints.Map(app);
 PlayerEndpoints.Map(app);
 MeEndpoints.Map(app);
@@ -204,6 +233,23 @@ ExpenseEndpoints.Map(app);
 app.MapHub<PokerHub.Api.Hubs.TournamentHub>("/hub/tournaments");
 
 app.MapHealthChecks("/health");
+
+if (servePreviewWeb)
+{
+    app.MapFallback(async context =>
+    {
+        if (context.Request.Path.StartsWithSegments("/api") ||
+            context.Request.Path.StartsWithSegments("/hub") ||
+            context.Request.Path.StartsWithSegments("/openapi"))
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+        context.Response.ContentType = "text/html; charset=utf-8";
+        context.Response.Headers.CacheControl = "no-cache";
+        await context.Response.SendFileAsync(Path.Combine(app.Environment.WebRootPath, "index.html"));
+    }).ExcludeFromDescription();
+}
 
 // Endpoint de smoke do Sentry — lança uma exceção de propósito para validar a captura
 // em produção. Desativado por padrão; habilitar pontualmente via env

@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * Playwright E2E config — corre contra a stack JÁ no ar:
  *   web (Vite):  http://localhost:5173
- *   api:         http://localhost:5100  (proxy /api + SignalR via VITE_API_URL)
+ *   api:         http://localhost:5100  (proxy /api + SignalR via VITE_API_BASE_URL)
  *
  * Não declaramos `webServer`: a stack é externa e persistente; os testes não devem
  * iniciá-la nem derrubá-la. Cada run usa identificadores únicos (ver e2e/seed.ts).
@@ -19,6 +19,9 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   use: {
     baseURL: 'http://localhost:5173',
+    launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+      : {},
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },

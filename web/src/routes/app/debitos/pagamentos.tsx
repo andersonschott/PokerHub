@@ -154,7 +154,7 @@ export default function PagamentosRoute() {
   const recalculate = () => {
     calcMut.mutate(undefined, {
       onSuccess: () => toast.success('Pagamentos calculados com sucesso'),
-      onError: () => toast.error('Falha ao calcular pagamentos')
+      onError: (error) => toast.error(error.message || 'Falha ao calcular pagamentos')
     });
   };
 
@@ -565,9 +565,10 @@ export default function PagamentosRoute() {
           {/* Actions */}
           <div className="flex flex-wrap gap-2 mt-1">
             {canOperate && (
-              <Button variant="secondary" icon={RefreshCcw} block onClick={recalculate}>
+              <Button variant="secondary" icon={RefreshCcw} block onClick={recalculate} disabled={calcMut.isPending || payments?.some(p => p.status !== PaymentStatus.Pending)}>
                 Calcular Pagamentos
               </Button>
+
             )}
             <Button
               variant="secondary"
@@ -647,7 +648,7 @@ export default function PagamentosRoute() {
             </span>
             <div className="flex flex-wrap gap-2">
               {canOperate && (
-                <Button variant="ghost" icon={RefreshCcw} size="sm" onClick={recalculate}>
+                <Button variant="ghost" icon={RefreshCcw} size="sm" onClick={recalculate} disabled={calcMut.isPending || payments?.some(p => p.status !== PaymentStatus.Pending)}>
                   Recalcular
                 </Button>
               )}
@@ -734,8 +735,11 @@ export default function PagamentosRoute() {
                   ) : null}
                 </div>
 
-                {/* PIX: copiar + QR (alvos ≥44px) */}
-                {g.toPlayerPixKey ? (
+                <div className="text-sm text-muted-foreground mt-2" aria-label="Situação dos valores">
+                  Em aberto: R$ {formatBRL(g.pendingAmount)} · Aguardando confirmação: R$ {formatBRL(g.paidAmount)} · Confirmado: R$ {formatBRL(g.confirmedAmount)}
+                </div>
+                {/* PIX: somente o valor ainda não pago */}
+                {g.toPlayerPixKey && g.pendingAmount > 0 ? (
                   <div className="flex items-center gap-[10px] mt-[10px]">
                     <button
                       type="button"
@@ -757,7 +761,7 @@ export default function PagamentosRoute() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setQrFor({ key: g.toPlayerPixKey!, name: g.toPlayerName, amount: g.totalAmount })}
+                      onClick={() => setQrFor({ key: g.toPlayerPixKey!, name: g.toPlayerName, amount: g.pendingAmount })}
                       aria-label="Mostrar QR Code PIX"
                       className="inline-flex items-center justify-center shrink-0 min-w-[44px] min-h-[44px] rounded-[var(--radius-sm)] border border-border bg-transparent text-foreground cursor-pointer"
                     >

@@ -1,4 +1,4 @@
-using PokerHub.Domain.Enums;
+using PokerHub.Application.Exceptions;
 
 namespace PokerHub.Application.Services;
 
@@ -8,8 +8,8 @@ namespace PokerHub.Application.Services;
 /// </summary>
 internal static class PaymentCalculationEngine
 {
-    internal record PlayerBalance(Guid PlayerId, string Name, int Balance);
-    internal record CalculatedPayment(Guid FromPlayerId, Guid? ToPlayerId, int Amount, bool IsJackpot, string? Description = null);
+    internal record PlayerBalance(Guid PlayerId, string Name, decimal Balance);
+    internal record CalculatedPayment(Guid FromPlayerId, Guid? ToPlayerId, decimal Amount, bool IsJackpot, string? Description = null);
 
     /// <summary>
     /// Calculates the minimum set of payments to settle all balances.
@@ -19,7 +19,7 @@ internal static class PaymentCalculationEngine
     /// <param name="adminPlayerId">Organizer player ID; they pay jackpot before any other match (Phase 0).</param>
     internal static List<CalculatedPayment> Calculate(
         IReadOnlyList<PlayerBalance> playerBalances,
-        int jackpotAmount,
+        decimal jackpotAmount,
         Guid? adminPlayerId)
     {
         var debtors = playerBalances
@@ -35,7 +35,10 @@ internal static class PaymentCalculationEngine
         if (jackpotAmount > 0)
             creditors.Add(new CreditorState(null, "Caixinha", jackpotAmount, isJackpot: true));
 
-        AdjustRoundingDifference(debtors, creditors);
+        if (jackpotAmount < 0 || playerBalances.Select(b => b.PlayerId).Distinct().Count() != playerBalances.Count)
+            throw new BusinessRuleException("Saldos ou caixinha inválidos para o acerto.");
+        if (debtors.Sum(d => d.Remaining) != creditors.Sum(c => c.Remaining))
+            throw new BusinessRuleException("O acerto não fecha: confira arrecadação, prêmios e caixinha antes de gerar os pagamentos.");
 
         var payments = new List<CalculatedPayment>();
 
@@ -50,41 +53,19 @@ internal static class PaymentCalculationEngine
 
     // ── Mutable state kept in private classes to avoid re-indexing ──────────
 
-    private sealed class DebtorState(Guid playerId, string name, int amount)
+    private sealed class DebtorState(Guid playerId, string name, decimal amount)
     {
         public Guid PlayerId { get; } = playerId;
         public string Name { get; } = name;
-        public int Remaining { get; set; } = amount;
+        public decimal Remaining { get; set; } = amount;
     }
 
-    private sealed class CreditorState(Guid? playerId, string name, int amount, bool isJackpot)
+    private sealed class CreditorState(Guid? playerId, string name, decimal amount, bool isJackpot)
     {
         public Guid? PlayerId { get; } = playerId;
         public string Name { get; } = name;
-        public int Remaining { get; set; } = amount;
+        public decimal Remaining { get; set; } = amount;
         public bool IsJackpot { get; } = isJackpot;
-    }
-
-    // ── Rounding correction ──────────────────────────────────────────────────
-
-    private static void AdjustRoundingDifference(List<DebtorState> debtors, List<CreditorState> creditors)
-    {
-        var totalDebt = debtors.Sum(d => d.Remaining);
-        var totalCredit = creditors.Sum(c => c.Remaining);
-        var diff = totalCredit - totalDebt;
-
-        if (diff > 0 && debtors.Count > 0)
-        {
-            // More credit than debt → spread excess onto the largest debtor
-            debtors.OrderByDescending(d => d.Remaining).First().Remaining += diff;
-        }
-        else if (diff < 0 && creditors.Count > 0)
-        {
-            // More debt than credit → spread excess onto the largest non-jackpot creditor
-            var largest = creditors.Where(c => !c.IsJackpot).OrderByDescending(c => c.Remaining).FirstOrDefault();
-            if (largest != null)
-                largest.Remaining += Math.Abs(diff);
-        }
     }
 
     // ── Phase 0: Admin pays jackpot first ────────────────────────────────────
@@ -182,11 +163,11 @@ internal static class PaymentCalculationEngine
     /// to <paramref name="target"/>, or null if none exists.
     /// Uses recursive backtracking — safe for ≤ 20 creditors.
     /// </summary>
-    private static List<CreditorState>? FindExactSubset(List<CreditorState> creditors, int target)
-        => FindSubsetRecursive(creditors, 0, target, []);
+    private static List<CreditorState>? FindExactSubset(List<CreditorState> creditors, decimal target)
+        => creditors.Count > 16 ? null : FindSubsetRecursive(creditors, 0, target, []);
 
     private static List<CreditorState>? FindSubsetRecursive(
-        List<CreditorState> creditors, int index, int remaining, List<CreditorState> current)
+        List<CreditorState> creditors, int index, decimal remaining, List<CreditorState> current)
     {
         if (remaining == 0) return current;
         if (index >= creditors.Count || remaining < 0) return null;

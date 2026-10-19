@@ -207,7 +207,7 @@ public class RankingAndPrizeTableEndpointsTests : IClassFixture<ApiFactory>
                 JackpotAmount = 30m,
                 Entries = new[]
                 {
-                    new { Position = 1, PrizeAmount = 180m },
+                    new { Position = 1, PrizeAmount = 150m },
                     new { Position = 2, PrizeAmount = 90m },
                     new { Position = 3, PrizeAmount = 30m }
                 }
@@ -322,4 +322,18 @@ public class RankingAndPrizeTableEndpointsTests : IClassFixture<ApiFactory>
             });
         Assert.Equal(HttpStatusCode.Forbidden, update.StatusCode);
     }
+    [Fact]
+    public async Task CreatePrizeTable_RejectsPrizesThatExceedPoolIncludingJackpot()
+    {
+        var (organizer, _) = await RegisteredClientAsync("pt-overfunded@test.com");
+        var league = await CreateLeagueAsync(organizer, "Liga inválida");
+        var response = await organizer.PostAsJsonAsync($"/api/leagues/{league.Id}/prize-tables", new
+        {
+            Name = "Excede arrecadação", PrizePoolTotal = 300m, JackpotAmount = 30m,
+            Entries = new[] { new { Position = 1, PrizeAmount = 300m } }
+        });
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("fechar exatamente", await response.Content.ReadAsStringAsync());
+    }
+
 }

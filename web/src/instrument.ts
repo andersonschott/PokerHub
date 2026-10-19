@@ -40,7 +40,7 @@ if (dsn) {
         blockAllMedia: true,
       }),
     ],
-    tracesSampleRate: 1.0,
+    tracesSampleRate: 0.1,
     // Propaga headers de trace para a API (Container App) — conecta trace front↔backend.
     tracePropagationTargets: [
       'localhost',

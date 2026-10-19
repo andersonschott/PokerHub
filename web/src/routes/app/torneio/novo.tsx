@@ -96,7 +96,7 @@ interface WizardInitial {
  */
 const CREATE_DEFAULTS: WizardInitial = {
   name: '',
-  tourDate: '2026-06-12',
+  tourDate: new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10),
   tourTime: '20:00',
   local: '',
   buyIn: '50',

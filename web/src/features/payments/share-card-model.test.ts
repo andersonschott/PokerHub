@@ -4,6 +4,7 @@ import type { AggregatedDebt } from './aggregate-debts';
 
 function makeAggregatedDebt(overrides: Partial<AggregatedDebt> & Pick<AggregatedDebt, 'key' | 'fromPlayerName' | 'toPlayerName' | 'totalAmount'>): AggregatedDebt {
   return {
+    pendingAmount: overrides.totalAmount, paidAmount: 0, confirmedAmount: 0,
     fromPlayerId: 'f1',
     toPlayerId: 't1',
     toPlayerPixKey: null,
@@ -128,4 +129,15 @@ describe('buildShareCardModel', () => {
 
     expect(model.subtitle).toBe('');
   });
+});
+
+it('cobra somente o componente pendente ao agregar pagamentos do mesmo par', async () => {
+  const { aggregateDebts } = await import('./aggregate-debts');
+  const base = { fromPlayerId:'a', fromPlayerName:'A', toPlayerId:'b', toPlayerName:'B', toPlayerPixKey:null, type:0, isJackpotContribution:false };
+  const debts = aggregateDebts([{ ...base,id:'pending',amount:20,status:0 },{ ...base,id:'paid',amount:50,status:1 },{ ...base,id:'confirmed',amount:100,status:2 }]);
+  const model = buildShareCardModel('Torneio',null,debts);
+  expect(model.lines[0].amount).toBe(20);
+  expect(model.total).toBe(20);
+  expect(debts[0].paidAmount).toBe(50);
+  expect(debts[0].confirmedAmount).toBe(100);
 });

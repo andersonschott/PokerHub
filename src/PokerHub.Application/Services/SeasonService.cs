@@ -269,7 +269,7 @@ public class SeasonService : ISeasonService
             {
                 var seasonParticipations = p.Participations
                     .Where(tp => tp.Tournament != null &&
-                                tp.Tournament.Status == TournamentStatus.Finished &&
+                                tp.IsCheckedIn && tp.Tournament.Status == TournamentStatus.Finished &&
                                 tp.Tournament.ScheduledDateTime.Date >= season.StartDate.Date &&
                                 tp.Tournament.ScheduledDateTime.Date <= season.EndDate.Date)
                     .ToList();

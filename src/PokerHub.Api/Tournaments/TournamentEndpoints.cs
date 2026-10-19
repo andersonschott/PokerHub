@@ -86,7 +86,7 @@ public static class TournamentEndpoints
                 return Results.Forbid();
 
             return Results.Ok(detail);
-        });
+        }).Produces<TournamentDetailDto>();
 
         // PUT /api/tournaments/{id}
         t.MapPut("/{id:guid}", async (

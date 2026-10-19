@@ -80,7 +80,7 @@ public class LeagueService : ILeagueService
         var players = league.Players.Select(p =>
         {
             var finishedParticipations = p.Participations
-                .Where(tp => tp.Tournament != null && tp.Tournament.Status == TournamentStatus.Finished)
+                .Where(tp => tp.Tournament != null && tp.IsCheckedIn && tp.Tournament.Status == TournamentStatus.Finished)
                 .ToList();
             var totalBuyIns = finishedParticipations.Sum(tp => tp.TotalInvestment(tp.Tournament!));
             var totalPrizes = finishedParticipations.Sum(tp => tp.Prize);
