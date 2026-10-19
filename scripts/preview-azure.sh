@@ -69,6 +69,7 @@ export ConnectionStrings__DefaultConnection="Server=tcp:$preview_server.database
 mask "$ConnectionStrings__DefaultConnection"
 echo 'Applying migrations to the preview database.'
 dotnet tool restore
+dotnet restore src/PokerHub.Api/PokerHub.Api.csproj
 dotnet ef database update --project src/PokerHub.Infrastructure --startup-project src/PokerHub.Api
 echo 'Building preview image with React and API on the same origin.'
 az acr build -r "$preview_registry" -t "pokerhub-preview:$preview_tag" -f Dockerfile.preview . -o none
