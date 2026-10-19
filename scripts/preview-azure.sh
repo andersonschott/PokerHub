@@ -55,7 +55,8 @@ else
   az sql server create -g "$preview_group" -n "$preview_server" -l "$preview_location" \
     --admin-user "$preview_user" --admin-password "$preview_sql_password" --minimal-tls-version 1.2 -o none
 fi
-az sql db create -g "$preview_group" -s "$preview_server" -n "$preview_database" --service-objective Basic -o none
+az sql db create -g "$preview_group" -s "$preview_server" -n "$preview_database" \
+  --service-objective Basic --backup-storage-redundancy Local --yes -o none
 # SQL authentication remains required; this rule permits the isolated ACA app to connect.
 az sql server firewall-rule create -g "$preview_group" -s "$preview_server" -n AzureServices \
   --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0 -o none
