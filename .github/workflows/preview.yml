@@ -24,6 +24,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Authenticate Azure for preview
         uses: azure/login@v2
         with:
@@ -33,7 +36,21 @@ jobs:
       - name: Install Azure Container Apps CLI extension
         run: az extension add --name containerapp --upgrade --yes
       - name: Provision isolated preview
+        id: deploy
         env:
           PREVIEW_RESOURCE_GROUP: pokerhub-preview-codex
           PREVIEW_LOCATION: brazilsouth
         run: bash scripts/preview-azure.sh
+      - name: Validate deployed preview in Chromium
+        working-directory: web
+        env:
+          POKERHUB_E2E_WEB_URL: ${{ steps.deploy.outputs.url }}
+          POKERHUB_E2E_API_URL: ${{ steps.deploy.outputs.url }}
+        run: npm ci && npx playwright install --with-deps chromium && npm run e2e
+      - name: Preserve preview browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-browser-results
+          path: web/test-results/
+          if-no-files-found: ignore

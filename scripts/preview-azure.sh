@@ -106,6 +106,7 @@ for attempt in {1..30}; do
     if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
       printf 'Preview: [%s](%s)\n\nDedicated resource group: `%s`.\n' "$preview_url" "$preview_url" "$preview_group" >> "$GITHUB_STEP_SUMMARY"
     fi
+    if [[ -n "${GITHUB_OUTPUT:-}" ]]; then printf 'url=%s\n' "$preview_url" >> "$GITHUB_OUTPUT"; fi
     exit 0
   fi
   sleep 5

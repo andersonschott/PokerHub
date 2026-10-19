@@ -9,7 +9,7 @@
  */
 import type { BrowserContext, Page } from '@playwright/test';
 
-export const API = 'http://localhost:5100';
+export const API = process.env.POKERHUB_E2E_API_URL ?? 'http://localhost:5100';
 export const PASSWORD = 'E2ePass@123';
 
 export interface AuthSession {

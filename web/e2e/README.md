@@ -22,6 +22,10 @@ npm run e2e
 npx playwright test realtime  # somente sincronização
 ```
 
+Para validar o empacotamento da prévia na mesma origem, configure
+`POKERHUB_E2E_WEB_URL` e `POKERHUB_E2E_API_URL` com a URL da prévia. Os testes
+cadastram usuários e criam ligas/torneios; use um ambiente de teste isolado.
+
 O Vite usa proxy para `/api` e `/hub`; `VITE_API_BASE_URL` deve ficar vazia.
 Não use Blazor nas migrations. `bash scripts/dev.sh migrate` seleciona
 explicitamente `pokerhub_dev` em `127.0.0.1:14333`.
