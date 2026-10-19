@@ -28,6 +28,8 @@ export function RkSort({ value, onChange }: RkSortProps) {
             key={o.k}
             type="button"
             onClick={() => onChange(o.k)}
+            aria-pressed={active}
+            aria-label={o.k === 'roi' ? 'Ordenar pelo retorno sobre o investimento' : o.k === 'part' ? 'Ordenar pela participação' : 'Ordenar pelo lucro'}
             className={[
               'flex-1 h-[34px] border-0 cursor-pointer rounded-[var(--radius-sm)]',
               'font-sans font-semibold text-[13px] transition-colors duration-[var(--dur-fast,120ms)]',

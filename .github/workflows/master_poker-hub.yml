@@ -16,7 +16,10 @@ env:
   WORKING_DIRECTORY: './src/PokerHub.Api'
 
 jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
   build:
+    needs: checks
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -28,13 +31,12 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
-          dotnet-quality: 'preview'  # Necessário para .NET 10 (ainda em preview)
 
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore src/PokerHub.Api/PokerHub.Api.csproj
 
       - name: Build with dotnet
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build src/PokerHub.Api/PokerHub.Api.csproj --configuration Release --no-restore
 
       - name: Publish
         run: dotnet publish ${{ env.WORKING_DIRECTORY }} -c Release -o ./publish --no-build
@@ -59,15 +61,16 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
-          dotnet-quality: 'preview'
 
       - name: Install EF Core tools
-        run: dotnet tool install --global dotnet-ef
+        run: dotnet tool restore
 
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore src/PokerHub.Api/PokerHub.Api.csproj
 
       - name: Generate idempotent migration script
+        env:
+          ConnectionStrings__DefaultConnection: 'Server=127.0.0.1;Database=script_generation_only;Integrated Security=True;Encrypt=True'
         run: >
           dotnet ef migrations script --idempotent
           --project src/PokerHub.Infrastructure
@@ -75,12 +78,18 @@ jobs:
           --output migrations.sql
 
       - name: Apply migration
+        env:
+          SQL_SERVER: ${{ secrets.AZURE_SQL_SERVER }}
+          SQL_DATABASE: ${{ secrets.AZURE_SQL_DATABASE }}
+          SQL_USER: ${{ secrets.AZURE_SQL_USER }}
+          SQL_PASSWORD: ${{ secrets.AZURE_SQL_PASSWORD }}
         run: |
-          if [ -z "${{ secrets.AZURE_SQL_SERVER }}" ] || [ -z "${{ secrets.AZURE_SQL_DATABASE }}" ]; then
-            echo "Secrets do Azure SQL não configurados. Pulando execução da migration."
-            exit 0
+          if [ -z "$SQL_SERVER" ] || [ -z "$SQL_DATABASE" ] || [ -z "$SQL_USER" ] || [ -z "$SQL_PASSWORD" ]; then
+            echo "Secrets do Azure SQL incompletos. Deploy bloqueado: migrations são obrigatórias."
+            exit 1
           fi
-          dotnet ef database update --project src/PokerHub.Infrastructure --startup-project src/PokerHub.Api --connection "Server=tcp:${{ secrets.AZURE_SQL_SERVER }},1433;Initial Catalog=${{ secrets.AZURE_SQL_DATABASE }};Persist Security Info=False;User ID=${{ secrets.AZURE_SQL_USER }};Password=${{ secrets.AZURE_SQL_PASSWORD }};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=True;Connection Timeout=30;"
+          export ConnectionStrings__DefaultConnection="Server=tcp:$SQL_SERVER,1433;Initial Catalog=$SQL_DATABASE;Persist Security Info=False;User ID=$SQL_USER;Password=$SQL_PASSWORD;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+          dotnet ef database update --project src/PokerHub.Infrastructure --startup-project src/PokerHub.Api
 
   deploy:
     runs-on: ubuntu-latest

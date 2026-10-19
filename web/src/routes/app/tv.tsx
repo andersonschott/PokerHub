@@ -68,7 +68,7 @@ export default function TvRoute() {
   });
 
   // Clock fiel via SignalR. Id vazio enquanto carrega → hook não conecta (no-op).
-  const { state: liveClock } = useTournamentClock(tReal?.id ?? '');
+  const { state: liveClock, connectionStatus } = useTournamentClock(tReal?.id ?? '');
 
   // Fallback REST que tica localmente (SignalR indisponível → timer continua andando entre polls).
   const restClock = useTickingRestClock(
@@ -197,7 +197,8 @@ export default function TvRoute() {
           paddingBottom: 'var(--safe-bottom, 0px)',
         } as CSSProperties}
       >
-        {/* Header */}
+        <div role="status" className="fixed top-2 right-3 z-50 text-sm text-muted-foreground">{connectionStatus === 'synced' ? 'Sincronizado' : connectionStatus === 'connecting' ? 'Conectando…' : 'Sem conexão. Reconectando…'}</div>
+      {/* Header */}
         <div
           className="flex items-center justify-between gap-3 px-5 pb-3 shrink-0"
           style={{
@@ -465,6 +466,7 @@ export default function TvRoute() {
         )
       )}
 
+      <div role="status" className="fixed bottom-2 right-3 z-50 text-sm text-muted-foreground">{connectionStatus === 'synced' ? 'Sincronizado' : connectionStatus === 'connecting' ? 'Conectando…' : 'Sem conexão. Reconectando…'}</div>
       {/* ------------------------------------------------------------------ */}
       {/* Center — timer dominante                                          */}
       {/* ------------------------------------------------------------------ */}

@@ -86,10 +86,13 @@ export function ExpenseSheet({
     }
   }, [open, expense, eligiblePlayers]);
 
-  const equalShare = useMemo(() => {
-    if (splitType !== ExpenseSplitType.Equal || selectedPlayerIds.size === 0 || totalAmount <= 0) return 0;
-    return totalAmount / selectedPlayerIds.size;
-  }, [splitType, selectedPlayerIds, totalAmount]);
+  const equalShares = useMemo(() => {
+    const ids = Array.from(selectedPlayerIds);
+    const cents = Math.round(totalAmount * 100);
+    const base = ids.length > 0 ? Math.floor(cents / ids.length) : 0;
+    const remainder = ids.length > 0 ? cents % ids.length : 0;
+    return Object.fromEntries(ids.map((id, index) => [id, (base + (index < remainder ? 1 : 0)) / 100]));
+  }, [selectedPlayerIds, totalAmount]);
 
   const customTotal = useMemo(() => {
     return Object.entries(customShares)
@@ -123,7 +126,7 @@ export function ExpenseSheet({
     if (!description.trim() || totalAmount <= 0 || !paidByPlayerId) return false;
     if (selectedPlayerIds.size === 0) return false;
     if (splitType === ExpenseSplitType.Custom) {
-      return Math.abs(customTotal - totalAmount) < 0.01;
+      return Math.round(customTotal * 100) === Math.round(totalAmount * 100);
     }
     return true;
   }, [description, totalAmount, paidByPlayerId, selectedPlayerIds, splitType, customTotal]);
@@ -273,13 +276,14 @@ export function ExpenseSheet({
                   <label htmlFor={`share-${p.id}`} className="flex-1 text-[14px] font-medium cursor-pointer">
                     {p.name}
                   </label>
-                  {splitType === ExpenseSplitType.Equal && checked && equalShare > 0 && (
-                    <MoneyValue value={equalShare} cents={false} color="none" size="13px" />
+                  {splitType === ExpenseSplitType.Equal && checked && (
+                    <MoneyValue value={equalShares[p.id] ?? 0} cents={false} color="none" size="13px" />
                   )}
                   {splitType === ExpenseSplitType.Custom && checked && (
                     <Input
                       type="text"
                       inputMode="decimal"
+                      aria-label={`Cota de ${p.name}`}
                       value={customShares[p.id] ?? '0,00'}
                       onChange={(e) =>
                         setCustomShares((prev) => ({ ...prev, [p.id]: e.target.value }))
@@ -293,9 +297,9 @@ export function ExpenseSheet({
             })}
           </div>
 
-          {splitType === ExpenseSplitType.Equal && selectedPlayerIds.size > 0 && equalShare > 0 && (
+          {splitType === ExpenseSplitType.Equal && selectedPlayerIds.size > 0 && totalAmount > 0 && (
             <div className="mt-2 text-[12.5px] text-muted-foreground">
-              <MoneyValue value={equalShare} cents={false} color="none" size="12.5px" /> por pessoa
+              Os centavos restantes são distribuídos entre os primeiros participantes selecionados.
             </div>
           )}
 

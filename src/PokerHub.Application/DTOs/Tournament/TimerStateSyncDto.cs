@@ -4,6 +4,7 @@ namespace PokerHub.Application.DTOs.Tournament;
 
 public class TimerStateSyncDto
 {
+    public string ServerInstanceId { get; set; } = string.Empty;
     public long Seq { get; set; }
     public Guid TournamentId { get; set; }
     public string Status { get; set; } = string.Empty;

@@ -162,6 +162,7 @@ export default function RankingRoute() {
         </button>
       </div>
 
+      <p className="text-sm text-muted-foreground mb-3">ROI é o retorno sobre o valor investido. ITM é a frequência com que o jogador recebeu premiação.</p>
       {/* Resumo da seleção */}
       <Card pad="md" className="mb-4">
         <div className="flex justify-between items-baseline">

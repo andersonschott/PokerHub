@@ -95,10 +95,10 @@ export function PrizeTableSheet({ leagueId, existing, onClose, onSaved }: Props)
     >
       <div className="flex flex-col gap-3.5">
         <div className="flex flex-col gap-1.5">
-          <label className={LABEL}>Prize pool total</label>
+          <label className={LABEL} htmlFor="prize-pool">Arrecadação total</label>
           <Input
             mono prefix="R$" inputMode="decimal" autoFocus
-            value={pool ? String(pool) : ''}
+            id="prize-pool" value={pool ? String(pool) : ''}
             onChange={(e) => setPool(num(e.target.value))}
           />
         </div>
@@ -113,7 +113,7 @@ export function PrizeTableSheet({ leagueId, existing, onClose, onSaved }: Props)
               <div className="flex-1">
                 <Input
                   mono prefix="R$" inputMode="decimal" className="h-10"
-                  value={e.prizeAmount ? String(e.prizeAmount) : ''}
+                  aria-label={`Prêmio do ${e.position}º colocado`} value={e.prizeAmount ? String(e.prizeAmount) : ''}
                   onChange={(ev) => setAmount(i, ev.target.value)}
                 />
               </div>
@@ -133,10 +133,10 @@ export function PrizeTableSheet({ leagueId, existing, onClose, onSaved }: Props)
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <label className={LABEL}>Caixinha (reservado do prize pool)</label>
+          <label className={LABEL} htmlFor="prize-jackpot">Caixinha (reservada da arrecadação)</label>
           <Input
             mono prefix="R$" inputMode="decimal"
-            value={jackpot ? String(jackpot) : ''}
+            id="prize-jackpot" value={jackpot ? String(jackpot) : ''}
             onChange={(e) => setJackpot(num(e.target.value))}
           />
         </div>

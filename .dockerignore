@@ -1,4 +1,4 @@
-﻿**/.dockerignore
+**/.dockerignore
 **/.env
 **/.git
 **/.gitignore
@@ -31,3 +31,17 @@ queries/
 **/*.DotSettings.user
 **/node_modules.bak
 web/dist
+
+.dev/
+TestResults/
+web/test-results/
+web/playwright-report/
+**/.env.local
+**/.env.*.local
+work/
+output/
+
+# Legacy app and local configuration must never enter a remote build context.
+src/PokerHub.Web/
+**/appsettings.Development.json
+**/appsettings.Production.json

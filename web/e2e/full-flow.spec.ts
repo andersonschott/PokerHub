@@ -85,6 +85,14 @@ test('fluxo completo: dashboard ao vivo → check-in → rebuy/eliminação → 
   const actionSheet = page.getByRole('dialog');
   await expect(actionSheet).toBeVisible();
   await expect(actionSheet.getByText('Rebuys', { exact: true })).toBeVisible();
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press('Tab');
+    await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'))).toBe(true);
+  }
+  await page.keyboard.press('Escape');
+  await expect(firstPlayerRow).toBeFocused();
+  await firstPlayerRow.click();
+  await expect(page.getByRole('dialog')).toBeVisible();
 
   // Rebuy: o DbStepper expõe um botão "Aumentar"; o primeiro é o da linha Rebuys.
   const addRebuy = actionSheet.getByRole('button', { name: 'Aumentar' }).first();
@@ -117,6 +125,10 @@ test('fluxo completo: dashboard ao vivo → check-in → rebuy/eliminação → 
   await page.getByRole('button', { name: /Encerrar torneio/i }).click();
   const confirmFinish = page.getByRole('button', { name: /Confirmar encerramento/i });
   await expect(confirmFinish).toBeVisible();
+  await expect(confirmFinish).toBeDisabled();
+  await page.getByLabel(`Posição de ${players[1].name}`).selectOption('1');
+  await page.getByLabel(`Posição de ${players[2].name}`).selectOption('2');
+  await expect(confirmFinish).toBeEnabled();
   await confirmFinish.click();
 
   // ---- Cai em /app/debitos/pagamentos?t=... ----

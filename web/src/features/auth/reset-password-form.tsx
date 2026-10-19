@@ -77,10 +77,10 @@ export function ResetPasswordForm() {
           id="password"
           type="password"
           autoComplete="new-password"
-          aria-invalid={!!errors.password}
+          aria-invalid={!!errors.password} aria-describedby={errors.password ? "password-error" : undefined}
           {...register('password')}
         />
-        {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
+        {errors.password && <p id="password-error" role="alert" className="text-sm text-destructive">{errors.password.message}</p>}
       </div>
 
       <div className="space-y-1.5">
@@ -89,18 +89,18 @@ export function ResetPasswordForm() {
           id="confirmPassword"
           type="password"
           autoComplete="new-password"
-          aria-invalid={!!errors.confirmPassword}
+          aria-invalid={!!errors.confirmPassword} aria-describedby={errors.confirmPassword ? "confirmPassword-error" : undefined}
           {...register('confirmPassword')}
         />
         {errors.confirmPassword && (
-          <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>
+          <p id="confirmPassword-error" role="alert" className="text-sm text-destructive">{errors.confirmPassword.message}</p>
         )}
       </div>
 
-      {mutation.error instanceof ApiError && (
-        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+      {mutation.error instanceof Error && (
+        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
           {identityErrors(mutation.error) ??
-            `Erro ${mutation.error.status}: ${mutation.error.message}`}
+            mutation.error.message}
         </p>
       )}
 

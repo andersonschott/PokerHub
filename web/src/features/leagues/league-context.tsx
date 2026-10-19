@@ -2,7 +2,8 @@
  * Lightweight context that tracks the "active league" (the one shown in Home).
  * Persisted to localStorage('ph-active-league') so the choice survives reload.
  */
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { useAuth } from '@/lib/auth-context';
 
 const STORAGE_KEY = 'ph-active-league';
 
@@ -22,7 +23,10 @@ function readStored(): string | null {
 }
 
 export function ActiveLeagueProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [activeLeagueId, setActiveLeagueIdState] = useState<string | null>(readStored);
+
+  useEffect(() => { setActiveLeagueIdState(readStored()); }, [user?.userId]);
 
   const setActiveLeagueId = (id: string) => {
     try {

@@ -1,0 +1,21 @@
+services:
+  sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${POKERHUB_DEV_SQL_PASSWORD:?Run bash scripts/dev.sh db}
+    ports:
+      - "127.0.0.1:14333:1433"
+    volumes:
+      - sql-data:/var/opt/mssql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'tool=/opt/mssql-tools18/bin/sqlcmd; [ -x "$$tool" ] || tool=/opt/mssql-tools/bin/sqlcmd; "$$tool" -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -C -Q "SELECT 1" -b -o /dev/null'
+      interval: 5s
+      timeout: 5s
+      retries: 36
+      start_period: 20s
+volumes:
+  sql-data:

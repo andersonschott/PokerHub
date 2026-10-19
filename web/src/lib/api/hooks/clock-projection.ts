@@ -22,6 +22,7 @@ export interface BlindLevelDto {
 
 export interface TimerStateSyncDto {
   seq: number;
+  serverInstanceId?: string;
   tournamentId: string;
   status: string;
   currentLevel: number;
@@ -57,6 +58,7 @@ export interface ClockSyncState {
   dto: TimerStateSyncDto | null;
   lastSeq: number;
   offsetMs: number;
+  retiredServerIds?: string[];
 }
 
 export const EMPTY_SYNC_STATE: ClockSyncState = {
@@ -79,13 +81,18 @@ export function reduceSync(
   dto: TimerStateSyncDto,
   localNowMs: number,
 ): ClockSyncState {
-  if (dto.seq <= prev.lastSeq) return prev;
-
   const serverNowMs = new Date(dto.serverNowUtc).getTime();
+  if (!Number.isFinite(serverNowMs) || !Number.isSafeInteger(dto.seq) || dto.seq < 0) return prev;
+  const currentServer = prev.dto?.serverInstanceId;
+  const changedServer = !!dto.serverInstanceId && !!currentServer && dto.serverInstanceId !== currentServer;
+  if (dto.serverInstanceId && prev.retiredServerIds?.includes(dto.serverInstanceId)) return prev;
+  if (changedServer && serverNowMs < new Date(prev.dto!.serverNowUtc).getTime()) return prev;
+  if (!changedServer && prev.dto && dto.seq <= prev.lastSeq) return prev;
   return {
     dto,
     lastSeq: dto.seq,
     offsetMs: serverNowMs - localNowMs,
+    ...(changedServer ? { retiredServerIds: [...(prev.retiredServerIds ?? []), currentServer!] } : prev.retiredServerIds ? { retiredServerIds: prev.retiredServerIds } : {}),
   };
 }
 

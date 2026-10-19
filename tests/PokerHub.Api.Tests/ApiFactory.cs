@@ -81,9 +81,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 options.UseSqlServer(
                     GetConnectionStringSafe(),
                     sqlOptions => sqlOptions.EnableRetryOnFailure(3))
-                       .EnableServiceProviderCaching(false)
-                       .ConfigureWarnings(w =>
-                           w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning)));
+                       .EnableServiceProviderCaching(false));
 
             // Garante que NENHUM teste dispara email real: troca o SMTP por um fake capturador.
             services.RemoveAll<IPasswordResetEmailSender>();

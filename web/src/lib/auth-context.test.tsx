@@ -89,3 +89,16 @@ describe('AuthProvider', () => {
     expect(JSON.parse(String(logoutCall![1]!.body))).toEqual({ refreshToken: 'ref' });
   });
 });
+
+it('limpa o cache e a liga ativa ao trocar de conta e ao sair', () => {
+  const reset = vi.fn();
+  const { result } = renderHook(() => useAuth(), { wrapper: ({ children }) => <AuthProvider onSessionChange={reset}>{children}</AuthProvider> });
+  localStorage.setItem('ph-active-league','old-league');
+  act(() => result.current.setSession('a','ra',{ userId:'a',name:'A',email:'a@test.local' }));
+  expect(reset).toHaveBeenCalledOnce();
+  expect(localStorage.getItem('ph-active-league')).toBeNull();
+  act(() => result.current.setSession('b','rb',{ userId:'b',name:'B',email:'b@test.local' }));
+  expect(reset).toHaveBeenCalledTimes(2);
+  act(() => result.current.clear());
+  expect(reset).toHaveBeenCalledTimes(3);
+});

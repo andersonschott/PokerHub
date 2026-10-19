@@ -1,3 +1,4 @@
+using PokerHub.Application.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using PokerHub.Application.DTOs.Payment;
 using PokerHub.Application.Helpers;
@@ -90,6 +91,11 @@ public class PaymentService : IPaymentService
     /// </summary>
     public async Task<IReadOnlyList<PaymentDto>> CalculateAndCreatePaymentsAsync(Guid tournamentId)
     {
+        return await MutationScope.RunAsync(_context, tournamentId, "Acerto calculado", () => CalculatePaymentsCoreAsync(tournamentId));
+    }
+
+    private async Task<IReadOnlyList<PaymentDto>> CalculatePaymentsCoreAsync(Guid tournamentId)
+    {
         var tournament = await _context.Tournaments
             .Include(t => t.Players)
                 .ThenInclude(tp => tp.Player)
@@ -104,7 +110,8 @@ public class PaymentService : IPaymentService
         var existingPayments = await _context.Payments
             .Where(p => p.TournamentId == tournamentId)
             .ToListAsync();
-        _context.Payments.RemoveRange(existingPayments);
+        if (existingPayments.Any(p => p.Status != PaymentStatus.Pending))
+            throw new BusinessRuleException("Há pagamentos pagos ou confirmados. O acerto está protegido para preservar o histórico.");
 
         var jackpotAmount = await ResolveJackpotAmountAsync(tournament, tournamentId);
 
@@ -113,7 +120,7 @@ public class PaymentService : IPaymentService
             .Select(tp => new PaymentCalculationEngine.PlayerBalance(
                 tp.PlayerId,
                 tp.Player.Name,
-                FinancialMath.FinancialRound(tp.Prize - tp.TotalInvestment(tournament))))
+                FinancialMath.RoundCents(tp.Prize - tp.TotalInvestment(tournament))))
             .ToList();
 
         Guid? adminPlayerId = tournament.League.Players
@@ -133,6 +140,7 @@ public class PaymentService : IPaymentService
 
         NetOpposingPayments(payments);
 
+        _context.Payments.RemoveRange(existingPayments);
         _context.Payments.AddRange(payments);
 
         await UpsertJackpotContributionAsync(tournament, jackpotAmount);
@@ -155,20 +163,22 @@ public class PaymentService : IPaymentService
     /// Uses the stored JackpotContribution if it exists; otherwise derives it from
     /// the difference between total investments and total prizes distributed.
     /// </summary>
-    private async Task<int> ResolveJackpotAmountAsync(Tournament tournament, Guid tournamentId)
+    private async Task<decimal> ResolveJackpotAmountAsync(Tournament tournament, Guid tournamentId)
     {
         var jackpotContribution = await _context.JackpotContributions
             .FirstOrDefaultAsync(j => j.TournamentId == tournamentId);
 
-        if (jackpotContribution?.Amount > 0)
-            return FinancialMath.FinancialRound(jackpotContribution.Amount);
+        if (jackpotContribution != null)
+            return jackpotContribution.Amount;
 
         // No stored record: derive from prize pool gap
         var checkedIn = tournament.Players.Where(tp => tp.IsCheckedIn).ToList();
         var totalInvestments = checkedIn.Sum(tp => tp.TotalInvestment(tournament));
         var totalPrizes = checkedIn.Sum(tp => tp.Prize);
         var gap = totalInvestments - totalPrizes;
-        return gap > 0 ? FinancialMath.FinancialRound(gap) : 0;
+        if (gap < 0)
+            throw new BusinessRuleException("Os prêmios superam a arrecadação. Revise o encerramento antes de gerar pagamentos.");
+        return FinancialMath.RoundCents(gap);
     }
 
     /// <summary>
@@ -176,7 +186,7 @@ public class PaymentService : IPaymentService
     /// value the engine used, so the caixinha extract sum matches the Jackpot Payment rows exactly.
     /// If jackpotAmount is 0, removes any existing contribution for the tournament.
     /// </summary>
-    private async Task UpsertJackpotContributionAsync(Tournament tournament, int jackpotAmount)
+    private async Task UpsertJackpotContributionAsync(Tournament tournament, decimal jackpotAmount)
     {
         var existing = await _context.JackpotContributions
             .FirstOrDefaultAsync(j => j.TournamentId == tournament.Id);
@@ -307,6 +317,13 @@ public class PaymentService : IPaymentService
 
     public async Task<bool> MarkAsPaidAsync(Guid paymentId, Guid fromPlayerId)
     {
+        var tournamentId = await _context.Payments.AsNoTracking().Where(p => p.Id == paymentId).Select(p => (Guid?)p.TournamentId).FirstOrDefaultAsync();
+        if (tournamentId == null) return false;
+        return await MutationScope.RunAsync(_context, tournamentId.Value, "Pagamento marcado como pago", () => MarkAsPaidCoreAsync(paymentId, fromPlayerId));
+    }
+
+    private async Task<bool> MarkAsPaidCoreAsync(Guid paymentId, Guid fromPlayerId)
+    {
         var payment = await _context.Payments.FindAsync(paymentId);
         if (payment == null || payment.FromPlayerId != fromPlayerId)
             return false;
@@ -321,6 +338,13 @@ public class PaymentService : IPaymentService
 
     public async Task<bool> ConfirmPaymentAsync(Guid paymentId, Guid toPlayerId)
     {
+        var tournamentId = await _context.Payments.AsNoTracking().Where(p => p.Id == paymentId).Select(p => (Guid?)p.TournamentId).FirstOrDefaultAsync();
+        if (tournamentId == null) return false;
+        return await MutationScope.RunAsync(_context, tournamentId.Value, "Recebimento confirmado", () => ConfirmPaymentCoreAsync(paymentId, toPlayerId));
+    }
+
+    private async Task<bool> ConfirmPaymentCoreAsync(Guid paymentId, Guid toPlayerId)
+    {
         var payment = await _context.Payments.FindAsync(paymentId);
         if (payment == null || payment.ToPlayerId != toPlayerId)
             return false;
@@ -334,6 +358,13 @@ public class PaymentService : IPaymentService
     }
 
     public async Task<(bool Success, string Message)> AdminMarkAsPaidAsync(Guid paymentId, string userId)
+    {
+        var tournamentId = await _context.Payments.AsNoTracking().Where(p => p.Id == paymentId).Select(p => (Guid?)p.TournamentId).FirstOrDefaultAsync();
+        if (tournamentId == null) return (false, "Pagamento não encontrado.");
+        return await MutationScope.RunAsync(_context, tournamentId.Value, "Pagamento marcado pelo organizador", () => AdminMarkAsPaidCoreAsync(paymentId, userId));
+    }
+
+    private async Task<(bool Success, string Message)> AdminMarkAsPaidCoreAsync(Guid paymentId, string userId)
     {
         var payment = await _context.Payments
             .Include(p => p.Tournament)
@@ -355,6 +386,13 @@ public class PaymentService : IPaymentService
     }
 
     public async Task<(bool Success, string Message)> AdminConfirmPaymentAsync(Guid paymentId, string userId)
+    {
+        var tournamentId = await _context.Payments.AsNoTracking().Where(p => p.Id == paymentId).Select(p => (Guid?)p.TournamentId).FirstOrDefaultAsync();
+        if (tournamentId == null) return (false, "Pagamento não encontrado.");
+        return await MutationScope.RunAsync(_context, tournamentId.Value, "Recebimento confirmado pelo organizador", () => AdminConfirmPaymentCoreAsync(paymentId, userId));
+    }
+
+    private async Task<(bool Success, string Message)> AdminConfirmPaymentCoreAsync(Guid paymentId, string userId)
     {
         var payment = await _context.Payments
             .Include(p => p.Tournament)
@@ -383,7 +421,7 @@ public class PaymentService : IPaymentService
         if (isOrganizer) return true;
 
         var isDelegate = await _context.TournamentDelegates
-            .AnyAsync(td => td.TournamentId == tournamentId && td.UserId == userId);
+            .AnyAsync(td => td.TournamentId == tournamentId && td.UserId == userId && (td.Permissions & DelegatePermissions.Finish) != 0);
         return isDelegate;
     }
 
@@ -449,13 +487,31 @@ public class PaymentService : IPaymentService
 
     public async Task<int> BulkConfirmPaymentsAsync(IList<Guid> paymentIds, string userId)
     {
-        var count = await _context.Payments
-            .Where(p => paymentIds.Contains(p.Id) && p.Status != PaymentStatus.Confirmed)
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(p => p.Status, PaymentStatus.Confirmed)
-                .SetProperty(p => p.ConfirmedAt, DateTime.UtcNow)
-                .SetProperty(p => p.PaidAt, p => p.PaidAt ?? DateTime.UtcNow));
-        return count;
+        var ids = paymentIds.Distinct().ToList();
+        var targets = await _context.Payments.AsNoTracking().Where(p => ids.Contains(p.Id))
+            .Select(p => new { p.Id, p.TournamentId }).ToListAsync();
+        if (targets.Count != ids.Count) throw new BusinessRuleException("Um dos pagamentos não foi encontrado.");
+        var groups = targets.Select(p => p.TournamentId).Distinct().Order().ToList();
+        if (groups.Count == 0) return 0;
+        foreach (var id in groups)
+            if (!await HasPaymentManagementPermissionAsync(id, userId))
+                throw new BusinessRuleException("Sem permissão para confirmar estes pagamentos.");
+        return await MutationScope.RunAsync(_context, groups[0], "Recebimentos confirmados em lote", async () =>
+        {
+            // Lock every affected tournament in a stable order and commit the batch once.
+            if (_context.Database.IsRelational())
+                foreach (var id in groups.Skip(1))
+                    await _context.Database.ExecuteSqlInterpolatedAsync($"SELECT [Id] FROM [Tournaments] WITH (UPDLOCK, HOLDLOCK) WHERE [Id] = {id}");
+            foreach (var id in groups)
+                if (!await HasPaymentManagementPermissionAsync(id, userId))
+                    throw new BusinessRuleException("Sem permissão para confirmar estes pagamentos.");
+            var payments = await _context.Payments.Where(p => ids.Contains(p.Id) && p.Status != PaymentStatus.Confirmed).ToListAsync();
+            foreach (var payment in payments) payment.Confirm();
+            foreach (var id in groups.Skip(1))
+                _context.OperationLogs.Add(new OperationLog { Id = Guid.NewGuid(), ScopeId = id, ScopeType = "Tournament", Action = "Recebimentos confirmados em lote", ActorId = _context.OperationActorId, CreatedAt = DateTime.UtcNow });
+            await _context.SaveChangesAsync();
+            return payments.Count;
+        });
     }
 
     public async Task<PaymentDto?> GetPaymentByIdAsync(Guid paymentId)

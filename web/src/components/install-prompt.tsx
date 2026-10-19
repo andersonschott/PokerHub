@@ -96,7 +96,7 @@ export function InstallPrompt() {
   return (
     <div
       className="pointer-events-none fixed inset-x-0 bottom-0 z-[70] p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
-      role="dialog"
+      role="region"
       aria-label="Instalar o PokerHub"
     >
       <div

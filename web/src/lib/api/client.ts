@@ -98,11 +98,15 @@ async function rawFetch(path: string, opts: ApiOptions, token: string | null): P
   };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  return fetch(apiUrl(`/api${path}`), {
-    ...opts,
-    headers,
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
-  });
+  try {
+    return await fetch(apiUrl(`/api${path}`), {
+      ...opts, headers,
+      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') throw error;
+    throw new ApiError(0, 'Não foi possível conectar. Verifique sua conexão e tente novamente.');
+  }
 }
 
 async function readBody(response: Response): Promise<unknown> {

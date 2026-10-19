@@ -1,3 +1,4 @@
+using PokerHub.Application.Exceptions;
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -10,7 +11,7 @@ using PokerHub.Infrastructure.Data;
 
 namespace PokerHub.Application.Services;
 
-public class TournamentService : ITournamentService
+public partial class TournamentService : ITournamentService
 {
     private readonly PokerHubDbContext _context;
     private readonly IJackpotService _jackpotService;
@@ -188,11 +189,16 @@ public class TournamentService : ITournamentService
     /// </summary>
     private async Task<IReadOnlyList<TournamentPrizeDto>> BuildPrizesAsync(Tournament tournament, decimal prizePool)
     {
+        if (tournament.Status == TournamentStatus.Finished)
+            return tournament.Players.Where(p => p.IsCheckedIn && p.Position.HasValue && p.Prize > 0)
+                .OrderBy(p => p.Position)
+                .Select(p => new TournamentPrizeDto(p.Position!.Value, p.Prize, prizePool > 0 ? p.Prize / prizePool * 100 : 0))
+                .ToList();
         if (prizePool <= 0)
             return [];
 
         var distribution = await _prizeTableService.CalculatePrizeDistributionAsync(
-            tournament.LeagueId, prizePool, tournament.PrizeStructure, tournament.UsePrizeTable);
+            tournament.LeagueId, prizePool, tournament.PrizeStructure, tournament.UsePrizeTable, tournament.PrizeDistributionType);
 
         return distribution.Allocations
             .Where(a => a.Amount > 0)
@@ -206,6 +212,7 @@ public class TournamentService : ITournamentService
 
     public async Task<TournamentDto> CreateTournamentAsync(Guid leagueId, CreateTournamentDto dto)
     {
+        ValidateConfiguration(dto);
         var tournament = new Tournament
         {
             Id = Guid.NewGuid(),
@@ -258,8 +265,12 @@ public class TournamentService : ITournamentService
         return MapToDto(tournament);
     }
 
-    public async Task<bool> UpdateTournamentAsync(Guid tournamentId, CreateTournamentDto dto)
+    public Task<bool> UpdateTournamentAsync(Guid tournamentId, CreateTournamentDto dto)
+        => MutationScope.RunAsync(_context, tournamentId, "Configuração do torneio atualizada", () => UpdateTournamentCoreAsync(tournamentId, dto));
+
+    private async Task<bool> UpdateTournamentCoreAsync(Guid tournamentId, CreateTournamentDto dto)
     {
+        ValidateConfiguration(dto);
         var tournament = await _context.Tournaments
             .FirstOrDefaultAsync(t => t.Id == tournamentId);
 
@@ -309,7 +320,10 @@ public class TournamentService : ITournamentService
         return true;
     }
 
-    public async Task<bool> DeleteTournamentAsync(Guid tournamentId)
+    public Task<bool> DeleteTournamentAsync(Guid tournamentId)
+        => MutationScope.RunAsync(_context, tournamentId, "Torneio excluído", () => DeleteTournamentCoreAsync(tournamentId));
+
+    private async Task<bool> DeleteTournamentCoreAsync(Guid tournamentId)
     {
         var tournament = await _context.Tournaments.FindAsync(tournamentId);
         if (tournament == null || tournament.Status != TournamentStatus.Scheduled)
@@ -320,7 +334,10 @@ public class TournamentService : ITournamentService
         return true;
     }
 
-    public async Task<bool> StartTournamentAsync(Guid tournamentId)
+    public Task<bool> StartTournamentAsync(Guid tournamentId)
+        => MutationScope.RunAsync(_context, tournamentId, "Torneio iniciado", () => StartTournamentCoreAsync(tournamentId));
+
+    private async Task<bool> StartTournamentCoreAsync(Guid tournamentId)
     {
         var tournament = await _context.Tournaments
             .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
@@ -342,7 +359,10 @@ public class TournamentService : ITournamentService
         return true;
     }
 
-    public async Task<bool> PauseTournamentAsync(Guid tournamentId)
+    public Task<bool> PauseTournamentAsync(Guid tournamentId)
+        => MutationScope.RunAsync(_context, tournamentId, "Torneio pausado", () => PauseTournamentCoreAsync(tournamentId));
+
+    private async Task<bool> PauseTournamentCoreAsync(Guid tournamentId)
     {
         var tournament = await _context.Tournaments.FindAsync(tournamentId);
         if (tournament == null || tournament.Status != TournamentStatus.InProgress)
@@ -353,7 +373,10 @@ public class TournamentService : ITournamentService
         return true;
     }
 
-    public async Task<bool> ResumeTournamentAsync(Guid tournamentId)
+    public Task<bool> ResumeTournamentAsync(Guid tournamentId)
+        => MutationScope.RunAsync(_context, tournamentId, "Torneio retomado", () => ResumeTournamentCoreAsync(tournamentId));
+
+    private async Task<bool> ResumeTournamentCoreAsync(Guid tournamentId)
     {
         var tournament = await _context.Tournaments
             .Include(t => t.BlindLevels)
@@ -384,144 +407,15 @@ public class TournamentService : ITournamentService
         return true;
     }
 
-    public async Task<(bool Success, string Message)> FinishTournamentAsync(Guid tournamentId, IList<(Guid playerId, int position)> positions)
-    {
-        var tournament = await _context.Tournaments
-            .Include(t => t.Players)
-            .Include(t => t.League)
-            .FirstOrDefaultAsync(t => t.Id == tournamentId);
-
-        if (tournament == null)
-            return (false, "Torneio não encontrado.");
-
-        if (tournament.Status != TournamentStatus.InProgress && tournament.Status != TournamentStatus.Paused)
-            return (false, "Torneio não está em andamento.");
-
-        var executionStrategy = _context.Database.CreateExecutionStrategy();
-        try
-        {
-            return await executionStrategy.ExecuteAsync(async () =>
-            {
-                await using var transaction = await _context.Database.BeginTransactionAsync();
-                try
-                {
-                    var prizePool = CalculatePrizePool(tournament);
-                    var prizeResult = await _prizeTableService.CalculatePrizeDistributionAsync(
-                        tournament.LeagueId, prizePool, tournament.PrizeStructure, tournament.UsePrizeTable);
-                    var prizeAllocations = prizeResult.Allocations.ToDictionary(a => a.Position, a => a.Amount);
-
-                    foreach (var (playerId, position) in positions)
-                    {
-                        var tp = tournament.Players.FirstOrDefault(p => p.PlayerId == playerId);
-                        if (tp != null)
-                        {
-                            tp.Position = position;
-                            if (prizeAllocations.TryGetValue(position, out var prizeAmount))
-                                tp.Prize = Math.Round(prizeAmount, MidpointRounding.AwayFromZero);
-                        }
-                    }
-
-                    if (!prizeResult.UsedPrizeTable)
-                    {
-                        var totalDistributed = tournament.Players.Sum(p => p.Prize) + prizeResult.JackpotContribution;
-                        var roundingDiff = prizePool - totalDistributed;
-                        if (roundingDiff != 0)
-                        {
-                            var firstPlace = tournament.Players.FirstOrDefault(p => p.Position == 1);
-                            if (firstPlace != null) firstPlace.Prize += roundingDiff;
-                        }
-                    }
-
-                    tournament.Status = TournamentStatus.Finished;
-                    tournament.FinishedAt = DateTime.UtcNow;
-                    await _context.SaveChangesAsync();
-
-                    if (prizeResult.JackpotContribution > 0)
-                        await _jackpotService.RecordContributionAsync(tournamentId, prizeResult.JackpotContribution);
-
-                    await transaction.CommitAsync();
-                    return (true, "Torneio finalizado com sucesso!");
-                }
-                catch
-                {
-                    await transaction.RollbackAsync();
-                    throw;
-                }
-            });
-        }
-        catch
-        {
-            return (false, "Erro ao finalizar torneio. Tente novamente.");
-        }
-    }
+    public Task<(bool Success, string Message)> FinishTournamentAsync(Guid tournamentId, IList<(Guid playerId, int position)> positions)
+        => CompleteTournamentAsync(tournamentId, positions, null);
 
     public async Task<(bool Success, string Message)> FinishTournamentWithCustomPrizesAsync(Guid tournamentId, ConfirmedPrizeDistributionDto distribution, string userId)
     {
         if (!await HasDelegatePermissionAsync(tournamentId, userId, DelegatePermissions.Finish))
             return (false, "Sem permissão para finalizar este torneio.");
-
-        var tournament = await _context.Tournaments
-            .Include(t => t.Players)
-            .Include(t => t.League)
-            .FirstOrDefaultAsync(t => t.Id == tournamentId);
-
-        if (tournament == null)
-            return (false, "Torneio não encontrado.");
-
-        if (tournament.Status != TournamentStatus.InProgress && tournament.Status != TournamentStatus.Paused)
-            return (false, "Torneio não está em andamento.");
-
-        _logger.LogInformation(
-            "FinishTournamentWithCustomPrizes start. TournamentId={TournamentId}, UserId={UserId}, InputCount={Count}, JackpotContribution={Jackpot}",
-            tournamentId, userId, distribution.PlayerPrizes.Count, distribution.JackpotContribution);
-
-        var executionStrategy = _context.Database.CreateExecutionStrategy();
-        try
-        {
-            return await executionStrategy.ExecuteAsync(async () =>
-            {
-                await using var transaction = await _context.Database.BeginTransactionAsync();
-                try
-                {
-                    foreach (var playerPrize in distribution.PlayerPrizes)
-                    {
-                        var tp = tournament.Players.FirstOrDefault(p => p.PlayerId == playerPrize.PlayerId);
-                        if (tp == null)
-                        {
-                            _logger.LogWarning(
-                                "FinishTournamentWithCustomPrizes: PlayerId {PlayerId} (Position={Position}, Prize={Prize}) not found among tournament players — skipping.",
-                                playerPrize.PlayerId, playerPrize.Position, playerPrize.Prize);
-                            continue;
-                        }
-
-                        tp.Position = playerPrize.Position;
-                        tp.Prize = playerPrize.Prize;
-                    }
-
-                    AssignMissingPositionsSafetyNet(tournament, tournamentId);
-
-                    tournament.Status = TournamentStatus.Finished;
-                    tournament.FinishedAt = DateTime.UtcNow;
-                    await _context.SaveChangesAsync();
-
-                    if (distribution.JackpotContribution > 0)
-                        await _jackpotService.RecordContributionAsync(tournamentId, distribution.JackpotContribution);
-
-                    await transaction.CommitAsync();
-                    return (true, "Torneio finalizado com sucesso!");
-                }
-                catch
-                {
-                    await transaction.RollbackAsync();
-                    throw;
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "FinishTournamentWithCustomPrizes failed for TournamentId={TournamentId}", tournamentId);
-            return (false, "Erro ao finalizar torneio. Tente novamente.");
-        }
+        return await CompleteTournamentAsync(tournamentId,
+            distribution.PlayerPrizes.Select(p => (p.PlayerId, p.Position)).ToList(), distribution);
     }
 
     /// <summary>
@@ -541,18 +435,33 @@ public class TournamentService : ITournamentService
         }
     }
 
-    public async Task<bool> CancelTournamentAsync(Guid tournamentId)
+    public Task<bool> CancelTournamentAsync(Guid tournamentId)
+        => MutationScope.RunAsync(_context, tournamentId, "Torneio cancelado", () => CancelTournamentCoreAsync(tournamentId));
+
+    private async Task<bool> CancelTournamentCoreAsync(Guid tournamentId)
     {
         var tournament = await _context.Tournaments.FindAsync(tournamentId);
         if (tournament == null) return false;
 
+        EnsureTournamentOpen(tournament);
+        if (tournament.Status != TournamentStatus.Scheduled)
+            throw new BusinessRuleException("Só torneios agendados podem ser cancelados.");
         tournament.Status = TournamentStatus.Cancelled;
         await _context.SaveChangesAsync();
         return true;
     }
 
-    public async Task<bool> AddPlayerToTournamentAsync(Guid tournamentId, Guid playerId)
+    public Task<bool> AddPlayerToTournamentAsync(Guid tournamentId, Guid playerId)
+        => MutationScope.RunAsync(_context, tournamentId, "Jogador inscrito", () => AddPlayerToTournamentCoreAsync(tournamentId, playerId));
+
+    private async Task<bool> AddPlayerToTournamentCoreAsync(Guid tournamentId, Guid playerId)
     {
+        var tournament = await _context.Tournaments.FindAsync(tournamentId);
+        if (tournament == null) return false;
+        EnsureTournamentOpen(tournament);
+        if (!tournament.IsCheckInAllowed()) throw new BusinessRuleException("As inscrições estão encerradas.");
+        if (!await _context.Players.AnyAsync(p => p.Id == playerId && p.LeagueId == tournament.LeagueId && p.IsActive))
+            throw new BusinessRuleException("O jogador deve pertencer a esta liga.");
         var exists = await _context.TournamentPlayers
             .AnyAsync(tp => tp.TournamentId == tournamentId && tp.PlayerId == playerId);
         if (exists) return false;
@@ -570,23 +479,38 @@ public class TournamentService : ITournamentService
         return true;
     }
 
-    public async Task<bool> RemovePlayerFromTournamentAsync(Guid tournamentId, Guid playerId)
+    public Task<bool> RemovePlayerFromTournamentAsync(Guid tournamentId, Guid playerId)
+        => MutationScope.RunAsync(_context, tournamentId, "Inscrição removida", () => RemovePlayerFromTournamentCoreAsync(tournamentId, playerId));
+
+    private async Task<bool> RemovePlayerFromTournamentCoreAsync(Guid tournamentId, Guid playerId)
     {
         var tp = await _context.TournamentPlayers
+            .Include(tp => tp.Tournament)
             .FirstOrDefaultAsync(tp => tp.TournamentId == tournamentId && tp.PlayerId == playerId);
         if (tp == null) return false;
+        EnsureTournamentOpen(tp.Tournament);
 
+        if (tp.IsCheckedIn || tp.RebuyCount > 0 || tp.HasAddon)
+            throw new BusinessRuleException("Desfaça o check-in antes de remover a inscrição.");
         _context.TournamentPlayers.Remove(tp);
         await _context.SaveChangesAsync();
         return true;
     }
 
-    public async Task<bool> CheckInPlayerAsync(Guid tournamentId, Guid playerId)
+    public Task<bool> CheckInPlayerAsync(Guid tournamentId, Guid playerId)
+        => MutationScope.RunAsync(_context, tournamentId, "Check-in registrado", () => CheckInPlayerCoreAsync(tournamentId, playerId));
+
+    private async Task<bool> CheckInPlayerCoreAsync(Guid tournamentId, Guid playerId)
     {
         var tp = await _context.TournamentPlayers
+            .Include(tp => tp.Tournament)
             .FirstOrDefaultAsync(tp => tp.TournamentId == tournamentId && tp.PlayerId == playerId);
         if (tp == null) return false;
+        EnsureTournamentOpen(tp.Tournament);
 
+        if (!tp.Tournament.IsCheckInAllowed())
+            throw new BusinessRuleException("A janela de check-in deste torneio está encerrada.");
+        if (tp.IsCheckedIn) return true;
         tp.IsCheckedIn = true;
         tp.CheckedInAt = DateTime.UtcNow;
         await MarkPlayerActivityAsync(playerId);
@@ -594,12 +518,19 @@ public class TournamentService : ITournamentService
         return true;
     }
 
-    public async Task<bool> CheckOutPlayerAsync(Guid tournamentId, Guid playerId)
+    public Task<bool> CheckOutPlayerAsync(Guid tournamentId, Guid playerId)
+        => MutationScope.RunAsync(_context, tournamentId, "Check-in desfeito", () => CheckOutPlayerCoreAsync(tournamentId, playerId));
+
+    private async Task<bool> CheckOutPlayerCoreAsync(Guid tournamentId, Guid playerId)
     {
         var tp = await _context.TournamentPlayers
+            .Include(tp => tp.Tournament)
             .FirstOrDefaultAsync(tp => tp.TournamentId == tournamentId && tp.PlayerId == playerId);
         if (tp == null) return false;
+        EnsureTournamentOpen(tp.Tournament);
 
+        if (tp.Tournament.Status != TournamentStatus.Scheduled || tp.RebuyCount > 0 || tp.HasAddon || tp.EliminatedAt.HasValue)
+            throw new BusinessRuleException("Só é possível desfazer check-in antes de iniciar o torneio e sem movimentações.");
         tp.IsCheckedIn = false;
         tp.CheckedInAt = null;
         await _context.SaveChangesAsync();
@@ -623,34 +554,53 @@ public class TournamentService : ITournamentService
         }
     }
 
-    public async Task<bool> AddRebuyAsync(Guid tournamentId, Guid playerId)
+    public Task<bool> AddRebuyAsync(Guid tournamentId, Guid playerId)
+        => MutationScope.RunAsync(_context, tournamentId, "Rebuy adicionado", () => AddRebuyCoreAsync(tournamentId, playerId));
+
+    private async Task<bool> AddRebuyCoreAsync(Guid tournamentId, Guid playerId)
     {
         var tp = await _context.TournamentPlayers
+            .Include(tp => tp.Tournament)
             .FirstOrDefaultAsync(tp => tp.TournamentId == tournamentId && tp.PlayerId == playerId);
         if (tp == null) return false;
+        EnsureTournamentOpen(tp.Tournament);
 
+        if (!tp.IsCheckedIn || tp.EliminatedAt.HasValue || !await IsRebuyAllowedAsync(tournamentId))
+            throw new BusinessRuleException("Rebuy indisponível: confira o check-in e o limite de nível ou tempo.");
         tp.RebuyCount++;
         await _context.SaveChangesAsync();
         return true;
     }
 
-    public async Task<bool> RemoveRebuyAsync(Guid tournamentId, Guid playerId)
+    public Task<bool> RemoveRebuyAsync(Guid tournamentId, Guid playerId)
+        => MutationScope.RunAsync(_context, tournamentId, "Rebuy removido", () => RemoveRebuyCoreAsync(tournamentId, playerId));
+
+    private async Task<bool> RemoveRebuyCoreAsync(Guid tournamentId, Guid playerId)
     {
         var tp = await _context.TournamentPlayers
+            .Include(tp => tp.Tournament)
             .FirstOrDefaultAsync(tp => tp.TournamentId == tournamentId && tp.PlayerId == playerId);
         if (tp == null || tp.RebuyCount <= 0) return false;
+        EnsureTournamentOpen(tp.Tournament);
 
         tp.RebuyCount--;
         await _context.SaveChangesAsync();
         return true;
     }
 
-    public async Task<bool> SetAddonAsync(Guid tournamentId, Guid playerId, bool hasAddon)
+    public Task<bool> SetAddonAsync(Guid tournamentId, Guid playerId, bool hasAddon)
+        => MutationScope.RunAsync(_context, tournamentId, "Add-on atualizado", () => SetAddonCoreAsync(tournamentId, playerId, hasAddon));
+
+    private async Task<bool> SetAddonCoreAsync(Guid tournamentId, Guid playerId, bool hasAddon)
     {
         var tp = await _context.TournamentPlayers
+            .Include(tp => tp.Tournament)
             .FirstOrDefaultAsync(tp => tp.TournamentId == tournamentId && tp.PlayerId == playerId);
         if (tp == null) return false;
+        EnsureTournamentOpen(tp.Tournament);
 
+        if (!tp.IsCheckedIn || (hasAddon && (tp.Tournament.AddonValue is null or <= 0 || tp.EliminatedAt.HasValue)))
+            throw new BusinessRuleException("Add-on indisponível para este jogador.");
         tp.HasAddon = hasAddon;
         await _context.SaveChangesAsync();
         return true;
@@ -665,18 +615,31 @@ public class TournamentService : ITournamentService
             ? (int)(DateTime.UtcNow - tournament.StartedAt.Value).TotalMinutes
             : 0;
 
-        return tournament.IsRebuyAllowed(tournament.CurrentLevel, minutesElapsed);
+        return tournament.Status is TournamentStatus.InProgress or TournamentStatus.Paused
+            && tournament.IsRebuyAllowed(tournament.CurrentLevel, minutesElapsed);
     }
 
-    public async Task<(bool Success, string Message)> EliminatePlayerAsync(Guid tournamentId, Guid playerId, Guid? eliminatedByPlayerId, string userId, int? position = null)
+    public Task<(bool Success, string Message)> EliminatePlayerAsync(Guid tournamentId, Guid playerId, Guid? eliminatedByPlayerId, string userId, int? position = null)
+        => MutationScope.RunAsync(_context, tournamentId, "Jogador eliminado", () => EliminatePlayerCoreAsync(tournamentId, playerId, eliminatedByPlayerId, userId, position));
+
+    private async Task<(bool Success, string Message)> EliminatePlayerCoreAsync(Guid tournamentId, Guid playerId, Guid? eliminatedByPlayerId, string userId, int? position = null)
     {
         if (!await HasDelegatePermissionAsync(tournamentId, userId, DelegatePermissions.Eliminate))
             return (false, "Sem permissão para eliminar jogadores neste torneio.");
 
         var tp = await _context.TournamentPlayers
+            .Include(tp => tp.Tournament)
             .FirstOrDefaultAsync(tp => tp.TournamentId == tournamentId && tp.PlayerId == playerId);
         if (tp == null) return (false, "Jogador não encontrado no torneio.");
 
+        EnsureTournamentOpen(tp.Tournament);
+        if (tp.Tournament.Status == TournamentStatus.Scheduled || !tp.IsCheckedIn || tp.EliminatedAt.HasValue)
+            return (false, "Jogador não está em jogo.");
+        if (eliminatedByPlayerId == playerId || (eliminatedByPlayerId.HasValue && !await _context.TournamentPlayers.AnyAsync(p => p.TournamentId == tournamentId && p.PlayerId == eliminatedByPlayerId && p.IsCheckedIn && p.EliminatedAt == null)))
+            return (false, "Quem eliminou deve ser outro jogador ainda na mesa.");
+        var alive = await _context.TournamentPlayers.CountAsync(p => p.TournamentId == tournamentId && p.IsCheckedIn && p.EliminatedAt == null);
+        if (position.HasValue && position != alive) return (false, "A posição da eliminação deve seguir a quantidade de jogadores na mesa.");
+        position = alive;
         tp.EliminatedByPlayerId = eliminatedByPlayerId;
         tp.EliminatedAt = DateTime.UtcNow;
         tp.Position = position;
@@ -684,12 +647,17 @@ public class TournamentService : ITournamentService
         return (true, "Jogador eliminado com sucesso.");
     }
 
-    public async Task<bool> RestoreEliminatedPlayerAsync(Guid tournamentId, Guid playerId)
+    public Task<bool> RestoreEliminatedPlayerAsync(Guid tournamentId, Guid playerId)
+        => MutationScope.RunAsync(_context, tournamentId, "Eliminação desfeita", () => RestoreEliminatedPlayerCoreAsync(tournamentId, playerId));
+
+    private async Task<bool> RestoreEliminatedPlayerCoreAsync(Guid tournamentId, Guid playerId)
     {
         var tp = await _context.TournamentPlayers
+            .Include(tp => tp.Tournament)
             .FirstOrDefaultAsync(tp => tp.TournamentId == tournamentId && tp.PlayerId == playerId);
 
         if (tp == null || tp.EliminatedAt == null) return false;
+        EnsureTournamentOpen(tp.Tournament);
 
         var restoredPosition = tp.Position;
 
@@ -768,7 +736,10 @@ public class TournamentService : ITournamentService
         );
     }
 
-    public async Task<bool> AdvanceToNextLevelAsync(Guid tournamentId)
+    public Task<bool> AdvanceToNextLevelAsync(Guid tournamentId)
+        => MutationScope.RunAsync(_context, tournamentId, "Nível avançado", () => AdvanceToNextLevelCoreAsync(tournamentId));
+
+    private async Task<bool> AdvanceToNextLevelCoreAsync(Guid tournamentId)
     {
         var tournament = await _context.Tournaments
             .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
@@ -776,6 +747,7 @@ public class TournamentService : ITournamentService
 
         if (tournament == null) return false;
 
+        EnsureTournamentOpen(tournament);
         var nextLevel = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == tournament.CurrentLevel + 1);
         if (nextLevel == null) return false;
 
@@ -787,7 +759,10 @@ public class TournamentService : ITournamentService
         return true;
     }
 
-    public async Task<bool> GoToPreviousLevelAsync(Guid tournamentId)
+    public Task<bool> GoToPreviousLevelAsync(Guid tournamentId)
+        => MutationScope.RunAsync(_context, tournamentId, "Nível anterior", () => GoToPreviousLevelCoreAsync(tournamentId));
+
+    private async Task<bool> GoToPreviousLevelCoreAsync(Guid tournamentId)
     {
         var tournament = await _context.Tournaments
             .Include(t => t.BlindLevels.OrderBy(bl => bl.Order))
@@ -795,6 +770,7 @@ public class TournamentService : ITournamentService
 
         if (tournament == null || tournament.CurrentLevel <= 1) return false;
 
+        EnsureTournamentOpen(tournament);
         var previousLevel = tournament.BlindLevels.FirstOrDefault(bl => bl.Order == tournament.CurrentLevel - 1);
         if (previousLevel == null) return false;
 
@@ -992,13 +968,18 @@ public class TournamentService : ITournamentService
             .ToListAsync();
     }
 
-    public async Task<int> BulkCheckInAsync(Guid tournamentId, IList<Guid> playerIds)
+    public Task<int> BulkCheckInAsync(Guid tournamentId, IList<Guid> playerIds)
+        => MutationScope.RunAsync(_context, tournamentId, "Check-in em lote", () => BulkCheckInCoreAsync(tournamentId, playerIds));
+
+    private async Task<int> BulkCheckInCoreAsync(Guid tournamentId, IList<Guid> playerIds)
     {
         var tournament = await _context.Tournaments
             .Include(t => t.Players)
             .FirstOrDefaultAsync(t => t.Id == tournamentId);
 
         if (tournament == null) return 0;
+        EnsureTournamentOpen(tournament);
+        if (!tournament.IsCheckInAllowed()) throw new BusinessRuleException("A janela de check-in deste torneio está encerrada.");
 
         var count = 0;
         foreach (var playerId in playerIds)
@@ -1047,8 +1028,8 @@ public class TournamentService : ITournamentService
     private static decimal CalculatePrizePool(Tournament tournament)
     {
         var buyIns = tournament.Players.Count(p => p.IsCheckedIn) * tournament.BuyIn;
-        var rebuys = tournament.Players.Sum(p => p.RebuyCount) * (tournament.RebuyValue ?? 0);
-        var addons = tournament.Players.Count(p => p.HasAddon) * (tournament.AddonValue ?? 0);
+        var rebuys = tournament.Players.Where(p => p.IsCheckedIn).Sum(p => p.RebuyCount) * (tournament.RebuyValue ?? 0);
+        var addons = tournament.Players.Count(p => p.IsCheckedIn && p.HasAddon) * (tournament.AddonValue ?? 0);
         return buyIns + rebuys + addons;
     }
 
@@ -1160,7 +1141,10 @@ public class TournamentService : ITournamentService
         return tournament == null ? null : await MapToDetailDtoAsync(tournament);
     }
 
-    public async Task<(bool Success, string Message)> SelfRegisterPlayerAsync(Guid tournamentId, string userId)
+    public Task<(bool Success, string Message)> SelfRegisterPlayerAsync(Guid tournamentId, string userId)
+        => MutationScope.RunAsync(_context, tournamentId, "Inscrição do jogador", () => SelfRegisterPlayerCoreAsync(tournamentId, userId));
+
+    private async Task<(bool Success, string Message)> SelfRegisterPlayerCoreAsync(Guid tournamentId, string userId)
     {
         var tournament = await _context.Tournaments
             .Include(t => t.League)
@@ -1258,7 +1242,10 @@ public class TournamentService : ITournamentService
                "Pague e registre o pagamento em Meus Débitos para liberar a inscrição.";
     }
 
-    public async Task<bool> SelfUnregisterPlayerAsync(Guid tournamentId, string userId)
+    public Task<bool> SelfUnregisterPlayerAsync(Guid tournamentId, string userId)
+        => MutationScope.RunAsync(_context, tournamentId, "Inscrição cancelada", () => SelfUnregisterPlayerCoreAsync(tournamentId, userId));
+
+    private async Task<bool> SelfUnregisterPlayerCoreAsync(Guid tournamentId, string userId)
     {
         var tournament = await _context.Tournaments
             .Include(t => t.League)

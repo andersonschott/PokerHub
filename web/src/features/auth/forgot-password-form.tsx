@@ -2,7 +2,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Link } from 'react-router-dom';
-import { ApiError } from '@/lib/api/client';
 import { useForgotPassword } from '@/lib/api/hooks/use-auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,14 +43,14 @@ export function ForgotPasswordForm() {
           id="email"
           type="email"
           autoComplete="username"
-          aria-invalid={!!errors.email}
+          aria-invalid={!!errors.email} aria-describedby={errors.email ? "email-error" : undefined}
           {...register('email')}
         />
-        {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
+        {errors.email && <p id="email-error" role="alert" className="text-sm text-destructive">{errors.email.message}</p>}
       </div>
 
-      {mutation.error instanceof ApiError && (
-        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+      {mutation.error instanceof Error && (
+        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
           Não foi possível processar agora. Tente novamente em instantes.
         </p>
       )}

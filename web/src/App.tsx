@@ -1,10 +1,9 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/lib/auth-context';
 import { ThemeProvider } from '@/lib/theme-context';
 import { Toaster } from '@/components/ui/sonner';
-import { Splash } from '@/components/splash';
 import { InstallPrompt } from '@/components/install-prompt';
 import { ReloadPrompt } from '@/components/ReloadPrompt';
 import LoginRoute from '@/routes/login';
@@ -75,13 +74,11 @@ const qc = new QueryClient({
 });
 
 export default function App() {
-  // Splash uma vez por load (padrão do kit), por cima de tudo.
-  const [splash, setSplash] = useState(true);
 
   return (
     <QueryClientProvider client={qc}>
       <ThemeProvider>
-        <AuthProvider>
+        <AuthProvider onSessionChange={() => { void qc.cancelQueries(); qc.clear(); }}>
           <ActiveLeagueProvider>
             <BrowserRouter>
               <Suspense fallback={<RouteFallback />}>
@@ -135,7 +132,6 @@ export default function App() {
             <Toaster position="top-center" richColors />
             <InstallPrompt />
             <ReloadPrompt />
-            {splash && <Splash onDone={() => setSplash(false)} />}
           </ActiveLeagueProvider>
         </AuthProvider>
       </ThemeProvider>

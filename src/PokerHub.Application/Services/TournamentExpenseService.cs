@@ -1,3 +1,5 @@
+using PokerHub.Application.Exceptions;
+using PokerHub.Application.Helpers;
 using Microsoft.EntityFrameworkCore;
 using PokerHub.Application.DTOs.Expense;
 using PokerHub.Application.DTOs.Player;
@@ -41,7 +43,10 @@ public class TournamentExpenseService : ITournamentExpenseService
         return expense != null ? MapToDto(expense) : null;
     }
 
-    public async Task<TournamentExpenseDto> CreateExpenseAsync(Guid tournamentId, CreateExpenseDto dto)
+    public Task<TournamentExpenseDto> CreateExpenseAsync(Guid tournamentId, CreateExpenseDto dto)
+        => MutationScope.RunAsync(_context, tournamentId, "Despesa criada", () => CreateExpenseCoreAsync(tournamentId, dto));
+
+    private async Task<TournamentExpenseDto> CreateExpenseCoreAsync(Guid tournamentId, CreateExpenseDto dto)
     {
         // Validate tournament exists
         var tournament = await _context.Tournaments
@@ -51,6 +56,8 @@ public class TournamentExpenseService : ITournamentExpenseService
         if (tournament == null)
             throw new InvalidOperationException("Torneio nao encontrado");
 
+        await EnsureExpensesEditableAsync(tournamentId);
+        _ = BuildShares(Guid.Empty, dto);
         // Validate payer is from the league
         var payer = await _context.Players
             .FirstOrDefaultAsync(p => p.Id == dto.PaidByPlayerId && p.LeagueId == tournament.LeagueId && p.IsActive);
@@ -82,49 +89,7 @@ public class TournamentExpenseService : ITournamentExpenseService
             CreatedAt = DateTime.UtcNow
         };
 
-        // Calculate shares based on split type
-        if (dto.SplitType == ExpenseSplitType.Equal)
-        {
-            var shareAmount = Math.Round(dto.TotalAmount / dto.Shares.Count, 2);
-            // Adjust for rounding errors
-            var remainder = dto.TotalAmount - (shareAmount * dto.Shares.Count);
-
-            var isFirst = true;
-            foreach (var shareInput in dto.Shares)
-            {
-                var amount = shareAmount;
-                if (isFirst && remainder != 0)
-                {
-                    amount += remainder;
-                    isFirst = false;
-                }
-
-                expense.Shares.Add(new TournamentExpenseShare
-                {
-                    Id = Guid.NewGuid(),
-                    ExpenseId = expense.Id,
-                    PlayerId = shareInput.PlayerId,
-                    Amount = amount
-                });
-            }
-        }
-        else // Custom
-        {
-            var totalShares = dto.Shares.Sum(s => s.Amount);
-            if (Math.Abs(totalShares - dto.TotalAmount) > 0.01m)
-                throw new InvalidOperationException($"Soma das divisoes (R$ {totalShares:N2}) deve ser igual ao valor total (R$ {dto.TotalAmount:N2})");
-
-            foreach (var shareInput in dto.Shares)
-            {
-                expense.Shares.Add(new TournamentExpenseShare
-                {
-                    Id = Guid.NewGuid(),
-                    ExpenseId = expense.Id,
-                    PlayerId = shareInput.PlayerId,
-                    Amount = shareInput.Amount
-                });
-            }
-        }
+        foreach (var share in BuildShares(expense.Id, dto)) expense.Shares.Add(share);
 
         _context.TournamentExpenses.Add(expense);
         await _context.SaveChangesAsync();
@@ -134,6 +99,13 @@ public class TournamentExpenseService : ITournamentExpenseService
     }
 
     public async Task<bool> UpdateExpenseAsync(Guid expenseId, CreateExpenseDto dto)
+    {
+        var tournamentId = await _context.TournamentExpenses.AsNoTracking().Where(e => e.Id == expenseId).Select(e => (Guid?)e.TournamentId).FirstOrDefaultAsync();
+        if (tournamentId == null) return false;
+        return await MutationScope.RunAsync(_context, tournamentId.Value, "Despesa atualizada", () => UpdateExpenseCoreAsync(expenseId, dto));
+    }
+
+    private async Task<bool> UpdateExpenseCoreAsync(Guid expenseId, CreateExpenseDto dto)
     {
         var expense = await _context.TournamentExpenses
             .Include(e => e.Shares)
@@ -147,6 +119,8 @@ public class TournamentExpenseService : ITournamentExpenseService
             .FirstOrDefaultAsync(t => t.Id == expense.TournamentId);
 
         if (tournament == null) return false;
+        await EnsureExpensesEditableAsync(expense.TournamentId);
+        _ = BuildShares(Guid.Empty, dto);
 
         // Validate payer
         var payer = await _context.Players
@@ -165,63 +139,12 @@ public class TournamentExpenseService : ITournamentExpenseService
         if (sharePlayerIds.Any(id => !checkedInPlayerIds.Contains(id)))
             throw new InvalidOperationException("Todos os jogadores da divisao devem estar com check-in no torneio");
 
-        // Update expense basic fields
+        var newShares = BuildShares(expenseId, dto);
         expense.PaidByPlayerId = dto.PaidByPlayerId;
         expense.Description = dto.Description;
         expense.TotalAmount = dto.TotalAmount;
         expense.SplitType = dto.SplitType;
-
-        // Delete old shares directly from database
-        await _context.TournamentExpenseShares
-            .Where(s => s.ExpenseId == expenseId)
-            .ExecuteDeleteAsync();
-
-        // Create new shares list
-        var newShares = new List<TournamentExpenseShare>();
-
-        if (dto.SplitType == ExpenseSplitType.Equal)
-        {
-            var shareAmount = Math.Round(dto.TotalAmount / dto.Shares.Count, 2);
-            var remainder = dto.TotalAmount - (shareAmount * dto.Shares.Count);
-
-            var isFirst = true;
-            foreach (var shareInput in dto.Shares)
-            {
-                var amount = shareAmount;
-                if (isFirst && remainder != 0)
-                {
-                    amount += remainder;
-                    isFirst = false;
-                }
-
-                newShares.Add(new TournamentExpenseShare
-                {
-                    Id = Guid.NewGuid(),
-                    ExpenseId = expenseId,
-                    PlayerId = shareInput.PlayerId,
-                    Amount = amount
-                });
-            }
-        }
-        else
-        {
-            var totalShares = dto.Shares.Sum(s => s.Amount);
-            if (Math.Abs(totalShares - dto.TotalAmount) > 0.01m)
-                throw new InvalidOperationException($"Soma das divisoes deve ser igual ao valor total");
-
-            foreach (var shareInput in dto.Shares)
-            {
-                newShares.Add(new TournamentExpenseShare
-                {
-                    Id = Guid.NewGuid(),
-                    ExpenseId = expenseId,
-                    PlayerId = shareInput.PlayerId,
-                    Amount = shareInput.Amount
-                });
-            }
-        }
-
-        // Add new shares
+        _context.TournamentExpenseShares.RemoveRange(expense.Shares);
         _context.TournamentExpenseShares.AddRange(newShares);
 
         await _context.SaveChangesAsync();
@@ -230,9 +153,17 @@ public class TournamentExpenseService : ITournamentExpenseService
 
     public async Task<bool> DeleteExpenseAsync(Guid expenseId)
     {
+        var tournamentId = await _context.TournamentExpenses.AsNoTracking().Where(e => e.Id == expenseId).Select(e => (Guid?)e.TournamentId).FirstOrDefaultAsync();
+        if (tournamentId == null) return false;
+        return await MutationScope.RunAsync(_context, tournamentId.Value, "Despesa removida", () => DeleteExpenseCoreAsync(expenseId));
+    }
+
+    private async Task<bool> DeleteExpenseCoreAsync(Guid expenseId)
+    {
         var expense = await _context.TournamentExpenses.FindAsync(expenseId);
         if (expense == null) return false;
 
+        await EnsureExpensesEditableAsync(expense.TournamentId);
         _context.TournamentExpenses.Remove(expense);
         await _context.SaveChangesAsync();
         return true;
@@ -308,6 +239,30 @@ public class TournamentExpenseService : ITournamentExpenseService
         return players.Select(p => MapToPlayerDto(p)).ToList();
     }
 
+    private async Task EnsureExpensesEditableAsync(Guid tournamentId)
+    {
+        if (await _context.Payments.AnyAsync(p => p.TournamentId == tournamentId))
+            throw new BusinessRuleException("O acerto já foi gerado. As despesas estão protegidas para manter os pagamentos corretos.");
+    }
+
+    private static List<TournamentExpenseShare> BuildShares(Guid expenseId, CreateExpenseDto dto)
+    {
+        if (string.IsNullOrWhiteSpace(dto.Description) || dto.TotalAmount <= 0 || FinancialMath.RoundCents(dto.TotalAmount) != dto.TotalAmount
+            || !Enum.IsDefined(dto.SplitType) || dto.Shares.Count == 0
+            || dto.Shares.Select(s => s.PlayerId).Distinct().Count() != dto.Shares.Count)
+            throw new BusinessRuleException("Informe uma descrição, valor positivo com até duas casas decimais e participantes sem repetições.");
+        if (dto.SplitType == ExpenseSplitType.Custom && (dto.Shares.Any(s => s.Amount < 0 || FinancialMath.RoundCents(s.Amount) != s.Amount) || dto.Shares.Sum(s => s.Amount) != dto.TotalAmount))
+            throw new BusinessRuleException("As cotas devem ser não negativas e somar exatamente o valor da despesa.");
+        var cents = dto.TotalAmount * 100;
+        var baseCents = Math.Floor(cents / dto.Shares.Count);
+        var remainder = cents - baseCents * dto.Shares.Count;
+        return dto.Shares.Select((share, index) => new TournamentExpenseShare
+        {
+            Id = Guid.NewGuid(), ExpenseId = expenseId, PlayerId = share.PlayerId,
+            Amount = dto.SplitType == ExpenseSplitType.Equal ? (baseCents + (index < remainder ? 1 : 0)) / 100 : share.Amount
+        }).ToList();
+    }
+
     private static TournamentExpenseDto MapToDto(TournamentExpense e) => new(
         e.Id,
         e.TournamentId,
@@ -323,7 +278,7 @@ public class TournamentExpenseService : ITournamentExpenseService
     private static PlayerDto MapToPlayerDto(Domain.Entities.Player player)
     {
         var finishedParticipations = player.Participations?
-            .Where(tp => tp.Tournament?.Status == TournamentStatus.Finished)
+            .Where(tp => tp.IsCheckedIn && tp.Tournament?.Status == TournamentStatus.Finished)
             .ToList() ?? new List<TournamentPlayer>();
 
         var totalBuyIns = finishedParticipations.Sum(tp => tp.TotalInvestment(tp.Tournament!));

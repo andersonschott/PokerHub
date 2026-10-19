@@ -20,17 +20,18 @@ interface DbStepperProps {
   label: string;
   sub: string;
   value: number;
+  busy: boolean;
   onMinus: () => void;
   onPlus: () => void;
 }
 
-function DbStepper({ icon, label, sub, value, onMinus, onPlus }: DbStepperProps) {
+function DbStepper({ icon, label, sub, value, busy, onMinus, onPlus }: DbStepperProps) {
   const stepBtn = (Icon: React.ElementType, onClick: () => void, disabled: boolean) => (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      aria-label={Icon === Minus ? 'Diminuir' : 'Aumentar'}
+      aria-label={`${Icon === Minus ? 'Diminuir' : 'Aumentar'} ${label}`}
       className={cn(
         'w-10 h-10 rounded-[var(--radius-sm)] border border-border bg-secondary text-foreground',
         'inline-flex items-center justify-center shrink-0 cursor-pointer',
@@ -49,9 +50,9 @@ function DbStepper({ icon, label, sub, value, onMinus, onPlus }: DbStepperProps)
         <div className="font-sans font-semibold text-[14px]">{label}</div>
         <div className="text-[11.5px] text-muted-foreground">{sub}</div>
       </div>
-      {stepBtn(Minus, onMinus, value <= 0)}
+      {stepBtn(Minus, onMinus, busy || value <= 0)}
       <span className="w-[26px] text-center font-mono font-bold text-[17px]">{value}</span>
-      {stepBtn(Plus, onPlus, false)}
+      {stepBtn(Plus, onPlus, busy)}
     </div>
   );
 }
@@ -62,7 +63,9 @@ function DbStepper({ icon, label, sub, value, onMinus, onPlus }: DbStepperProps)
 
 interface ActionSheetProps {
   player: MockTablePlayer;
-  buyIn: number;
+  rebuyValue: number;
+  addonValue: number;
+  busy: boolean;
   onClose: () => void;
   onAdjust: (id: string, key: 'rebuys' | 'addons', delta: number) => void;
   onEliminate: () => void;
@@ -71,14 +74,16 @@ interface ActionSheetProps {
 
 export function ActionSheet({
   player,
-  buyIn,
+  rebuyValue,
+  addonValue,
+  busy,
   onClose,
   onAdjust,
   onEliminate,
   onCheckIn,
 }: ActionSheetProps) {
-  const rebuysSub = `R$ ${formatBRL(buyIn)} cada · toque − para desfazer`;
-  const addonsSub = `R$ ${formatBRL(buyIn)} cada · toque − para desfazer`;
+  const rebuysSub = `R$ ${formatBRL(rebuyValue)} cada · toque − para desfazer`;
+  const addonsSub = `R$ ${formatBRL(addonValue)} cada · toque − para desfazer`;
   const rebuysCount = player.rebuys;
   const addonsCount = player.addons;
 
@@ -99,6 +104,7 @@ export function ActionSheet({
           label="Rebuys"
           sub={rebuysSub}
           value={rebuysCount}
+          busy={busy}
           onMinus={() => onAdjust(player.id, 'rebuys', -1)}
           onPlus={() => onAdjust(player.id, 'rebuys', +1)}
         />
@@ -107,13 +113,14 @@ export function ActionSheet({
           label="Add-ons"
           sub={addonsSub}
           value={addonsCount}
+          busy={busy}
           onMinus={() => onAdjust(player.id, 'addons', -1)}
           onPlus={() => onAdjust(player.id, 'addons', +1)}
         />
-        <Button variant="outline" icon={UserCheck} block onClick={onCheckIn}>
+        <Button variant="outline" icon={UserCheck} block disabled={busy} onClick={onCheckIn}>
           Check-in
         </Button>
-        <Button variant="destructive" icon={Skull} block onClick={onEliminate}>
+        <Button variant="destructive" icon={Skull} block disabled={busy} onClick={onEliminate}>
           Eliminar
         </Button>
       </div>

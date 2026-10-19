@@ -54,7 +54,7 @@ async function revokeRefreshTokenBestEffort(refreshToken: string): Promise<void>
   }
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children, onSessionChange }: { children: ReactNode; onSessionChange?: () => void }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(STORAGE_TOKEN));
   const [refreshToken, setRefreshToken] = useState<string | null>(
     () => localStorage.getItem(STORAGE_REFRESH),
@@ -72,6 +72,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const setSession = (accessToken: string, refresh: string, u: AuthUser) => {
+    if (user?.userId !== u.userId) {
+      onSessionChange?.();
+      localStorage.removeItem('ph-active-league');
+    }
     localStorage.setItem(STORAGE_TOKEN, accessToken);
     localStorage.setItem(STORAGE_REFRESH, refresh);
     localStorage.setItem(STORAGE_USER, JSON.stringify(u));
@@ -88,6 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // fire-and-forget; não aguarda — a UI limpa imediatamente.
       void revokeRefreshTokenBestEffort(currentRefresh);
     }
+    onSessionChange?.();
+    localStorage.removeItem('ph-active-league');
     localStorage.removeItem(STORAGE_TOKEN);
     localStorage.removeItem(STORAGE_REFRESH);
     localStorage.removeItem(STORAGE_USER);

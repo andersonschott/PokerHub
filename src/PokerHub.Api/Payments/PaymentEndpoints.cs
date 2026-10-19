@@ -173,7 +173,7 @@ public static class PaymentEndpoints
 
                 if (!delegateOkTournaments.TryGetValue(payment.TournamentId, out var allowed))
                 {
-                    allowed = await tournaments.IsUserOrganizerOrDelegateAsync(payment.TournamentId, userId);
+                    allowed = await tournaments.HasDelegatePermissionAsync(payment.TournamentId, userId, DelegatePermissions.Finish);
                     delegateOkTournaments[payment.TournamentId] = allowed;
                 }
 
@@ -247,7 +247,7 @@ public static class PaymentEndpoints
 
             // O service (HasPaymentManagementPermissionAsync) já aceita organizador OU delegado —
             // o guard do endpoint segue o mesmo contrato para não bloquear delegado com 403 antes.
-            if (!await tournaments.IsUserOrganizerOrDelegateAsync(payment.TournamentId, userId))
+            if (!await tournaments.HasDelegatePermissionAsync(payment.TournamentId, userId, DelegatePermissions.Finish))
                 return Results.Forbid();
 
             var (success, message) = await payments.AdminMarkAsPaidAsync(paymentId, userId);
@@ -273,7 +273,7 @@ public static class PaymentEndpoints
             var tournament = await tournaments.GetTournamentByIdAsync(payment.TournamentId);
             if (tournament is null) return Results.NotFound();
 
-            if (!await tournaments.IsUserOrganizerOrDelegateAsync(payment.TournamentId, userId))
+            if (!await tournaments.HasDelegatePermissionAsync(payment.TournamentId, userId, DelegatePermissions.Finish))
                 return Results.Forbid();
 
             var (success, message) = await payments.AdminConfirmPaymentAsync(paymentId, userId);

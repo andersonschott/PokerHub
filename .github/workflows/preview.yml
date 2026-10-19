@@ -1,0 +1,57 @@
+name: PokerHub isolated preview
+on:
+  push:
+    branches: [codex/pokerhub-integrity-preview]
+  workflow_dispatch:
+concurrency:
+  group: pokerhub-isolated-preview
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+  preview:
+    if: github.ref == 'refs/heads/codex/pokerhub-integrity-preview'
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Authenticate Azure for preview
+        uses: azure/login@v2
+        with:
+          # Public identifiers of the verified id-pokerhub managed identity.
+          client-id: 5cb3ec0f-17c1-4af5-af6e-a86b1091be37
+          tenant-id: 455df613-939f-44e8-86bc-337ae13625c7
+          subscription-id: 3a8f01e0-e749-4a9c-9d81-f6078b4195d2
+      - name: Install Azure Container Apps CLI extension
+        run: az extension add --name containerapp --upgrade --yes
+      - name: Provision isolated preview
+        id: deploy
+        env:
+          PREVIEW_RESOURCE_GROUP: pokerhub-preview-codex
+          PREVIEW_LOCATION: brazilsouth
+        run: bash scripts/preview-azure.sh
+      - name: Validate deployed preview in Chromium
+        working-directory: web
+        env:
+          POKERHUB_E2E_WEB_URL: ${{ steps.deploy.outputs.url }}
+          POKERHUB_E2E_API_URL: ${{ steps.deploy.outputs.url }}
+        run: npm ci && npx playwright install --with-deps chromium && npm run e2e
+      - name: Preserve preview browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-browser-results
+          path: web/test-results/
+          if-no-files-found: ignore

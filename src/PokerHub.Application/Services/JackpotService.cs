@@ -91,6 +91,8 @@ public class JackpotService : IJackpotService
         var league = await _context.Leagues.FindAsync(leagueId);
         if (league == null) return false;
 
+        if (dto.JackpotPercentage < 0 || dto.JackpotPercentage > 100)
+            throw new PokerHub.Application.Exceptions.BusinessRuleException("O percentual da caixinha deve estar entre 0 e 100.");
         league.JackpotPercentage = dto.JackpotPercentage;
 
         // null = "não alterar" (clientes antigos mandam só o percentual e não podem apagar a
@@ -156,14 +158,17 @@ public class JackpotService : IJackpotService
         );
     }
 
-    public async Task<bool> UseJackpotAsync(Guid leagueId, UseJackpotDto dto)
+    public Task<bool> UseJackpotAsync(Guid leagueId, UseJackpotDto dto)
+        => MutationScope.RunAsync(_context, leagueId, "Uso da caixinha", () => UseJackpotCoreAsync(leagueId, dto), "League");
+
+    private async Task<bool> UseJackpotCoreAsync(Guid leagueId, UseJackpotDto dto)
     {
         var league = await _context.Leagues.FindAsync(leagueId);
         if (league == null) return false;
 
         var balanceBefore = await GetDerivedBalanceAsync(leagueId);
 
-        if (dto.Amount <= 0 || dto.Amount > balanceBefore)
+        if (dto.Amount <= 0 || dto.Amount > balanceBefore || Math.Round(dto.Amount, 2) != dto.Amount)
             throw new InvalidOperationException("Valor inválido para uso do jackpot");
 
         var balanceAfter = balanceBefore - dto.Amount;

@@ -9,7 +9,7 @@
  */
 import type { BrowserContext, Page } from '@playwright/test';
 
-export const API = 'http://localhost:5100';
+export const API = process.env.POKERHUB_E2E_API_URL ?? 'http://localhost:5100';
 export const PASSWORD = 'E2ePass@123';
 
 export interface AuthSession {
@@ -131,7 +131,7 @@ export async function createTournament(
     `/api/leagues/${leagueId}/tournaments`,
     {
       name,
-      scheduledDateTime: '2026-06-21T20:00:00Z',
+      scheduledDateTime: new Date().toISOString(),
       location: 'E2E',
       buyIn: 50,
       startingStack: 10000,
@@ -146,7 +146,7 @@ export async function createTournament(
       prizeDistributionType: 0,
       usePrizeTable: false,
       prizeTableId: null,
-      allowCheckInUntilLevel: null,
+      allowCheckInUntilLevel: levels,
       blindLevels,
     },
     token,

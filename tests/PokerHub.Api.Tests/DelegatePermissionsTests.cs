@@ -63,7 +63,7 @@ public class DelegatePermissionsTests : IClassFixture<ApiFactory>
         AllowCheckInUntilLevel = (int?)null,
         BlindLevels = new[]
         {
-            new { Level = 1, SmallBlind = 25, BigBlind = 50, Ante = 0, DurationMinutes = 15, IsBreak = false },
+            new { Order = 1, SmallBlind = 25, BigBlind = 50, Ante = 0, DurationMinutes = 15, IsBreak = false },
         },
     };
 
@@ -84,6 +84,7 @@ public class DelegatePermissionsTests : IClassFixture<ApiFactory>
 
         var createResp = await organizer.PostAsJsonAsync(
             $"/api/leagues/{league.Id}/tournaments", DefaultTournamentPayload($"Torneio {slug}"));
+        Assert.Equal(HttpStatusCode.Created, createResp.StatusCode);
         var tournament = (await createResp.Content.ReadFromJsonAsync<TournamentResponse>())!;
 
         var playerIds = new List<Guid>();

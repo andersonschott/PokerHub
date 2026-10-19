@@ -19,3 +19,11 @@ web/dist/
 web/*.tsbuildinfo
 .superpowers/
 web/node_modules.bak/
+
+# Local development credentials and test artifacts
+.dev/
+TestResults/
+web/test-results/
+web/playwright-report/
+web/.env.local
+web/.env.*.local

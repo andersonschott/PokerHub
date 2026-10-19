@@ -98,16 +98,22 @@ public class PlayerService : IPlayerService
         if (player == null) return null;
 
         var finishedParticipations = player.Participations
-            .Where(tp => tp.Tournament.Status == TournamentStatus.Finished)
+            .Where(tp => tp.IsCheckedIn && tp.Tournament.Status == TournamentStatus.Finished)
             .ToList();
 
+        var resultTournamentIds = finishedParticipations.Select(tp => tp.TournamentId).ToList();
+        var participantCounts = await _context.TournamentPlayers.AsNoTracking()
+            .Where(tp => tp.IsCheckedIn && resultTournamentIds.Contains(tp.TournamentId))
+            .GroupBy(tp => tp.TournamentId)
+            .Select(g => new { TournamentId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(g => g.TournamentId, g => g.Count);
         var results = finishedParticipations
             .Select(tp => new PlayerTournamentResultDto(
                 tp.TournamentId,
                 tp.Tournament.Name,
                 tp.Tournament.ScheduledDateTime,
                 tp.Position,
-                tp.Tournament.Players.Count,
+                participantCounts.GetValueOrDefault(tp.TournamentId),
                 tp.TotalInvestment(tp.Tournament),
                 tp.Prize,
                 tp.ProfitLoss(tp.Tournament)
@@ -317,7 +323,7 @@ public class PlayerService : IPlayerService
     private static PlayerDto MapToDto(Player player)
     {
         var finishedParticipations = player.Participations
-            .Where(tp => tp.Tournament.Status == TournamentStatus.Finished)
+            .Where(tp => tp.IsCheckedIn && tp.Tournament.Status == TournamentStatus.Finished)
             .ToList();
 
         var totalBuyIns = finishedParticipations.Sum(tp => tp.TotalInvestment(tp.Tournament));

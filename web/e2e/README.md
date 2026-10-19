@@ -1,49 +1,37 @@
 # E2E (Playwright)
 
-Os testes E2E rodam contra uma **stack local descartável** (não toque em produção).
-Cada teste se auto-semeia via API com identificadores únicos — seguro reexecutar.
+Os testes usam React + API .NET e banco local. Consulte
+[DEVELOPMENT.md](../../DEVELOPMENT.md) para requisitos e configuração completa.
 
-## 1. SQL local (Docker)
+Na raiz do repositório:
+
 ```bash
-docker run -d --name pokerhub-sql \
-  -e 'ACCEPT_EULA=Y' -e 'MSSQL_SA_PASSWORD=Local@Dev123!' \
-  -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
-# aguarde o log "SQL Server is now ready for client connections"
+bash scripts/dev.sh install
+bash scripts/dev.sh db
+bash scripts/dev.sh migrate
+bash scripts/dev.sh api
 ```
 
-## 2. Migrations no banco LOCAL
-> ⚠️ SEMPRE com `--connection` explícito. `dotnet ef database update` puro usa o
-> appsettings do `PokerHub.Web`, que aponta para **PRODUÇÃO**.
+Em outro terminal: `bash scripts/dev.sh web`.
+Com API em `5100` e React em `5173`, execute em um terceiro terminal:
+
 ```bash
-dotnet ef database update \
-  --project src/PokerHub.Infrastructure --startup-project src/PokerHub.Web \
-  --connection "Server=localhost,1433;Database=pokerhub;User ID=sa;Password=Local@Dev123!;TrustServerCertificate=True;Encrypt=False;"
+cd web
+npx playwright install --with-deps chromium
+npm run e2e
+npx playwright test realtime  # somente sincronização
 ```
 
-## 3. Api :5100 (contra o local)
-```bash
-ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=pokerhub;User ID=sa;Password=Local@Dev123!;TrustServerCertificate=True;Encrypt=False;" \
-ASPNETCORE_URLS="http://localhost:5100" ASPNETCORE_ENVIRONMENT=Development \
-dotnet run --project src/PokerHub.Api
-```
+Para validar o empacotamento da prévia na mesma origem, configure
+`POKERHUB_E2E_WEB_URL` e `POKERHUB_E2E_API_URL` com a URL da prévia. Os testes
+cadastram usuários e criam ligas/torneios; use um ambiente de teste isolado.
 
-## 4. web :5173 (SignalR via VITE_API_URL)
-```bash
-cd web && VITE_API_URL="http://localhost:5100" npm run dev
-```
+O Vite usa proxy para `/api` e `/hub`; `VITE_API_BASE_URL` deve ficar vazia.
+Não use Blazor nas migrations. `bash scripts/dev.sh migrate` seleciona
+explicitamente `pokerhub_dev` em `127.0.0.1:14333`.
 
-## 5. Rodar o E2E
-```bash
-cd web && npm run e2e            # tudo
-cd web && npx playwright test realtime   # um spec
-```
+- `full-flow.spec.ts`: inscrição, operação, encerramento e pagamentos.
+- `realtime.spec.ts`: sincronização entre organizador e TV; o teste injeta
+  autenticação do viewer porque `by-invite` ainda exige login.
 
-## Teardown
-```bash
-docker rm -f pokerhub-sql   # + matar os processos da Api (:5100) e web (:5173)
-```
-
-## Specs
-- `full-flow.spec.ts` — inscrição/seed → operar ao vivo (check-in/rebuy/eliminação) → encerrar (folha → `/finish`) → pagamentos com "quem paga quem" não-vazio.
-- `realtime.spec.ts` — 2 contextos: organizer avança nível → TV mode (`/tv/{inviteCode}`) reflete via SignalR.
-  - ⚠️ TV mode não é público hoje (endpoint `by-invite` exige auth); o teste injeta token de um viewer. Ver roadmap.
+Encerre os servidores com Ctrl+C e o banco com `bash scripts/dev.sh stop`.
