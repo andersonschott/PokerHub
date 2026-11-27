@@ -3322,6 +3322,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/leagues/{leagueId}/jackpot/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    leagueId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AddJackpotEntryDto"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tournaments/{tournamentId}/expenses": {
         parameters: {
             query?: never;
@@ -3569,6 +3608,11 @@ export interface components {
         AddDelegateRequest: {
             userId: string;
             permissions: components["schemas"]["DelegatePermissions"];
+        };
+        AddJackpotEntryDto: {
+            /** Format: double */
+            amount: number;
+            description: null | string;
         };
         AddPlayerRequest: {
             /** Format: uuid */

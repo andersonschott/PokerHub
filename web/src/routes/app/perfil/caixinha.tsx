@@ -4,7 +4,7 @@
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShoppingCart, Trophy, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, Trophy, Check, Loader2, PiggyBank } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,10 +22,11 @@ import {
   useJackpotContributions,
   useJackpotUsages,
   useUseJackpot,
+  useAddJackpotEntry,
 } from '@/lib/api/hooks/use-jackpot';
 import { jackpotBalance } from '@/features/jackpot/jackpot-balance';
 
-type SheetKind = 'expense' | 'tournament' | null;
+type SheetKind = 'expense' | 'tournament' | 'entry' | null;
 
 export default function CaixinhaRoute() {
   const navigate = useNavigate();
@@ -47,9 +48,13 @@ export default function CaixinhaRoute() {
 
   // Mutations
   const useJackpotMut = useUseJackpot(activeLeagueId);
+  const addEntryMut = useAddJackpotEntry(activeLeagueId);
+  const mutation = sheet === 'entry' ? addEntryMut : useJackpotMut;
 
   const openSheet = (kind: SheetKind) => {
     setSheet(kind);
+    useJackpotMut.reset();
+    addEntryMut.reset();
     setDesc('');
     setVal('');
   };
@@ -58,7 +63,7 @@ export default function CaixinhaRoute() {
     const amount = parseFloat(val.replace(',', '.')) || 0;
     if (!amount || !desc.trim()) return;
 
-    useJackpotMut.mutate(
+    mutation.mutate(
       { amount, description: desc.trim() },
       {
         onSuccess: () => {
@@ -181,16 +186,34 @@ export default function CaixinhaRoute() {
                 <div className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="font-sans font-semibold text-[14.5px] truncate">
-                      {e.tournamentName}
+                      {e.tournamentName ?? e.description}
                     </div>
                     <div className="font-mono text-[11.5px] text-muted-foreground mt-0.5">
-                      {new Date(e.tournamentDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} · pool <MoneyValue value={e.tournamentPrizePool} cents={false} size="11.5px" color="none" /> · {e.percentageApplied}%
+                      {new Date(e.tournamentDate ?? e.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                      {e.tournamentId && (
+                        <> · pool <MoneyValue value={e.tournamentPrizePool} cents={false} size="11.5px" color="none" /> · {e.percentageApplied}%</>
+                      )}
                     </div>
                   </div>
-                  <MoneyValue value={e.amount} signed cents={false} size="15px" />
+                  <div className="flex flex-col items-end gap-1.5">
+                    <MoneyValue value={e.amount} signed cents={false} size="15px" />
+                    {!e.tournamentId && <Badge tone="neutral">Entrada manual</Badge>}
+                  </div>
                 </div>
               </Card>
             ))
+          )}
+
+          {organizer && (
+            <Button
+              variant="primary"
+              icon={PiggyBank}
+              block
+              className="mt-1.5"
+              onClick={() => openSheet('entry')}
+            >
+              Registrar entrada
+            </Button>
           )}
         </div>
       )}
@@ -257,8 +280,14 @@ export default function CaixinhaRoute() {
           fixed
           open
           onClose={() => setSheet(null)}
-          title={sheet === 'expense' ? 'Registrar gasto da liga' : 'Usar em torneio especial'}
-          subtitle={<>Saldo disponível: <MoneyValue value={balance} cents={false} color="none" /></>}
+          title={
+            sheet === 'entry'
+              ? 'Registrar entrada na caixinha'
+              : sheet === 'expense'
+                ? 'Registrar gasto da liga'
+                : 'Usar em torneio especial'
+          }
+          subtitle={<>Saldo {sheet === 'entry' ? 'atual' : 'disponível'}: <MoneyValue value={balance} cents={false} color="none" /></>}
         >
           <div className="flex flex-col gap-3.5">
             <div className="flex flex-col gap-1.5">
@@ -267,7 +296,11 @@ export default function CaixinhaRoute() {
               </label>
               <Input
                 placeholder={
-                  sheet === 'expense' ? 'Ex.: Baralhos novos' : 'Ex.: Torneio de Natal'
+                  sheet === 'entry'
+                    ? 'Ex.: Pedágio evento de fim de ano'
+                    : sheet === 'expense'
+                      ? 'Ex.: Baralhos novos'
+                      : 'Ex.: Torneio de Natal'
                 }
                 value={desc}
                 onChange={(e) => setDesc(e.target.value)}
@@ -292,12 +325,19 @@ export default function CaixinhaRoute() {
               icon={Check}
               block
               disabled={
-                !desc.trim() || !val || (parseFloat(val.replace(',', '.')) || 0) > balance
+                !desc.trim() ||
+                !val ||
+                mutation.isPending ||
+                // entrada não tem teto; saída não pode passar do saldo
+                (sheet !== 'entry' && (parseFloat(val.replace(',', '.')) || 0) > balance)
               }
               onClick={submitSheet}
             >
               Confirmar
             </Button>
+            {mutation.error && (
+              <p role="alert" className="text-[12.5px] text-destructive">{mutation.error.message}</p>
+            )}
           </div>
         </Sheet>
       )}

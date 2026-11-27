@@ -22,6 +22,9 @@ public class JackpotContributionConfiguration : IEntityTypeConfiguration<Jackpot
             .HasPrecision(5, 2)
             .IsRequired();
 
+        builder.Property(jc => jc.Description)
+            .HasMaxLength(500);
+
         builder.Property(jc => jc.CreatedAt)
             .IsRequired();
 
@@ -33,9 +36,12 @@ public class JackpotContributionConfiguration : IEntityTypeConfiguration<Jackpot
         builder.HasOne(jc => jc.Tournament)
             .WithMany()
             .HasForeignKey(jc => jc.TournamentId)
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.NoAction);
 
+        // Uma contribuição por torneio; entradas manuais (TournamentId NULL) ficam fora do índice.
         builder.HasIndex(jc => jc.TournamentId)
-            .IsUnique();
+            .IsUnique()
+            .HasFilter("[TournamentId] IS NOT NULL");
     }
 }

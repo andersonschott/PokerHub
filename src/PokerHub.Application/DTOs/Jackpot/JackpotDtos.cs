@@ -14,13 +14,19 @@ public record JackpotStatusDto(
 
 public record JackpotContributionDto(
     Guid Id,
-    Guid TournamentId,
-    string TournamentName,
-    DateTime TournamentDate,
+    Guid? TournamentId,
+    string? TournamentName,
+    DateTime? TournamentDate,
     decimal TournamentPrizePool,
     decimal PercentageApplied,
     decimal Amount,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    string? Description = null
+);
+
+public record AddJackpotEntryDto(
+    decimal Amount,
+    string? Description
 );
 
 public record UpdateJackpotSettingsDto(

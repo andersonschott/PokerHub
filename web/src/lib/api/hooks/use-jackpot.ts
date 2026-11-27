@@ -3,13 +3,15 @@ import { api } from '../client';
 
 export interface JackpotContributionDto {
   id: string;
-  tournamentId: string;
-  tournamentName: string;
-  tournamentDate: string;
+  /** null = entrada manual (ex.: pedágio), sem torneio de origem */
+  tournamentId: string | null;
+  tournamentName: string | null;
+  tournamentDate: string | null;
   tournamentPrizePool: number;
   percentageApplied: number;
   amount: number;
   createdAt: string;
+  description: string | null;
 }
 
 export interface JackpotStatusDto {
@@ -35,6 +37,11 @@ export interface UpdateJackpotSettingsDto {
   jackpotPercentage: number;
   jackpotPixKey?: string | null;
   jackpotPixKeyType?: number | null;
+}
+
+export interface AddJackpotEntryDto {
+  amount: number;
+  description: string;
 }
 
 export interface UseJackpotDto {
@@ -97,6 +104,21 @@ export function useUseJackpot(leagueId: string | null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['jackpot', 'status', leagueId] });
       queryClient.invalidateQueries({ queryKey: ['jackpot', 'usages', leagueId] });
+    },
+  });
+}
+
+export function useAddJackpotEntry(leagueId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (dto: AddJackpotEntryDto) =>
+      api<void>(`/leagues/${leagueId}/jackpot/entries`, {
+        method: 'POST',
+        body: dto,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['jackpot', 'status', leagueId] });
+      queryClient.invalidateQueries({ queryKey: ['jackpot', 'contributions', leagueId] });
     },
   });
 }

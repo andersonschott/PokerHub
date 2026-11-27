@@ -260,6 +260,69 @@ public class JackpotAndExpenseEndpointsTests : IClassFixture<ApiFactory>
     }
 
     // =========================================================================
+    // Jackpot — manual entries (ex.: pedágio)
+    // =========================================================================
+
+    private sealed record ContributionResponse(Guid Id, Guid? TournamentId, string? TournamentName, decimal Amount, string? Description);
+    private sealed record StatusResponse(decimal AccumulatedPrizePool);
+
+    [Fact]
+    public async Task AddManualEntry_AsOrganizer_TwiceAddsToBalanceAndHistory()
+    {
+        var (organizer, _) = await RegisteredClientAsync("jackpot-entry-org@test.com");
+        var league = await CreateLeagueAsync(organizer, "Liga Jackpot Entry");
+
+        // Duas entradas sem torneio: o índice único de TournamentId precisa aceitar múltiplos NULL.
+        var r1 = await organizer.PostAsJsonAsync($"/api/leagues/{league.Id}/jackpot/entries",
+            new { Amount = 30m, Description = "Pedágio evento fim de ano - João" });
+        Assert.Equal(HttpStatusCode.OK, r1.StatusCode);
+        var r2 = await organizer.PostAsJsonAsync($"/api/leagues/{league.Id}/jackpot/entries",
+            new { Amount = 20.5m, Description = "Pedágio evento fim de ano - Maria" });
+        Assert.Equal(HttpStatusCode.OK, r2.StatusCode);
+
+        var history = await organizer.GetFromJsonAsync<List<ContributionResponse>>($"/api/leagues/{league.Id}/jackpot/contributions");
+        Assert.Equal(2, history!.Count);
+        Assert.All(history, c => { Assert.Null(c.TournamentId); Assert.Null(c.TournamentName); });
+        Assert.Contains(history, c => c.Description == "Pedágio evento fim de ano - Maria" && c.Amount == 20.5m);
+
+        var status = await organizer.GetFromJsonAsync<StatusResponse>($"/api/leagues/{league.Id}/jackpot");
+        Assert.Equal(50.5m, status!.AccumulatedPrizePool);
+
+        // Saldo vindo de entrada manual pode ser usado na saída manual.
+        var use = await organizer.PostAsJsonAsync($"/api/leagues/{league.Id}/jackpot/use",
+            new { Amount = 50.5m, Description = "Evento fim de ano" });
+        Assert.Equal(HttpStatusCode.OK, use.StatusCode);
+    }
+
+    [Fact]
+    public async Task AddManualEntry_AsNonOrganizer_Returns403()
+    {
+        var (organizer, _) = await RegisteredClientAsync("jackpot-entry403-org@test.com");
+        var league = await CreateLeagueAsync(organizer, "Liga Jackpot Entry 403");
+        var (member, _) = await RegisteredClientAsync("jackpot-entry403-member@test.com");
+        Assert.Equal(HttpStatusCode.OK, (await member.PostAsync($"/api/leagues/join/{league.InviteCode}", null)).StatusCode);
+
+        var resp = await member.PostAsJsonAsync($"/api/leagues/{league.Id}/jackpot/entries",
+            new { Amount = 10m, Description = "Pedágio" });
+        Assert.Equal(HttpStatusCode.Forbidden, resp.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(0, "Pedágio")]
+    [InlineData(-5, "Pedágio")]
+    [InlineData(10.123, "Pedágio")]
+    [InlineData(10, "  ")]
+    public async Task AddManualEntry_Invalid_Returns400(double amount, string description)
+    {
+        var (organizer, _) = await RegisteredClientAsync($"jackpot-entry400-{Guid.NewGuid():N}@test.com");
+        var league = await CreateLeagueAsync(organizer, "Liga Jackpot Entry 400");
+
+        var resp = await organizer.PostAsJsonAsync($"/api/leagues/{league.Id}/jackpot/entries",
+            new { Amount = (decimal)amount, Description = description });
+        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
+    }
+
+    // =========================================================================
     // Expenses — 401 without token
     // =========================================================================
 
