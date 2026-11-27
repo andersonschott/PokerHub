@@ -4,7 +4,9 @@ public class JackpotContribution
 {
     public Guid Id { get; set; }
     public Guid LeagueId { get; set; }
-    public Guid TournamentId { get; set; }
+    // null = entrada manual (ex.: pedágio de evento), sem torneio de origem
+    public Guid? TournamentId { get; set; }
+    public string? Description { get; set; }
     public decimal Amount { get; set; }
     public decimal TournamentPrizePool { get; set; }
     public decimal PercentageApplied { get; set; }
@@ -12,5 +14,5 @@ public class JackpotContribution
 
     // Navigation properties
     public League League { get; set; } = null!;
-    public Tournament Tournament { get; set; } = null!;
+    public Tournament? Tournament { get; set; }
 }

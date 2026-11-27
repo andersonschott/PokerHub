@@ -29,12 +29,13 @@ public class JackpotService : IJackpotService
             .Select(jc => new JackpotContributionDto(
                 jc.Id,
                 jc.TournamentId,
-                jc.Tournament.Name,
-                jc.Tournament.ScheduledDateTime,
+                jc.Tournament != null ? jc.Tournament.Name : null,
+                jc.Tournament != null ? jc.Tournament.ScheduledDateTime : (DateTime?)null,
                 jc.TournamentPrizePool,
                 jc.PercentageApplied,
                 jc.Amount,
-                jc.CreatedAt
+                jc.CreatedAt,
+                jc.Description
             ))
             .ToListAsync();
 
@@ -76,12 +77,13 @@ public class JackpotService : IJackpotService
             .Select(jc => new JackpotContributionDto(
                 jc.Id,
                 jc.TournamentId,
-                jc.Tournament.Name,
-                jc.Tournament.ScheduledDateTime,
+                jc.Tournament != null ? jc.Tournament.Name : null,
+                jc.Tournament != null ? jc.Tournament.ScheduledDateTime : (DateTime?)null,
                 jc.TournamentPrizePool,
                 jc.PercentageApplied,
                 jc.Amount,
-                jc.CreatedAt
+                jc.CreatedAt,
+                jc.Description
             ))
             .ToListAsync();
     }
@@ -185,6 +187,33 @@ public class JackpotService : IJackpotService
         };
 
         _context.JackpotUsages.Add(usage);
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
+    public Task<bool> AddManualEntryAsync(Guid leagueId, AddJackpotEntryDto dto)
+        => MutationScope.RunAsync(_context, leagueId, "Entrada manual na caixinha", () => AddManualEntryCoreAsync(leagueId, dto), "League");
+
+    private async Task<bool> AddManualEntryCoreAsync(Guid leagueId, AddJackpotEntryDto dto)
+    {
+        if (!await _context.Leagues.AnyAsync(l => l.Id == leagueId)) return false;
+
+        if (dto.Amount <= 0 || Math.Round(dto.Amount, 2) != dto.Amount)
+            throw new PokerHub.Application.Exceptions.BusinessRuleException("Valor inválido para entrada na caixinha.");
+        if (string.IsNullOrWhiteSpace(dto.Description) || dto.Description.Trim().Length > 500)
+            throw new PokerHub.Application.Exceptions.BusinessRuleException("Informe uma descrição de até 500 caracteres.");
+
+        _context.JackpotContributions.Add(new JackpotContribution
+        {
+            Id = Guid.NewGuid(),
+            LeagueId = leagueId,
+            TournamentId = null,
+            Description = dto.Description.Trim(),
+            Amount = dto.Amount,
+            TournamentPrizePool = 0,
+            PercentageApplied = 0,
+            CreatedAt = DateTime.UtcNow
+        });
         await _context.SaveChangesAsync();
         return true;
     }

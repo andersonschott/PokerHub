@@ -10,5 +10,6 @@ public interface IJackpotService
     Task<bool> UpdateJackpotSettingsAsync(Guid leagueId, UpdateJackpotSettingsDto dto);
     Task<JackpotContributionDto?> RecordContributionAsync(Guid tournamentId, decimal amount);
     Task<bool> UseJackpotAsync(Guid leagueId, UseJackpotDto dto);
+    Task<bool> AddManualEntryAsync(Guid leagueId, AddJackpotEntryDto dto);
     Task<decimal> CalculateJackpotContributionAsync(Guid tournamentId);
 }

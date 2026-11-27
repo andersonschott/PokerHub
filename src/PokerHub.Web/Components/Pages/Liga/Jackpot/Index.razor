@@ -109,11 +109,11 @@
                 <div class="transaction-list mobile-only">
                     @foreach (var contribution in _contributions)
                     {
-                        <div class="transaction-item" @onclick="@(() => NavigateToTournament(contribution.TournamentId))">
+                        <div class="transaction-item" @onclick="@(() => { if (contribution.TournamentId is Guid tid) NavigateToTournament(tid); })">
                             <div class="transaction-header">
                                 <div>
-                                    <div class="transaction-title">@contribution.TournamentName</div>
-                                    <div class="transaction-date">@contribution.TournamentDate.ToString("dd/MM/yyyy")</div>
+                                    <div class="transaction-title">@(contribution.TournamentName ?? contribution.Description)</div>
+                                    <div class="transaction-date">@((contribution.TournamentDate ?? contribution.CreatedAt).ToString("dd/MM/yyyy"))</div>
                                 </div>
                                 <div class="transaction-amount positive">+@contribution.Amount.ToBrl()</div>
                             </div>
@@ -144,10 +144,10 @@
                             <MudTd DataLabel="Torneio">
                                 <div>
                                     <MudLink Href="@($"/torneio/{context.TournamentId}")" Color="Color.Success">
-                                        @context.TournamentName
+                                        @(context.TournamentName ?? context.Description)
                                     </MudLink>
                                     <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                        @context.TournamentDate.ToString("dd/MM/yyyy")
+                                        @((context.TournamentDate ?? context.CreatedAt).ToString("dd/MM/yyyy"))
                                     </MudText>
                                 </div>
                             </MudTd>

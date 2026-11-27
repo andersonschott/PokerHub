@@ -247,6 +247,10 @@ namespace PokerHub.Infrastructure.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<Guid>("LeagueId")
                         .HasColumnType("uniqueidentifier");
 
@@ -254,7 +258,7 @@ namespace PokerHub.Infrastructure.Data.Migrations
                         .HasPrecision(5, 2)
                         .HasColumnType("decimal(5,2)");
 
-                    b.Property<Guid>("TournamentId")
+                    b.Property<Guid?>("TournamentId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("TournamentPrizePool")
@@ -266,7 +270,8 @@ namespace PokerHub.Infrastructure.Data.Migrations
                     b.HasIndex("LeagueId");
 
                     b.HasIndex("TournamentId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("[TournamentId] IS NOT NULL");
 
                     b.ToTable("JackpotContributions");
                 });
@@ -1166,8 +1171,7 @@ namespace PokerHub.Infrastructure.Data.Migrations
                     b.HasOne("PokerHub.Domain.Entities.Tournament", "Tournament")
                         .WithMany()
                         .HasForeignKey("TournamentId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("League");
 

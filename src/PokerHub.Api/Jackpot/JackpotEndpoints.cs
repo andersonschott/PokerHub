@@ -88,5 +88,25 @@ public static class JackpotEndpoints
             var ok = await jackpot.UseJackpotAsync(leagueId, dto);
             return ok ? Results.Ok() : Results.BadRequest();
         });
+
+        // POST /api/leagues/{leagueId}/jackpot/entries  — organizer adds a manual entry (ex.: pedágio)
+        group.MapPost("/entries", async (
+            Guid leagueId,
+            AddJackpotEntryDto dto,
+            ClaimsPrincipal user,
+            ILeagueService leagues,
+            IJackpotService jackpot) =>
+        {
+            if (!await leagues.IsUserOrganizerAsync(leagueId, user.GetUserId()))
+                return Results.Forbid();
+
+            if (dto.Amount <= 0 || Math.Round(dto.Amount, 2) != dto.Amount)
+                return Results.BadRequest(new { Message = "Informe um valor maior que zero, com até 2 casas decimais." });
+            if (string.IsNullOrWhiteSpace(dto.Description) || dto.Description.Trim().Length > 500)
+                return Results.BadRequest(new { Message = "Informe uma descrição de até 500 caracteres." });
+
+            var ok = await jackpot.AddManualEntryAsync(leagueId, dto);
+            return ok ? Results.Ok() : Results.NotFound();
+        });
     }
 }
